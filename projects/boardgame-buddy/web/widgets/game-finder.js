@@ -841,9 +841,7 @@
               data-finder-bgg-id="${hit.bgg_id}"
               data-finder-bgg-name="${escapeAttr(hit.name)}"
               data-bgg-id="${hit.bgg_id}">
-            <div class="game-finder-dropdown-item__thumb game-finder-dropdown-item__thumb--placeholder">
-              <i data-icon="dice-6"></i>
-            </div>
+            ${this._bggThumb(hit)}
             <div class="game-finder-dropdown-item__body">
               <div class="game-finder-dropdown-item__name">${escapeHtml(hit.name)}</div>
               <div class="game-finder-dropdown-item__meta">
@@ -856,6 +854,34 @@
           </li>
         `).join("");
       window.BgbIcons.render(dd);
+      this._fillBggThumbs(dd, bgg.slice(0, BGG_DROPDOWN_MAX), token);
+    }
+
+    /** A BGG row's leading square: the cover when it is known, else the dice. */
+    _bggThumb(hit) {
+      const thumb = hit.thumbnail_url || window.Game.bggThumb(hit.bgg_id);
+      return thumb
+        ? `<img class="game-finder-dropdown-item__thumb" src="${escapeAttr(thumb)}" alt=""
+                loading="lazy" referrerpolicy="no-referrer" />`
+        : `<div class="game-finder-dropdown-item__thumb game-finder-dropdown-item__thumb--placeholder">
+             <i data-icon="dice-6"></i>
+           </div>`;
+    }
+
+    /** BGG's /search carries no art: ask for the rows on show, then swap each
+     *  placeholder in place. In place, not a repaint — the list is what the
+     *  host is tapping — and dropped if a newer query owns the dropdown. */
+    async _fillBggThumbs(dd, hits, token) {
+      const changed = await window.Game.loadBggThumbs(hits);
+      if (!changed || token !== this._queryToken) return;
+      for (const hit of hits) {
+        const thumb = window.Game.bggThumb(hit.bgg_id);
+        if (!thumb) continue;
+        const ph = dd.querySelector(
+          `[data-finder-bgg-id="${Number(hit.bgg_id)}"] .game-finder-dropdown-item__thumb--placeholder`,
+        );
+        if (ph) ph.outerHTML = this._bggThumb(hit);
+      }
     }
 
     async _importBgg(bggId, name, rowEl) {

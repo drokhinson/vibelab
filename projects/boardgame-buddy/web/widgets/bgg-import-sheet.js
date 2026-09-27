@@ -318,9 +318,7 @@
     _renderRowInner(hit, job, state) {
       const meta = this._metaFor(hit, job, state);
       return `
-        <span class="bgg-import-row__mark" aria-hidden="true">
-          <i data-icon="${MARK_ICON[state] || "dice-6"}" class="w-4 h-4"></i>
-        </span>
+        ${this._renderMark(hit, state)}
         <span class="bgg-import-row__body">
           <span class="bgg-import-row__name">${escapeHtml(hit.name || "")}</span>
           <span class="bgg-import-row__meta${meta.bad ? " bgg-import-row__meta--bad" : ""}"
@@ -329,6 +327,24 @@
         ${this._renderRowAction(hit, job, state)}
         <span class="bgg-import-row__bar" aria-hidden="true"></span>
       `;
+    }
+
+    /** The leading mark: the game's box art once it is known, so a list of
+     *  same-named editions can be told apart at a glance. The state glyph
+     *  stays on it as a corner badge for every state but `new`, where the
+     *  art is the whole point and the Import button already says the rest. */
+    _renderMark(hit, state) {
+      const icon = `<i data-icon="${MARK_ICON[state] || "dice-6"}" class="w-4 h-4"></i>`;
+      const thumb = hit.thumbnail_url || window.Game.bggThumb(hit.bgg_id);
+      if (!thumb) {
+        return `<span class="bgg-import-row__mark" aria-hidden="true">${icon}</span>`;
+      }
+      return `
+        <span class="bgg-import-row__mark bgg-import-row__mark--art" aria-hidden="true">
+          <img src="${escapeAttr(thumb)}" alt="" loading="lazy" decoding="async"
+               referrerpolicy="no-referrer" onerror="this.remove()" />
+          ${state === "new" ? "" : `<span class="bgg-import-row__badge">${icon}</span>`}
+        </span>`;
     }
 
     _renderRowAction(hit, job, state) {
@@ -406,6 +422,8 @@
         (job && job.shelf) || "",
         job && job.shelving ? "1" : "",
         (job && job.error) || "",
+        // So a thumbnail landing repaints its row through _syncRows.
+        hit.thumbnail_url || window.Game.bggThumb(hit.bgg_id) || "",
       ].join("|");
     }
 
@@ -526,6 +544,7 @@
       this._shown = Math.min(PAGE, this._hits.length);
       this._phase = this._hits.length ? "results" : "empty";
       this._paintList();
+      this._loadThumbs(this._hits.slice(0, this._shown));
       // A fresh list starts at its head — a scroll position kept from the
       // previous search drops the user into rows they never scrolled to.
       const list = document.getElementById(LIST_ID);
@@ -567,6 +586,20 @@
       window.BgbIcons.render(list);
       for (const hit of next) this._rowSig.set(Number(hit.bgg_id), this._sigFor(hit));
       this._paintCount();
+      this._loadThumbs(next);
+    }
+
+    /**
+     * Art for rows just put on screen, and only those — BGG's /search has
+     * none, and each 20 unseen games costs the server one BoardGameGeek call.
+     * Lands through _syncRows, which patches exactly the rows whose signature
+     * (thumbnail included) moved. A newer search in the meantime owns the
+     * list, so a late answer only fills the cache.
+     */
+    async _loadThumbs(hits) {
+      const seq = this._seq;
+      const changed = await window.Game.loadBggThumbs(hits);
+      if (changed && seq === this._seq) this._syncRows();
     }
 
     /** Signatures for the rendered window only. Recording one for a row that

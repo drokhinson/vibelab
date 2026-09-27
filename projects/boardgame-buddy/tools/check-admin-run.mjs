@@ -118,8 +118,8 @@ const ledger = (tool, over = {}) => ({
 console.log("the tool registry");
 {
   const slugs = flow.slugs().sort();
-  ok("three tools, matching the server's AdminRunTool slugs",
-    slugs.join(",") === "bgg-images,bgg-metadata,trending");
+  ok("four tools, matching the server's AdminRunTool slugs",
+    slugs.join(",") === "bgg-image-links,bgg-images,bgg-metadata,trending");
   const t = flow.tool("bgg-metadata");
   ok("a backfill inherits the shared three-phase vocabulary",
     t.order.join(",") === "scan,fetch,caches" && !!t.labels.fetch);

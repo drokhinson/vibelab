@@ -69,6 +69,16 @@
       timeoutMs: 5 * 60 * 1000,
       run: (opts) => window.Game.adminBackfillMetadata(opts),
     },
+    // Records links only — no downloads — so it takes the metadata tool's bite.
+    "bgg-image-links": {
+      title: "Record BGG image links",
+      lede: "Save BoardGameGeek's own image URLs next to the ones we host, so the app can switch to them later. One call covers twenty games.",
+      icon: "link",
+      multiPass: true,
+      limit: 200,
+      timeoutMs: 5 * 60 * 1000,
+      run: (opts) => window.Game.adminBackfillImageLinks(opts),
+    },
   };
 
   // The backfills share one phase vocabulary, because they are one job with a

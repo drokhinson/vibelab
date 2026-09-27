@@ -553,11 +553,16 @@ class AdminRunTool(StrEnum):
     Images stays its own tool because it is genuinely different work: one BGG
     call plus two downloads and two uploads per game, which is why its pass is
     a tenth the size.
+
+    BGG_IMAGE_LINKS only RECORDS BoardGameGeek's own image URLs (migration 054)
+    for games imported before import started keeping them — one /thing per 20
+    games, no downloads — so it is not folded into BGG_IMAGES either.
     """
 
     TRENDING = "trending"
     BGG_IMAGES = "bgg-images"
     BGG_METADATA = "bgg-metadata"
+    BGG_IMAGE_LINKS = "bgg-image-links"
 
 
 class AdminTrendingPhase(StrEnum):

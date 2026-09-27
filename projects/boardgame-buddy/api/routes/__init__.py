@@ -13,6 +13,9 @@ router = APIRouter(
 # redesign added the buddy / feed / session / stats / search modules; the
 # existing modules are still served while the new frontend cuts over.
 from . import game_routes      # noqa: F401, E402
+# Right behind game_routes: its one path is a literal under /games/admin/, the
+# same shape as the backfill-metadata route declared there.
+from . import image_link_routes  # noqa: F401, E402
 from . import collection_routes  # noqa: F401, E402
 # Ahead of play_routes, and this is load-bearing: FastAPI resolves in
 # declaration order, and `DELETE /plays/reactions` would otherwise be
