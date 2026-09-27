@@ -66,7 +66,7 @@
   // gather→play advance doesn't wait for the timer; it flushes.
   const TEAM_PUSH_DEBOUNCE_MS = 700;
 
-  // The Play step's pages on a phone, left to right (widgets/play-step-pager.js).
+  // The Play step's pages on a phone or tablet, left to right (widgets/play-step-pager.js).
   // It opens on the scores, and Next round always comes back to them.
   const PLAY_PAGE_PLAYERS = 0;
   const PLAY_PAGE_SCORES = 1;
@@ -208,6 +208,9 @@
       // The Play step's page turner (phone tier). Attached on first mount to
       // the container, which outlives every repaint; see _attachPlayPager.
       this._pager = null;
+      // Wide/land: the standings + guide column on the right is folded to a
+      // strip. A per-viewer convenience, so localStorage and nothing more.
+      this._sideMin = window.BgbPlaySide ? window.BgbPlaySide.load() : false;
       // The phase the last render() drew, so arriving on Play can land on
       // the scores page rather than wherever the last game was left.
       this._renderedPhase = null;
@@ -222,6 +225,7 @@
       const existing = window.PlaySession.load();
       this._ps = existing || new window.PlaySession();
       this._attachPlayPager();
+      this._attachKeypadRound();
       this._renderedPhase = null;
       // Template state belongs to the game it was loaded for, and this view is
       // a singleton: without this, a draft for a different game paints its
@@ -2131,14 +2135,16 @@
       // strip and the docked bar, so its round rows scroll inside it and the
       // names and totals never leave the screen.
       //
-      // On the tablet and wide tiers .play-pager is display:contents and the
-      // players page and dots are not drawn: the guide stands beside the grid
-      // in a sticky pane of its own (styles.css, "Cascade panes"), as before.
-      // The spectator's mirror (session-viewer-view.js) renders the same
-      // pages with the same pager, so the two phones swipe alike.
+      // A tablet pages the same way, one full-width page at a time, with the
+      // dots drawn as labelled tabs. On the wide and land tiers nothing pages:
+      // the grid takes the left and the standings stack above the guide in a
+      // column on the right that folds to a strip (styles.css, "Play step
+      // pages"). The spectator's mirror (session-viewer-view.js) renders the
+      // same pages with the same pager, so the two screens behave alike.
       return `
         ${this._renderGameInfoBar()}
-        <div class="play-pager">
+        <div class="play-pager${this._sideMin ? " is-side-min" : ""}">
+        ${window.BgbPlaySide ? window.BgbPlaySide.renderBar("playFlowView") : ""}
         <div class="play-pager__page play-pager__page--players" data-pp-page="${PLAY_PAGE_PLAYERS}"
              role="group" aria-label="Players"${off(PLAY_PAGE_PLAYERS)}>
           <div id="play-standings-mount">${this._renderStandings()}</div>
@@ -2164,9 +2170,31 @@
       `;
     }
 
-    /** The phone tier, where the Play step is three pages rather than panes. */
+    /** The phone and tablet tiers, where the Play step is three pages rather than panes. */
     _playPaged() {
-      return document.documentElement.getAttribute("data-bgb-layout") === "phone";
+      const tier = document.documentElement.getAttribute("data-bgb-layout");
+      return tier === "phone" || tier === "tablet";
+    }
+
+    /** Fold or unfold the right-hand column (wide/land). */
+    _togglePlaySide() {
+      if (!window.BgbPlaySide) return;
+      this._sideMin = window.BgbPlaySide.toggle(this.container, this._sideMin);
+    }
+
+    /**
+     * The keypad's + Round (widgets/score-keypad.js). Adds the round and moves
+     * focus into its first cell in the same tap, so the keyboard stays up.
+     */
+    _attachKeypadRound() {
+      if (this._keypadRoundBound || !this.container) return;
+      this._keypadRoundBound = true;
+      this.container.addEventListener("scorekeypad:round", () => {
+        this._addRound();
+        const rows = this.container.querySelectorAll("#screen-play .scoring-table--body tbody tr");
+        const cell = rows.length && rows[rows.length - 1].querySelector("input.scoring-cell");
+        if (cell) cell.focus();
+      });
     }
 
     _attachPlayPager() {
@@ -2188,20 +2216,20 @@
     }
 
     /**
-     * Which page is showing, and a tap target to each. Drawn on every tier and
-     * hidden past the phone by CSS, like the players page itself.
+     * Which page is showing, and a tap target to each: dots on a phone,
+     * labelled tabs on a tablet, not shown past that (styles.css).
      * @param {number} page
      */
     _renderPlayDots(page) {
-      const dot = (i, label) => `
+      const dot = (i, label, short) => `
         <button class="play-pager__dot" type="button" role="tab" data-pp-dot="${i}"
                 aria-label="${label}" aria-selected="${i === page ? "true" : "false"}"
-                onclick="window.playFlowView._turnPlayPage(${i})"><span></span></button>`;
+                onclick="window.playFlowView._turnPlayPage(${i})"><span class="play-pager__dot-mark"></span><span class="play-pager__dot-label" aria-hidden="true">${short}</span></button>`;
       return `
         <div class="play-pager__dots" role="tablist" aria-label="Play step pages">
-          ${dot(PLAY_PAGE_PLAYERS, "Players")}
-          ${dot(PLAY_PAGE_SCORES, "Scores")}
-          ${dot(PLAY_PAGE_GUIDE, "Reference guide")}
+          ${dot(PLAY_PAGE_PLAYERS, "Players", "Players")}
+          ${dot(PLAY_PAGE_SCORES, "Scores", "Scores")}
+          ${dot(PLAY_PAGE_GUIDE, "Reference guide", "Guide")}
         </div>`;
     }
 
@@ -2295,7 +2323,7 @@
       // repeating the word "Scoring" over all of that was a row of vertical
       // space spent on the phone screen the host stares at all evening.
       return `
-        <section class="cascade-card cascade-card--scoring">
+        <section class="cascade-card cascade-card--scoring" data-kp-round>
           ${this._renderTemplateBar()}
           ${mode === "coop" ? this._renderCoopOutcome() : ""}
           ${grid}

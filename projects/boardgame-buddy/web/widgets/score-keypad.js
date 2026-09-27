@@ -1,6 +1,7 @@
 // widgets/score-keypad.js — the bar that rides on top of the number pad while
-// a scoring-grid cell has focus: (−) to flip the cell's sign, and Prev / Next
-// to move between cells.
+// a scoring-grid cell has focus: (−) to flip the cell's sign, Prev / Next to
+// move between cells, the cell being typed into, and — on the Play step — the
+// docked bar's "Next round" as + Round.
 //
 // The cell asks for `inputmode="numeric"`, the iOS 10-key pad — big keys,
 // digits only, no sign and no return key. The two keys that pad is missing
@@ -16,6 +17,12 @@
 // comes back on every tap. pointerdown is cancelled for mouse and Android;
 // iOS decides focus in the tap itself, so a touch acts on touchend and cancels
 // that, which also swallows the click it would have become.
+//
+// + Round shows only for a cell inside a [data-kp-round] element. It
+// dispatches `scorekeypad:round` (bubbling) from the cell; the host adds the
+// row and focuses its first cell in the same tap, so the keyboard stays up.
+// With a keyboard up the Play step hides its docked bar (styles.css), because
+// this bar sits exactly where that one would.
 
 (function () {
   const CELL = "input.scoring-cell";
@@ -85,8 +92,10 @@
     el.hidden = true;
     el.innerHTML = `
       <button type="button" tabindex="-1" class="score-keypad__key" data-key="sign" aria-label="Make negative or positive">(&minus;)</button>
+      <span class="score-keypad__where" aria-hidden="true"></span>
       <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__prev" data-key="prev">Prev</button>
-      <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__next" data-key="next">Next</button>`;
+      <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__next" data-key="next">Next</button>
+      <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__round" data-key="round">+ Round</button>`;
     el.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "touch" && e.target instanceof Element && e.target.closest("button")) e.preventDefault();
     });
@@ -117,6 +126,10 @@
     if (key === "next") move(el, 1);
     else if (key === "prev") move(el, -1);
     else if (key === "sign") toggleSign(el);
+    else if (key === "round") {
+      settle(el);
+      el.dispatchEvent(new CustomEvent("scorekeypad:round", { bubbles: true }));
+    }
   }
 
   function show(el) {
@@ -127,6 +140,10 @@
     const prevBtn = /** @type {HTMLButtonElement|null} */ (bar.querySelector(".score-keypad__prev"));
     if (nextBtn) nextBtn.textContent = cells[cells.length - 1] === el ? "Done" : "Next";
     if (prevBtn) prevBtn.disabled = cells[0] === el;
+    const where = bar.querySelector(".score-keypad__where");
+    if (where) where.textContent = el.getAttribute("aria-label") || "";
+    const roundBtn = /** @type {HTMLElement|null} */ (bar.querySelector(".score-keypad__round"));
+    if (roundBtn) roundBtn.hidden = !el.closest("[data-kp-round]");
     bar.hidden = false;
     // iOS scrolls a focused field clear of the keyboard, but it does not know
     // about this bar — once the keyboard has settled, bring the cell out from
@@ -134,7 +151,7 @@
     setTimeout(() => {
       if (active !== el || !bar || bar.hidden) return;
       const barTop = bar.getBoundingClientRect().top;
-      if (el.getBoundingClientRect().bottom > barTop) el.scrollIntoView({ block: "center", inline: "nearest" });
+      if (el.getBoundingClientRect().bottom > barTop) el.scrollIntoView({ block: "nearest", inline: "nearest" });
     }, 350);
   }
 

@@ -60,6 +60,8 @@
       // container, which outlives every repaint — the 2s poll replaces the
       // whole Play screen, and the pager keeps its position on the container.
       this._pager = null;
+      // Wide/land: the right-hand column folded to a strip (widgets/play-side.js).
+      this._sideMin = window.BgbPlaySide ? window.BgbPlaySide.load() : false;
       // The phase the last render() drew, so arriving on Play lands on the grid.
       this._renderedPhase = null;
     }
@@ -854,9 +856,9 @@
       // and the reference guide, opening on the grid and turned by a swipe or
       // the dots (widgets/play-step-pager.js). The grid page is height-locked,
       // so its round rows scroll inside it and the names and totals never leave
-      // the screen. On the tablet and wide tiers .play-pager is
-      // display:contents and the players page and dots are not drawn: grid
-      // left, guide right, as before.
+      // the screen. A tablet pages the same way with labelled tabs; on the wide
+      // and land tiers the grid takes the left and the standings stack above
+      // the guide in a right-hand column that folds to a strip.
       //
       // Scoring first: it sizes the grid (_renderedRounds) the standings total.
       const scoring = this._renderViewerScoring(s);
@@ -865,7 +867,8 @@
       const off = (i) => (paged && i !== page ? ` inert aria-hidden="true"` : "");
       return `
         ${this._renderGameInfoBar(s)}
-        <div class="play-pager">
+        <div class="play-pager${this._sideMin ? " is-side-min" : ""}">
+        ${window.BgbPlaySide ? window.BgbPlaySide.renderBar("sessionViewerView") : ""}
         <div class="play-pager__page play-pager__page--players" data-pp-page="${PLAY_PAGE_PLAYERS}"
              role="group" aria-label="Players"${off(PLAY_PAGE_PLAYERS)}>
           <div id="session-viewer-standings-mount">${this._renderStandings(s)}</div>
@@ -891,9 +894,16 @@
       `;
     }
 
-    /** The phone tier, where the Play step is three pages rather than panes. */
+    /** The phone and tablet tiers, where the Play step is three pages rather than panes. */
     _playPaged() {
-      return document.documentElement.getAttribute("data-bgb-layout") === "phone";
+      const tier = document.documentElement.getAttribute("data-bgb-layout");
+      return tier === "phone" || tier === "tablet";
+    }
+
+    /** Fold or unfold the right-hand column (wide/land). */
+    _togglePlaySide() {
+      if (!window.BgbPlaySide) return;
+      this._sideMin = window.BgbPlaySide.toggle(this.container, this._sideMin);
     }
 
     _attachPlayPager() {
@@ -916,15 +926,15 @@
 
     /** @param {number} page */
     _renderPlayDots(page) {
-      const dot = (i, label) => `
+      const dot = (i, label, short) => `
         <button class="play-pager__dot" type="button" role="tab" data-pp-dot="${i}"
                 aria-label="${label}" aria-selected="${i === page ? "true" : "false"}"
-                onclick="window.sessionViewerView._turnPlayPage(${i})"><span></span></button>`;
+                onclick="window.sessionViewerView._turnPlayPage(${i})"><span class="play-pager__dot-mark"></span><span class="play-pager__dot-label" aria-hidden="true">${short}</span></button>`;
       return `
         <div class="play-pager__dots" role="tablist" aria-label="Play step pages">
-          ${dot(PLAY_PAGE_PLAYERS, "Players")}
-          ${dot(PLAY_PAGE_SCORES, "Scores")}
-          ${dot(PLAY_PAGE_GUIDE, "Reference guide")}
+          ${dot(PLAY_PAGE_PLAYERS, "Players", "Players")}
+          ${dot(PLAY_PAGE_SCORES, "Scores", "Scores")}
+          ${dot(PLAY_PAGE_GUIDE, "Reference guide", "Guide")}
         </div>`;
     }
 
