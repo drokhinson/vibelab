@@ -668,35 +668,21 @@
 
   // One editable cell.
   //
-  // `type="text"` with `inputmode="numeric"`: the iOS 10-key pad, whose
-  // missing keys (+, −, the (−) sign flip, Next) ride on the bar
-  // widgets/score-keypad.js docks on top of it. Text rather than number
-  // because a cell can hold a sum while it is typed ("12+7"), which a
-  // `type=number` would refuse to read back. The host never sees that text:
-  // oninput hands it ScoreKeypad.value(this), the score the text stands for,
-  // and leaving the cell replaces the sum with its result.
-  //
-  // A repaint while the cell is focused must not do that replacement early —
-  // the play-detail popup re-renders on every keystroke, and the morph would
-  // write "19" over the "12+7" still being typed. So when the live cell is the
-  // focused one and its text still adds up to the stored score, the render
-  // keeps the text.
+  // `type="text"` with `inputmode="numeric"`: the iOS 10-key pad, big keys
+  // and digits only. The sign it lacks, and a key to move on, ride on the bar
+  // widgets/score-keypad.js docks on top of it. Text rather than number so a
+  // half-typed "-" reads back as "-" instead of as "" with badInput set; the
+  // host sanitizes what arrives (sanitizeRoundScore) and writes it back.
   function renderEditableCell(rawValue, i, r, host, label) {
     const val = rawValue == null ? "" : String(rawValue);
     const neg = val.charAt(0) === "-";
-    const id = `rg-${host}-${i}-${r}`;
-    let shown = val;
-    const live = typeof document !== "undefined" ? document.activeElement : null;
-    if (live && live.id === id && window.ScoreKeypad && window.ScoreKeypad.evaluate(live.value) === val) {
-      shown = live.value;
-    }
     return `<div class="scoring-cell-wrap${neg ? " is-neg" : ""}">
       <input type="text" inputmode="numeric" enterkeyhint="next" autocomplete="off"
-             id="${id}" data-score-cell="${i}-${r}"
+             id="rg-${host}-${i}-${r}" data-score-cell="${i}-${r}"
              class="scoring-cell"
              aria-label="${escapeAttr(label || "Score")}"
-             value="${escapeAttr(shown)}"
-             oninput="window.${host}._setRoundScore(${i}, ${r}, window.ScoreKeypad ? window.ScoreKeypad.value(this) : this.value)" />
+             value="${escapeAttr(val)}"
+             oninput="window.${host}._setRoundScore(${i}, ${r}, this.value)" />
     </div>`;
   }
 

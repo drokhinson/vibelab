@@ -1,19 +1,16 @@
 // widgets/score-keypad.js — the bar that rides on top of the number pad while
-// a scoring-grid cell has focus: + and − to add up a cell, (−) to flip its
-// sign, and Next to move on.
+// a scoring-grid cell has focus: (−) to flip the cell's sign, and Next to move
+// on.
 //
 // The cell asks for `inputmode="numeric"`, the iOS 10-key pad — big keys,
-// digits only, no sign and no return key. Everything that pad is missing lives
-// here instead. A cell can therefore hold a sum while it is being typed
-// ("12+7-3"), and the host only ever sees the result: the grid's oninput
-// passes ScoreKeypad.value(this) rather than the raw text, and leaving the
-// cell (Next, a tap elsewhere) replaces the sum with that same result.
+// digits only, no sign and no return key. The two keys that pad is missing
+// live here instead.
 //
 // The bar is one element on <body>, created on first use, so it is never
 // inside a transformed sheet where `position: fixed` would stop meaning the
 // screen. It shows only while :root.bgb-kb-open (ui/viewport-lock.js) says a
-// software keyboard is up — a laptop has its own + and − keys and Enter moves
-// on just the same — and sits on it through --bgb-kb-inset.
+// software keyboard is up — a laptop has its own minus key and Enter moves on
+// just the same — and sits on it through --bgb-kb-inset.
 //
 // The buttons must not take focus from the cell, or the keyboard drops and
 // comes back on every tap. pointerdown is cancelled for mouse and Android;
@@ -24,74 +21,32 @@
   const CELL = "input.scoring-cell";
 
   /**
-   * The score a cell's text stands for: "" (empty), "-" (a sign waiting for
-   * digits, the same half-typed state sanitizeRoundScore keeps), or an integer
-   * string. A trailing operator is ignored, so "12+" is 12 while it is typed.
+   * The cell's text with its sign flipped: "" → "-" (a sign waiting for
+   * digits, the half-typed state sanitizeRoundScore keeps), "-" → "", and
+   * "12" ↔ "-12".
    * @param {string} text
    * @returns {string}
    */
-  function evaluate(text) {
-    const s = clean(text);
-    const terms = s.match(/[+-]?\d+/g);
-    if (!terms) return s.charAt(0) === "-" ? "-" : "";
-    return String(terms.reduce((sum, t) => sum + parseInt(t, 10), 0));
-  }
-
-  /** Digits and the two operators, no operator stacked on another, no leading "+". */
-  function clean(text) {
-    return String(text == null ? "" : text)
-      .replace(/[^0-9+-]/g, "")
-      .replace(/[+-]+(?=[+-])/g, "")
-      .replace(/^\+/, "");
-  }
-
-  /**
-   * For the cell's oninput: tidy the text in place (a pasted letter, a doubled
-   * operator) and return the score it stands for.
-   * @param {HTMLInputElement} el
-   */
-  function value(el) {
-    const tidy = clean(el.value);
-    if (tidy !== el.value) {
-      const pos = Math.max(0, (el.selectionStart || 0) - (el.value.length - tidy.length));
-      el.value = tidy;
-      try { el.setSelectionRange(pos, pos); } catch (_) {}
-    }
-    return evaluate(tidy);
+  function flipSign(text) {
+    const v = String(text == null ? "" : text);
+    return v.charAt(0) === "-" ? v.slice(1) : "-" + v;
   }
 
   /** Write text into a cell the way typing would, so the host hears it. */
-  function write(el, text, caret) {
+  function write(el, text) {
     el.value = text;
-    try { el.setSelectionRange(caret, caret); } catch (_) {}
+    try { el.setSelectionRange(text.length, text.length); } catch (_) {}
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
-  function insertOp(el, op) {
-    const v = el.value;
-    let start = el.selectionStart == null ? v.length : el.selectionStart;
-    const end = el.selectionEnd == null ? v.length : el.selectionEnd;
-    // Swap an operator right behind the caret rather than stacking a second.
-    if (start === end && /[+-]/.test(v.charAt(start - 1))) start -= 1;
-    if (start === 0 && op === "+") return;
-    write(el, v.slice(0, start) + op + v.slice(end), start + 1);
-  }
-
-  // (−) is about the whole cell, not the term under the caret: a sum in
-  // progress is settled first, so "12+7" becomes "-19".
   function toggleSign(el) {
-    const v = evaluate(el.value);
-    const next = v === "" ? "-" : v === "-" ? "" : v.charAt(0) === "-" ? v.slice(1) : "-" + v;
-    write(el, next, next.length);
+    write(el, flipSign(el.value));
   }
 
-  // Settle a cell on the way out: the sum becomes its result and a lone "-"
-  // becomes empty, so a cell never sits there showing text its column is not
-  // totalling.
+  // A lone "-" left behind is cleared on the way out, so a cell never sits
+  // there showing a sign its column is totalling as nothing.
   function settle(el) {
-    const v = evaluate(el.value);
-    const final = v === "-" ? "" : v;
-    if (el.value !== final) write(el, final, final.length);
+    if (el.value === "-") write(el, "");
   }
 
   // The cells of the grid this one belongs to, in reading order — across a
@@ -131,9 +86,7 @@
     el.setAttribute("aria-label", "Score keys");
     el.hidden = true;
     el.innerHTML = `
-      <button type="button" tabindex="-1" class="score-keypad__key" data-key="+" aria-label="Plus">+</button>
-      <button type="button" tabindex="-1" class="score-keypad__key" data-key="-" aria-label="Minus">&minus;</button>
-      <button type="button" tabindex="-1" class="score-keypad__key score-keypad__key--sign" data-key="sign" aria-label="Make negative or positive">(&minus;)</button>
+      <button type="button" tabindex="-1" class="score-keypad__key" data-key="sign" aria-label="Make negative or positive">(&minus;)</button>
       <button type="button" tabindex="-1" class="score-keypad__next" data-key="next">Next</button>`;
     el.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "touch" && e.target instanceof Element && e.target.closest("button")) e.preventDefault();
@@ -164,7 +117,6 @@
     const key = b.getAttribute("data-key");
     if (key === "next") next(el);
     else if (key === "sign") toggleSign(el);
-    else if (key) insertOp(el, key);
   }
 
   function show(el) {
@@ -211,6 +163,6 @@
     });
   }
 
-  window.ScoreKeypad = { evaluate, value, toggleSign, insertOp, next };
+  window.ScoreKeypad = { flipSign, toggleSign, next };
   if (typeof document !== "undefined" && document.addEventListener) start();
 })();

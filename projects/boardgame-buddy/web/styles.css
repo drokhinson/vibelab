@@ -9485,10 +9485,10 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-cell:focus { outline: none; border-color: var(--accent-ink); }
 
 /* The bar widgets/score-keypad.js docks on the number pad while a score cell
-   has focus: + and − to add up a cell, (−) to flip its sign, Next to move on.
+   has focus: (−) to flip its sign, Next to move on.
    Body-level and edge to edge like the keyboard it sits on, and shown only
    while ui/viewport-lock.js reports a software keyboard up — a hardware
-   keyboard has its own + and − and Enter does what Next does.
+   keyboard has its own minus key and Enter does what Next does.
 
    z-index 105: above the modal/sheet rung (100–102), because the play-detail
    popup's edit grid is a cell inside a modal; below the import toasts (111)
@@ -9529,10 +9529,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .score-keypad__key {
   background: var(--bg-1);
   color: var(--ink);
-  font: 500 24px/1 var(--font-score);
+  font: 500 20px/1 var(--font-score);
   box-shadow: 0 1px 0 var(--shadow-c);
 }
-.score-keypad__key--sign { font-size: 18px; }
 .score-keypad__key:active { background: var(--bg-0); }
 .score-keypad__next {
   margin-left: auto;
