@@ -7721,7 +7721,7 @@ html.bgb-ptr-armed body {
   font-weight: 700;
   cursor: pointer;
 }
-/* Matches .cascade-cta:disabled — a filled, muted block, not an outlined
+/* Echoes .cascade-cta:disabled — a filled, muted block, not an outlined
    ghost. The comment on that rule says out loud that it exists so inactive
    states read consistently, and --polaroid-line as a fill is nearly invisible
    on the espresso panel, which left this indistinguishable from Cancel below
@@ -11526,19 +11526,21 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   box-shadow: 0 10px 22px -8px color-mix(in srgb, var(--accent-fill) 55%, transparent);
 }
 .cascade-cta:hover { background: var(--accent-hover); }
-/* Disabled state — same warm grey + reduced opacity as
-   .cascade-card--expansions.is-disabled so the inactive states across
-   the cascade read consistently. */
+/* Disabled state — the same warm grey as .cascade-card--expansions.is-disabled,
+   but mixed into the ground as a SOLID fill rather than faded with opacity.
+   The CTA floats in a fixed bar over the scrolling screen, so a translucent
+   button let the game list show through it ("Continue to Play" before a game
+   is picked). */
 .cascade-cta:disabled,
 .cascade-cta[disabled] {
-  background: var(--polaroid-muted);
-  color: var(--polaroid-bg);
+  --cta-off: color-mix(in srgb, var(--polaroid-muted) 45%, var(--bg-1));
+  background: var(--cta-off);
+  color: color-mix(in srgb, var(--polaroid-bg) 70%, var(--cta-off));
   box-shadow: none;
-  opacity: 0.55;
   cursor: not-allowed;
 }
 .cascade-cta:disabled:hover,
-.cascade-cta[disabled]:hover { background: var(--polaroid-muted); }
+.cascade-cta[disabled]:hover { background: var(--cta-off); }
 
 /* The Play screen docks TWO buttons — "Next round" and "Wrap up"
    (play-flow-view#_renderPlayCta) — so its bar carries a row instead of a
