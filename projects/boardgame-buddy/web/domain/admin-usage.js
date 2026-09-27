@@ -21,6 +21,7 @@
 /**
  * @typedef {Object} UsagePayload
  * @property {string} generated_at
+ * @property {boolean} exclude_admins  whether is_admin accounts were left out (055)
  * @property {{ total:number, new_24h:number, new_7d:number, new_30d:number,
  *             admins:number, bgg_linked:number, push_enabled:number,
  *             first_signup:string|null }} users
@@ -52,6 +53,12 @@
   const NS = "admin.usage";
   const BUCKETS_NS = "admin.usage.buckets";
   const KEY = "all";
+  const KEY_NO_ADMINS = "no_admins";
+
+  /** @param {boolean} [excludeAdmins] */
+  function usageKey(excludeAdmins) {
+    return excludeAdmins ? KEY_NO_ADMINS : KEY;
+  }
 
   // Short fresh window: the server caches the RPC for five minutes anyway, so
   // a longer one here would only stack two staleness budgets on a number an
@@ -66,16 +73,22 @@
 
   class AdminUsage {
     /**
-     * @param {{refresh?: boolean}} [opts]
+     * @param {{refresh?: boolean, excludeAdmins?: boolean}} [opts]
      * @returns {Promise<UsagePayload>}
      */
     static load(opts) {
       const refresh = !!(opts && opts.refresh);
-      if (refresh) window.bgbCache.delete(NS, KEY);
+      const excludeAdmins = !!(opts && opts.excludeAdmins);
+      const key = usageKey(excludeAdmins);
+      if (refresh) window.bgbCache.delete(NS, key);
+      /** @type {Record<string, boolean>} */
+      const params = {};
+      if (refresh) params.refresh = true;
+      if (excludeAdmins) params.exclude_admins = true;
       return window.bgbCache.swr(
         NS,
-        KEY,
-        () => window.api.get("/admin/usage", refresh ? { refresh: true } : undefined),
+        key,
+        () => window.api.get("/admin/usage", Object.keys(params).length ? params : undefined),
         { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS },
       );
     }
@@ -95,9 +108,12 @@
       );
     }
 
-    /** Stale-tolerant synchronous read, or null. Lets the spoke paint first. */
-    static cached() {
-      return window.bgbCache.peek(NS, KEY);
+    /**
+     * Stale-tolerant synchronous read, or null. Lets the spoke paint first.
+     * @param {boolean} [excludeAdmins]
+     */
+    static cached(excludeAdmins) {
+      return window.bgbCache.peek(NS, usageKey(excludeAdmins));
     }
 
     /** Same, for the buckets block. */

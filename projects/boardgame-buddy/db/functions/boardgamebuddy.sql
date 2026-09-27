@@ -1,6 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 051_account_deletion_handover.sql (adds bgb_delete_account_rows
+-- Last updated: 055_usage_exclude_admins.sql (re-emits bgb_admin_usage_stats
+--               with p_exclude_admins BOOLEAN DEFAULT false — leaves is_admin
+--               accounts out of every per-account figure; screen views are
+--               filtered on metadata.admin, which web/domain/api.js stamps on
+--               an admin's events. The zero-arg overload is DROPped first.)
+--               Before that: 051_account_deletion_handover.sql (adds bgb_delete_account_rows
 --               and re-emits bgb_notifications + bgb_notifications_unread for a
 --               fourth kind, play_inherited.
 --
@@ -1852,10 +1857,11 @@
 --               and feedback_routes forces it to 'open' for non-admins so a
 --               missing argument can never leak the resolved half.
 
--- bgb_admin_usage_stats()
---   → JSONB { generated_at, users, active, database, screens, events, domain,
---             play_origins }
---   Defined in: projects/boardgame-buddy/db/migrations/047_usage_stats.sql
+-- bgb_admin_usage_stats(p_exclude_admins BOOLEAN DEFAULT false)
+--   → JSONB { generated_at, exclude_admins, users, active, database, screens,
+--             events, domain, play_origins }
+--   Defined in: projects/boardgame-buddy/db/migrations/055_usage_exclude_admins.sql
+--               (first 047_usage_stats.sql)
 --   Called by:  services/usage_service.fetch_usage (GET /admin/usage)
 --   Purpose:    App-wide usage for the admin Usage spoke — accounts, active
 --               accounts, the Postgres footprint, the screen leaderboard, the

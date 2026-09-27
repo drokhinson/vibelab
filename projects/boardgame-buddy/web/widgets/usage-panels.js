@@ -76,16 +76,36 @@
       return w ? w.phrase : "";
     },
 
-    windowSeg(current, handler) {
+    /** A segmented control over `{value, label}` options; `value` is a JS literal. */
+    seg(options, current, handler, ariaLabel) {
       return `
-        <div class="theme-seg usage-seg" role="group" aria-label="Time window">
-          ${UsagePanels.WINDOWS.map((w) => `
-            <button class="theme-seg__opt${w.key === current ? " is-on" : ""}"
-                    aria-pressed="${w.key === current ? "true" : "false"}"
-                    onclick="${escapeAttr(handler + "('" + w.key + "')")}">${w.label}</button>
+        <div class="theme-seg usage-seg" role="group" aria-label="${escapeAttr(ariaLabel)}">
+          ${options.map((o) => `
+            <button class="theme-seg__opt${o.value === current ? " is-on" : ""}"
+                    aria-pressed="${o.value === current ? "true" : "false"}"
+                    onclick="${escapeAttr(handler + "(" + JSON.stringify(o.value) + ")")}">${escapeHtml(o.label)}</button>
           `).join("")}
         </div>
       `;
+    },
+
+    windowSeg(current, handler) {
+      return UsagePanels.seg(
+        UsagePanels.WINDOWS.map((w) => ({ value: w.key, label: w.label })),
+        current, handler, "Time window",
+      );
+    },
+
+    /**
+     * Everyone vs. without admins. Admins are the accounts doing development
+     * work, so on a small user base their test traffic swamps the real
+     * numbers. Sits above People because it filters both cards below it.
+     */
+    audienceSeg(excludeAdmins, handler) {
+      return UsagePanels.seg(
+        [{ value: false, label: "Everyone" }, { value: true, label: "Without admins" }],
+        !!excludeAdmins, handler, "Whose usage",
+      );
     },
 
     // ── People ───────────────────────────────────────────────────────────────
@@ -105,7 +125,7 @@
           </div>
           ${UsagePanels.dailyStrip(a.daily)}
           <div class="usage-facts">
-            <span><b>${n(u.admins)}</b> admin${u.admins === 1 ? "" : "s"}</span>
+            <span><b>${n(u.admins)}</b> admin${u.admins === 1 ? "" : "s"}${data.exclude_admins ? " left out" : ""}</span>
             <span><b>${n(u.bgg_linked)}</b> linked to BoardGameGeek</span>
             <span><b>${n(u.push_enabled)}</b> with notifications on</span>
           </div>
@@ -139,7 +159,12 @@
 
     // ── Features ─────────────────────────────────────────────────────────────
 
-    features(data, w) {
+    /**
+     * The window control lives INSIDE this card because it is the only card
+     * it changes: People counts fixed windows, Storage has no window at all.
+     * The view repaints just this card's host on a switch.
+     */
+    features(data, w, windowHandler) {
       const phrase = UsagePanels.phraseFor(w);
       const screens = (data.screens || [])
         .slice()
@@ -155,6 +180,7 @@
       return `
         <div class="set-card-label">Features</div>
         <div class="set-card usage-card">
+          ${UsagePanels.windowSeg(w, windowHandler)}
           <h4 class="usage-h">Screens opened <em>${escapeHtml(phrase)}</em></h4>
           ${screens.length ? `
             <div class="stats-bars">
@@ -163,6 +189,11 @@
               )).join("")}
             </div>
           ` : `<p class="usage-quiet">No screen views recorded ${escapeHtml(phrase)}.</p>`}
+          ${data.exclude_admins ? `
+            <p class="usage-quiet">Screen views carry no account, so an
+              admin's are only told apart from when the app started tagging them —
+              older admin views are still counted here.</p>
+          ` : ""}
 
           <h4 class="usage-h usage-h--sep">What people make <em>${escapeHtml(phrase)}</em></h4>
           <div class="usage-rows">
