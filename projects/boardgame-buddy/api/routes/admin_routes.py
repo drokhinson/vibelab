@@ -69,11 +69,15 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
     # panel on purpose — so it is not expected to reach zero. The queue that
     # has to terminate is `bgg_meta_synced_at IS NULL`, and it lives with the
     # endpoint that drains it.
+    #
+    # A missing YEAR counts only until the game has been synced: BGG has no
+    # year for plenty of unreleased/fan titles, and such a row stays listed in
+    # the panel but is not work that should light the dot.
     missing_metadata = (
         _count_query(sb, "boardgamebuddy_games")
         .or_(
-            "description.is.null,bgg_stats_synced_at.is.null,"
-            "publishers.is.null,year_published.is.null"
+            "description.is.null,bgg_stats_synced_at.is.null,publishers.is.null,"
+            "and(year_published.is.null,bgg_meta_synced_at.is.null)"
         )
         .not_.is_("bgg_id", "null")
         .limit(1)

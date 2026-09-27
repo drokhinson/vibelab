@@ -65,7 +65,7 @@
     if (!t) return "";
     const parts = [`${t.updated} updated`];
     if (t.failed) parts.push(`${t.failed} failed`);
-    if (t.remaining) parts.push(`${t.remaining} still to do`);
+    if (t.remaining) parts.push(`${t.remaining} left`);
     return `<p class="admin-run__totals">${escapeHtml(parts.join(" · "))}</p>`;
   }
 
@@ -93,9 +93,8 @@
     // saying "running" about it is the lie this notice exists to avoid. The
     // flow decides staleness; this only reports it.
     const stalled = o.stale
-      ? `<p class="bgg-log__errors">This run stopped reporting. It was most likely
-          interrupted — nothing is half-written, and continuing picks up where it
-          left off.</p>`
+      ? `<p class="bgg-log__errors">Run stopped reporting — likely interrupted.
+          Nothing is half-written; Continue resumes.</p>`
       : "";
 
     const checklist = window.renderPhaseLog(progress, {
