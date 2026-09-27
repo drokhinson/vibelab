@@ -4308,11 +4308,14 @@
         seat.roundScores[roundIndex] = clean === "" ? null : clean;
       }
       this._normalizeRoundArrays();
-      // The text input doesn't auto-reject stray characters the way type=number
-      // did — write the sanitized value back when they differ (e.g. a pasted
-      // letter), preserving the caret.
+      // Write the sanitized value back when the cell's text stands for a
+      // different score, preserving the caret. Compared through the keypad's
+      // evaluator because a cell mid-sum reads "12+7" while holding 19, and
+      // that text is the user's to keep until they leave the cell
+      // (widgets/score-keypad.js).
       const input = this.container.querySelector(`input[data-score-cell="${playerIndex}-${roundIndex}"]`);
-      if (input && input.value !== clean) {
+      const shown = input && window.ScoreKeypad ? window.ScoreKeypad.evaluate(input.value) : input && input.value;
+      if (input && shown !== clean) {
         const pos = input.selectionStart;
         input.value = clean;
         try { input.setSelectionRange(pos, pos); } catch (_) {}

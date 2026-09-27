@@ -668,56 +668,36 @@
 
   // One editable cell.
   //
-  // `type="number"` WITH NO `inputmode` AND NO `pattern`, and both omissions
-  // are the point. A score can be negative, and on iOS the minus key exists on
-  // exactly one software keyboard: the numbers-and-punctuation plane, which is
-  // what Safari raises for a bare `type="number"`. `inputmode="numeric"` (or
-  // `pattern="[0-9]*"`) is the documented way to ask for the 10-key pad
-  // INSTEAD — digits and nothing else, no sign — and either one overrides the
-  // type. This cell used to carry both, which is why it needed a per-cell +/−
-  // button and a preference to turn that button on; the keyboard carries the
-  // sign now, so the button and the preference are gone.
+  // `type="text"` with `inputmode="numeric"`: the iOS 10-key pad, whose
+  // missing keys (+, −, the (−) sign flip, Next) ride on the bar
+  // widgets/score-keypad.js docks on top of it. Text rather than number
+  // because a cell can hold a sum while it is typed ("12+7"), which a
+  // `type=number` would refuse to read back. The host never sees that text:
+  // oninput hands it ScoreKeypad.value(this), the score the text stands for,
+  // and leaving the cell replaces the sum with its result.
   //
-  // The cost of `type=number` is that the element sanitizes its own value: a
-  // half-typed "-" reads back as "" (with `validity.badInput` set) rather than
-  // as "-", and so does "+5" or "3e4". Three places cover that, and all three
-  // are load-bearing:
-  //
-  //   * Neither editable host re-renders the cell it is being typed into —
-  //     play-flow-view patches only the totals row, and the popup morphs
-  //     (ui/dom-patch.js), whose syncValue no-ops when the live value and the
-  //     rendered one agree, which "" and "" do. So the "-" on screen survives
-  //     until a digit follows it and the value becomes real.
-  //   * `onblur` clears text the element is refusing to parse, so a cell can
-  //     never sit there reading "+5" while its column totals it as nothing.
-  //   * `onwheel` blurs rather than letting a scroll over a focused cell
-  //     spin its value — the grid body is a horizontal scroller inside a
-  //     vertical page, so a wheel gesture over a cell is a scroll, never an
-  //     edit.
+  // A repaint while the cell is focused must not do that replacement early —
+  // the play-detail popup re-renders on every keystroke, and the morph would
+  // write "19" over the "12+7" still being typed. So when the live cell is the
+  // focused one and its text still adds up to the stored score, the render
+  // keeps the text.
   function renderEditableCell(rawValue, i, r, host, label) {
     const val = rawValue == null ? "" : String(rawValue);
     const neg = val.charAt(0) === "-";
+    const id = `rg-${host}-${i}-${r}`;
+    let shown = val;
+    const live = typeof document !== "undefined" ? document.activeElement : null;
+    if (live && live.id === id && window.ScoreKeypad && window.ScoreKeypad.evaluate(live.value) === val) {
+      shown = live.value;
+    }
     return `<div class="scoring-cell-wrap${neg ? " is-neg" : ""}">
-      <input type="number" step="1"
-             id="rg-${host}-${i}-${r}" data-score-cell="${i}-${r}"
+      <input type="text" inputmode="numeric" enterkeyhint="next" autocomplete="off"
+             id="${id}" data-score-cell="${i}-${r}"
              class="scoring-cell"
              aria-label="${escapeAttr(label || "Score")}"
-             value="${escapeAttr(val)}"
-             onwheel="window.roundGridCellWheel(this)"
-             onblur="window.roundGridCellBlur(this)"
-             oninput="window.${host}._setRoundScore(${i}, ${r}, this.value)" />
+             value="${escapeAttr(shown)}"
+             oninput="window.${host}._setRoundScore(${i}, ${r}, window.ScoreKeypad ? window.ScoreKeypad.value(this) : this.value)" />
     </div>`;
-  }
-
-  // The two `type=number` guards the comment above describes. Globals rather
-  // than host methods on purpose: they are about the ELEMENT, identical on
-  // every surface, and adding them to the host contract would mean six
-  // consumers implementing the same two lines.
-  function roundGridCellBlur(el) {
-    if (el && el.validity && el.validity.badInput) el.value = "";
-  }
-  function roundGridCellWheel(el) {
-    if (el && el.ownerDocument && el.ownerDocument.activeElement === el) el.blur();
   }
 
   // Exported as window.renderRoundGridTotalsCell for hosts that repaint the
@@ -1119,8 +1099,6 @@
   window.roundGridTotal = roundGridTotal;
   window.roundGridHasAnyScore = roundGridHasAnyScore;
   window.sanitizeRoundScore = sanitizeRoundScore;
-  window.roundGridCellBlur = roundGridCellBlur;
-  window.roundGridCellWheel = roundGridCellWheel;
   window.parseRoundScore = parseRoundScore;
   window.RoundGridScroll = RoundGridScroll;
   window.RoundGridNames = RoundGridNames;
