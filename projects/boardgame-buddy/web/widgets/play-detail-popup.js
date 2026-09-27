@@ -398,6 +398,7 @@
         _pager = window.PlayDetailPager.attach(root, {
           canSwipe: canPage, neighbour, peekHtml, swap: swapTo,
           current: () => state.playId,
+          sequence: () => state.sequence,
         });
       },
     });
