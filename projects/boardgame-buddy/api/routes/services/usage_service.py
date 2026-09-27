@@ -34,31 +34,42 @@ _USAGE_TTL_SECONDS = 300          # 5 minutes
 _BUCKETS_NS = "bgb.admin_buckets"
 _BUCKETS_TTL_SECONDS = 6 * 60 * 60  # 6 hours
 
-# One entry each — these are app-wide figures, not per-user, so the key is a
-# constant and the namespace can never grow.
-cache.configure(_USAGE_NS, max_entries=1)
+# App-wide figures, not per-user, so the keys are constants and the namespaces
+# can never grow: one bucket entry, and one usage entry per admin filter.
+cache.configure(_USAGE_NS, max_entries=2)
 cache.configure(_BUCKETS_NS, max_entries=1)
 
 _KEY = "all"
+_KEY_NO_ADMINS = "no_admins"
 
 
-def fetch_usage(sb: Client, refresh: bool = False) -> dict[str, Any]:
+def fetch_usage(
+    sb: Client, refresh: bool = False, exclude_admins: bool = False
+) -> dict[str, Any]:
     """Return the whole Usage spoke payload in one call.
+
+    `exclude_admins` leaves is_admin accounts out of every per-account figure
+    (055) — admins are the ones doing development work, and on a small user
+    base their test traffic swamps everyone else's.
 
     Thin by design, exactly like `fetch_stats_detail`: the RPC composes every
     block server-side, so there is nothing to reshape here and no second
     declaration of its shape to drift. `047_usage_stats.sql` is the contract;
     the frontend carries it as a JSDoc `@typedef` in `web/domain/admin-usage.js`.
     """
+    key = _KEY_NO_ADMINS if exclude_admins else _KEY
     if not refresh:
-        hit = cache.get(_USAGE_NS, _KEY)
+        hit = cache.get(_USAGE_NS, key)
         if hit is not None:
             return hit
     # `.data` is the JSONB the function returns, already decoded. An RPC
     # returning a scalar jsonb comes back as the object itself rather than a
     # one-row list, which is why there is no `[0]` here.
-    payload = sb.rpc("bgb_admin_usage_stats").execute().data or {}
-    cache.set(_USAGE_NS, _KEY, payload, _USAGE_TTL_SECONDS)
+    payload = (
+        sb.rpc("bgb_admin_usage_stats", {"p_exclude_admins": exclude_admins}).execute().data
+        or {}
+    )
+    cache.set(_USAGE_NS, key, payload, _USAGE_TTL_SECONDS)
     return payload
 
 
@@ -83,4 +94,5 @@ def fetch_bucket_usage(refresh: bool = False) -> dict[str, Any]:
 def invalidate() -> None:
     """Drop both caches. For tests, and for a Refresh that should re-read all."""
     cache.delete(_USAGE_NS, _KEY)
+    cache.delete(_USAGE_NS, _KEY_NO_ADMINS)
     cache.delete(_BUCKETS_NS, _KEY)

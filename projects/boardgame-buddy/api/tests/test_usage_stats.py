@@ -161,10 +161,12 @@ class _FakeSupabase:
     def __init__(self, payload):
         self.payload = payload
         self.calls = 0
+        self.params = []
 
     def rpc(self, name, params=None):
         assert name == "bgb_admin_usage_stats"
         self.calls += 1
+        self.params.append(params)
         return self
 
     def execute(self):
@@ -185,6 +187,18 @@ def test_usage_payload_is_cached_then_bypassed_by_refresh():
     assert sb.calls == 1, "second read should have come from cache"
     U.fetch_usage(sb, refresh=True)
     assert sb.calls == 2, "refresh should have bypassed the cache"
+
+
+def test_admin_filter_is_passed_through_and_cached_separately():
+    """The two views are different numbers; one must never be served for the
+    other out of the cache."""
+    sb = _FakeSupabase({"users": {"total": 3}})
+    U.fetch_usage(sb)
+    U.fetch_usage(sb, exclude_admins=True)
+    assert sb.calls == 2, "the filtered payload came from the unfiltered cache"
+    assert sb.params == [{"p_exclude_admins": False}, {"p_exclude_admins": True}]
+    U.fetch_usage(sb, exclude_admins=True)
+    assert sb.calls == 2, "the filtered payload should be cached too"
 
 
 def test_bucket_walk_is_cached_then_bypassed_by_refresh(monkeypatch):
@@ -217,8 +231,20 @@ def client():
 
 def test_usage_endpoint_passes_the_rpc_payload_through(client, monkeypatch):
     payload = {"users": {"total": 7}, "screens": [], "generated_at": "2026-01-01T00:00:00Z"}
-    monkeypatch.setattr(U, "fetch_usage", lambda sb, refresh=False: payload)
+    monkeypatch.setattr(U, "fetch_usage", lambda sb, refresh=False, exclude_admins=False: payload)
     assert client.get(BASE).json() == payload
+
+
+def test_usage_endpoint_forwards_exclude_admins(client, monkeypatch):
+    seen = {}
+
+    def _fake(sb, refresh=False, exclude_admins=False):
+        seen["exclude_admins"] = exclude_admins
+        return {}
+
+    monkeypatch.setattr(U, "fetch_usage", _fake)
+    client.get(BASE, params={"exclude_admins": "true"})
+    assert seen["exclude_admins"] is True
 
 
 def test_buckets_endpoint_reports_an_unconfigured_bucket_as_a_200(client, monkeypatch):

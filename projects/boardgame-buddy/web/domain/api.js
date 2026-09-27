@@ -456,6 +456,11 @@
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
       const body = { app: "boardgame-buddy", event };
+      // analytics_events has no user column, so an admin's own clicks are
+      // stamped here — that is the only way the Usage spoke's "Without
+      // admins" view can leave them out of the screen counts (055).
+      const me = window.store && window.store.get("user");
+      if (me && me.is_admin) metadata = Object.assign({}, metadata, { admin: true });
       if (metadata) body.metadata = metadata;
       fetch(this.base + "/api/v1/analytics/track", {
         method: "POST",

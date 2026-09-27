@@ -19,15 +19,21 @@
 //
 // THE WINDOW CONTROL DOES NOT REFETCH. The payload carries all four windows
 // (24h / 7d / 30d / all) for every ranked block, so a switch is a repaint of
-// one host from memory, in the same frame as the tap
-// (`.claude/rules/web-frontend.md`). Fetching per window would have made the
-// one control on the screen the slowest thing on it.
+// the Features card from memory, in the same frame as the tap
+// (`.claude/rules/web-frontend.md`). It sits inside that card because that
+// card is all it changes.
+//
+// THE AUDIENCE CONTROL DOES. "Without admins" is a different payload (the RPC
+// filters server-side), cached under its own key on both sides, so after the
+// first switch each way it paints from cache too. Defaults to without admins:
+// admins are the accounts doing development work.
 
 (function () {
   // Stable hosts, so a window switch and the buckets landing each repaint one
   // region rather than the screen.
   const BODY_ID = "usage-body";
   const BUCKETS_ID = "usage-buckets";
+  const FEATURES_ID = "usage-features";
 
   const SELF = "window.adminUsageView";
 
@@ -45,6 +51,7 @@
       this._data = null;
       this._buckets = null;
       this._window = "last_7d";
+      this._excludeAdmins = true;
       this._loading = false;
       this._error = null;
       this._bucketsLoading = false;
@@ -67,7 +74,7 @@
       // Paint whatever the cache still holds before the network answers. These
       // figures move by the minute at most, so a second-stale number is a
       // better first frame than a spinner.
-      this._data = window.AdminUsage.cached() || null;
+      this._data = window.AdminUsage.cached(this._excludeAdmins) || null;
       this._buckets = window.AdminUsage.cachedBuckets() || null;
       await this._load();
       // Only now: the bucket walk must not delay anything above it.
@@ -84,17 +91,26 @@
       this._error = null;
       if (refresh) this._refreshing = true;
       this.render();
+      const excludeAdmins = this._excludeAdmins;
+      // True once the audience was switched while this was in flight: the
+      // newer request owns the screen, and this answer is for the other view.
+      const superseded = () => excludeAdmins !== this._excludeAdmins;
       try {
-        this._data = await window.AdminUsage.load({ refresh });
+        const data = await window.AdminUsage.load({ refresh, excludeAdmins });
+        if (!superseded()) this._data = data;
       } catch (e) {
         // A failed first load is NOT an empty state: it gets its own branch
         // with a retry rather than rendering "nothing here yet" over an error.
-        this._error = e.message || "Couldn't load usage stats";
-        if (refresh) showToast(this._error, "error");
+        if (!superseded()) {
+          this._error = e.message || "Couldn't load usage stats";
+          if (refresh) showToast(this._error, "error");
+        }
       } finally {
-        this._loading = false;
-        this._refreshing = false;
-        this.render();
+        if (!superseded()) {
+          this._loading = false;
+          this._refreshing = false;
+          this.render();
+        }
       }
     }
 
@@ -150,15 +166,19 @@
       if (!this._data) return window.buddyLoader({ size: 80 });
       const P = window.UsagePanels;
       return `
-        ${P.windowSeg(this._window, SELF + "._setWindow")}
+        ${P.audienceSeg(this._excludeAdmins, SELF + "._setAudience")}
         ${P.people(this._data)}
-        ${P.features(this._data, this._window)}
+        <div id="${FEATURES_ID}">${this._renderFeatures()}</div>
         ${P.storage(this._data, BUCKETS_ID, this._bucketRows())}
         ${P.footer(this._data, {
           refreshing: this._refreshing,
           refreshHandler: SELF + "._load({ refresh: true })",
         })}
       `;
+    }
+
+    _renderFeatures() {
+      return window.UsagePanels.features(this._data, this._window, SELF + "._setWindow");
     }
 
     _bucketRows() {
@@ -187,7 +207,17 @@
       this._window = key;
       // The payload already holds every window, so this is a repaint of one
       // host — no request, same frame as the tap.
-      this._patch(BODY_ID, this._renderBody());
+      this._patch(FEATURES_ID, this._renderFeatures());
+    }
+
+    _setAudience(excludeAdmins) {
+      if (this._excludeAdmins === excludeAdmins) return;
+      this._excludeAdmins = excludeAdmins;
+      // Paint the cached copy of the other view if there is one; otherwise the
+      // loader, never the previous audience's numbers under the new label.
+      this._data = window.AdminUsage.cached(excludeAdmins) || null;
+      this._error = null;
+      this._load();
     }
   }
 

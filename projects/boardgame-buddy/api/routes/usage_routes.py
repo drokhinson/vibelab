@@ -33,6 +33,9 @@ from .services import usage_service
 )
 async def get_admin_usage(
     refresh: bool = Query(False, description="Bypass the 5-minute server cache"),
+    exclude_admins: bool = Query(
+        False, description="Leave is_admin accounts out of every per-account figure"
+    ),
     _admin: CurrentUser = Depends(get_current_admin),
 ) -> dict[str, Any]:
     """Accounts, active accounts, Postgres footprint, screens and feature counts.
@@ -43,7 +46,9 @@ async def get_admin_usage(
     models.py would only be one more thing to drift. The frontend carries the
     shape as a JSDoc `@typedef` in web/domain/admin-usage.js instead.
     """
-    return await asyncio.to_thread(usage_service.fetch_usage, get_supabase(), refresh)
+    return await asyncio.to_thread(
+        usage_service.fetch_usage, get_supabase(), refresh, exclude_admins
+    )
 
 
 @router.get(
