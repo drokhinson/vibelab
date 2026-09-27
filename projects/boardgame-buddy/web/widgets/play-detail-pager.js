@@ -557,5 +557,11 @@
     return ctl;
   }
 
-  window.PlayDetailPager = { sequenceFor, renderNav, attach, preload, reserveImages, learn };
+  // The feel of a page turn, shared with the Play step's pages on a phone
+  // (widgets/play-step-pager.js) so the two surfaces slide as one gesture.
+  const MOTION = Object.freeze({
+    SLOP_PX, COMMIT_PX, FLICK_V, FLICK_MIN_PX, TURN_MS, TURN_EASE, GAP_PX, PEEK_SCALE, PEEK_OPACITY,
+  });
+
+  window.PlayDetailPager = { sequenceFor, renderNav, attach, preload, reserveImages, learn, MOTION };
 })();
