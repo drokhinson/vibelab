@@ -139,7 +139,15 @@
     if (!root.__opts) return;
     if (cardId != null && root.__cardId !== cardId) return;
     const merged = { ...(root.__opts || {}), ...partial };
+    // Carry the photo across the repaint. A fresh gameArtImg starts from the
+    // ~150px thumbnail again, so every update (the joiner's playId, the host's
+    // save settling) would flash the card back to grainy until the box art
+    // re-decoded. The old node keeps whatever it has — box art, or the
+    // upgrade still in flight, which swaps into this same element.
+    const oldPhoto = partial.game ? null : root.querySelector("img.polaroid-popup__photo");
     root.innerHTML = renderInner(merged);
+    const newPhoto = oldPhoto && root.querySelector("img.polaroid-popup__photo");
+    if (newPhoto) newPhoto.replaceWith(oldPhoto);
     wire(root, merged);
   }
 
