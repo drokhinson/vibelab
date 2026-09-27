@@ -122,12 +122,13 @@
     }
     if (!code) {
       // Minting. Five en-dashes in the same tabular face measure exactly as
-      // wide as the five characters they stand in for, so the strip doesn't
-      // resize under the reader when the real code lands.
+      // wide as the five characters they stand in for, and the spinner sits
+      // in the copy glyph's 14px slot, so the strip doesn't resize under the
+      // reader when the real code lands.
       return `
-        <span class="cascade-gamebar__code cascade-gamebar__code--pending">
+        <span class="cascade-gamebar__code cascade-gamebar__code--pending" role="status" aria-label="Getting session code">
           <span class="cascade-gamebar__code-text">–––––</span>
-          <span class="cascade-gamebar__glyph cascade-gamebar__glyph--spacer"></span>
+          <span class="game-finder-spinner" aria-hidden="true"></span>
         </span>
       `;
     }

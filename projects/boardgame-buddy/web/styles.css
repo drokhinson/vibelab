@@ -11573,6 +11573,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--polaroid-muted);
   animation: importExpPulse 1.2s ease-in-out infinite;
 }
+/* The icon bubble paints --polaroid-line, the same colour as the shared
+   spinner's track, so the track is re-pointed to stay visible against it. */
+.cascade-invite__icon .game-finder-spinner {
+  width: 16px;
+  height: 16px;
+  border-color: color-mix(in srgb, var(--polaroid-muted) 30%, transparent);
+  border-top-color: var(--polaroid-accent);
+}
 /* Shown for a few seconds after a dead session was swapped for a fresh one, so
    the host knows the code they already read out to the table is no longer the
    one to share. Deliberately a line on the card rather than a toast or a modal:
@@ -11684,9 +11692,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 /* Copy / check swap. Both glyphs ship hydrated and only one is ever shown, so
    confirming the tap needs no icon re-render. */
 .cascade-gamebar__glyph { flex: none; }
-/* Holds the copy glyph's width in the pending pill, so the slot is the same
-   size before and after the code arrives. */
-.cascade-gamebar__glyph--spacer { width: 14px; }
 .cascade-gamebar__glyph--done { display: none; }
 .cascade-gamebar__code--copy.is-copied .cascade-gamebar__glyph--idle { display: none; }
 .cascade-gamebar__code--copy.is-copied .cascade-gamebar__glyph--done { display: inline-block; }
