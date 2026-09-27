@@ -82,7 +82,7 @@ def counts_client(monkeypatch):
         ("boardgamebuddy_games", "or(image_url.is.null,thumbnail_url.is.null)"): 5,
         ("boardgamebuddy_games",
          "not bgg_id is null,or(description.is.null,bgg_stats_synced_at.is.null,"
-         "publishers.is.null,year_published.is.null)"): 40,
+         "publishers.is.null,and(year_published.is.null,bgg_meta_synced_at.is.null))"): 40,
         # Filtered on the LAYOUT as well as the status: moderation_status is
         # NULL on every other chapter today, and a status filter alone would
         # quietly start counting prose the day that stops being true.

@@ -317,7 +317,7 @@ console.log("\nthe log");
     events_dropped: 12,
   }), { labels: tool.labels, order: tool.order });
 
-  ok("phases read as sentences, not wire names", html.includes("Finding what is missing"));
+  ok("phases read as sentences, not wire names", html.includes("Find gaps"));
   ok("the active phase carries its counter", html.includes("1 of 3"));
   ok("the totals line is there", html.includes("20 updated") && html.includes("1 failed"));
   ok("an error line is marked as one", html.includes("admin-run__line--error"));

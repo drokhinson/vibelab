@@ -36,24 +36,24 @@
   const TOOLS = {
     trending: {
       title: "Refresh trending",
-      lede: "Snapshot BoardGameGeek's hot list and import what the catalog lacks.",
+      lede: "Snapshot the BGG hot list; import new games.",
       icon: "flame",
       multiPass: false,
       timeoutMs: 180 * 1000,
       order: ["fetch", "snapshot", "prune", "diff", "import", "caches"],
       labels: {
-        fetch: "Reading BoardGameGeek's hot list",
-        snapshot: "Saving this run",
-        prune: "Clearing out old runs",
-        diff: "Checking what the catalog already has",
-        import: "Importing the games it lacks",
-        caches: "Refreshing the Discover rails",
+        fetch: "Read hot list",
+        snapshot: "Save snapshot",
+        prune: "Prune old runs",
+        diff: "Diff catalog",
+        import: "Import new games",
+        caches: "Refresh Discover",
       },
       run: (opts) => window.Game.adminRefreshTrending(opts),
     },
     "bgg-images": {
       title: "Missing images",
-      lede: "Re-host box art for games with no image, or one still hotlinked from BoardGameGeek.",
+      lede: "Re-host box art that is missing or hotlinked to BGG.",
       icon: "image-off",
       multiPass: true,
       limit: 25,
@@ -62,7 +62,7 @@
     },
     "bgg-metadata": {
       title: "Missing BGG data",
-      lede: "Fetch descriptions, publisher credits, ratings and missing years — one BoardGameGeek call covers all four.",
+      lede: "Fetch description, publishers, stats and year — one BGG call per game.",
       icon: "layers",
       multiPass: true,
       limit: 200,
@@ -71,8 +71,8 @@
     },
     // Records links only — no downloads — so it takes the metadata tool's bite.
     "bgg-image-links": {
-      title: "Record BGG image links",
-      lede: "Save BoardGameGeek's own image URLs next to the ones we host, so the app can switch to them later. One call covers twenty games.",
+      title: "BGG image links",
+      lede: "Save BGG image URLs beside our hosted copies. One call per 20 games.",
       icon: "link",
       multiPass: true,
       limit: 200,
@@ -86,9 +86,9 @@
   // makes for their being one screen.
   const BACKFILL_ORDER = ["scan", "fetch", "caches"];
   const BACKFILL_LABELS = {
-    scan: "Finding what is missing",
-    fetch: "Asking BoardGameGeek, and saving what comes back",
-    caches: "Refreshing the catalog caches",
+    scan: "Find gaps",
+    fetch: "Fetch from BGG",
+    caches: "Refresh caches",
   };
 
 

@@ -113,15 +113,15 @@
       {
         key: "images",
         runTool: "bgg-images",
-        title: "Games missing images",
+        title: "Images",
         icon: "image-off",
-        emptyText: "All catalog games have images.",
+        emptyText: "All games have images.",
         oneOkToast: "Image refreshed",
         rowStatus: (g) => {
           const missing = [];
           if (!g.thumbnail_url) missing.push("thumb");
           if (!g.image_url) missing.push("image");
-          return missing.length ? `Missing: ${missing.join(", ")}` : "OK";
+          return missing.length ? `Missing ${missing.join(", ")}` : "OK";
         },
         list: () => window.Game.adminMissingImages(),
         refreshOne: (id) => window.Game.adminRefreshOneImage(id),
@@ -129,9 +129,9 @@
       {
         key: "metadata",
         runTool: "bgg-metadata",
-        title: "Games missing BGG data",
+        title: "BGG data",
         icon: "layers",
-        emptyText: "Every catalog game has been checked against BoardGameGeek.",
+        emptyText: "All games synced.",
         oneOkToast: "Game data refreshed",
         // The server sends `missing` (the field names) and `checked_at`, so
         // this needs no ternaries and — more importantly — a row that has been
@@ -139,14 +139,10 @@
         // stays listed on purpose; without the "checked" half it reads as a
         // queue that will not drain.
         rowStatus: (g) => {
-          const names = {
-            description: "no description", stats: "no BGG stats",
-            publishers: "no publisher", year: "no year",
-          };
+          const names = { publishers: "publisher" };
           const missing = (g.missing || []).map((k) => names[k] || k).join(", ");
-          return g.checked_at
-            ? `${missing} — BoardGameGeek has no more`
-            : missing || "Not synced";
+          if (!missing) return "Not synced";
+          return g.checked_at ? `Missing ${missing} · not on BGG` : `Missing ${missing}`;
         },
         list: () => window.Game.adminMissingMetadata(),
         refreshOne: (id) => window.Game.adminRefreshOneMetadata(id),
@@ -156,11 +152,11 @@
         // nothing left to do, so this one does drain to empty.
         key: "image-links",
         runTool: "bgg-image-links",
-        title: "Games without BGG image links",
+        title: "Image links",
         icon: "link",
-        emptyText: "Every catalog game has its BoardGameGeek image links recorded.",
+        emptyText: "All games recorded.",
         oneOkToast: "Image links recorded",
-        rowStatus: () => "BoardGameGeek image URLs not recorded",
+        rowStatus: () => "Not recorded",
         list: () => window.Game.adminMissingImageLinks(),
         refreshOne: (id) => window.Game.adminRecordOneImageLinks(id),
       },
