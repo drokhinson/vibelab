@@ -115,9 +115,10 @@ async def set_played_before(
     # wishlist rows. A match of zero rows is therefore the 404 — there is
     # nothing to mark.
     #
-    # Nothing else in the app reads played_before_at: the game keeps reading
-    # as Owned in the status map, on its detail page and in every play count.
-    # The only consumer is the 'shelf' block of bgb_user_stats_detail.
+    # The game keeps reading as Owned in the status map, on its detail page
+    # and in every play count. Two readers: the 'shelf' block of
+    # bgb_user_stats_detail, and the rank queue (services/rank_service.queue),
+    # which offers only games that are played by this same rule.
     stamp = datetime.now(timezone.utc).isoformat() if body.played_before else None
     result = await asyncio.to_thread(
         get_supabase()

@@ -163,23 +163,25 @@ def remove(sb: Client, user_id: str, game_id: str) -> bool:
 
 
 def queue(sb: Client, user_id: str) -> list[RankQueueItem]:
-    """Owned or played base games without a rank, A to Z.
+    """Played base games without a rank, A to Z.
 
-    Played is the rule every play-derived surface uses — plays the viewer
-    logged or is seated in — read through bgb_play_stats. Wishlist and
-    previously-owned games are left out unless the viewer has played them.
+    A game you have never played has nothing to rank yet, so the Shelf of
+    Shame stays out — and the rule is the shelf's own: a game counts as played
+    when it has a play (logged or seated in, read through bgb_play_stats) or
+    carries the "played before joining" mark on its collection row
+    (played_before_at, set from the Shelf of Shame sheet).
     """
-    owned = page_all(
+    marked = page_all(
         lambda: sb.table("boardgamebuddy_collections")
         .select("id, game_id")
         .eq("user_id", user_id)
-        .eq("status", "owned"),
-        "id", label="rank queue owned",
+        .not_.is_("played_before_at", "null"),
+        "id", label="rank queue played before",
     )
     stats = sb.rpc("bgb_play_stats", {"p_viewer": user_id, "p_game_ids": None}).execute().data or []
     played = [r["game_id"] for r in stats if (r.get("play_count") or 0) > 0 or r.get("last_played_at")]
     ranked = {r["game_id"] for r in _rank_rows(sb, user_id)}
-    ids = [gid for gid in dict.fromkeys([r["game_id"] for r in owned] + played) if gid not in ranked]
+    ids = [gid for gid in dict.fromkeys(played + [r["game_id"] for r in marked]) if gid not in ranked]
     games = _game_rows(sb, ids)
     items = []
     for gid in ids:
