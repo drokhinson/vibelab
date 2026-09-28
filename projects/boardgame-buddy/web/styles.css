@@ -15178,26 +15178,54 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   margin: 0.5rem 0;
 }
 /* The dropdown and the search field stack as one column: same height as the
-   DaisyUI .input (3rem), same row gap as .profile-panel__controls, and each
-   row ends in the same 3rem square — the sort button above, the filter button
-   below, or an empty slot where either is not offered — so the two fields'
-   right edges line up whatever the order and whoever's shelf it is. */
+   DaisyUI .input (3rem) and the same row gap as .profile-panel__controls. A
+   row that ends in a button (the sort button above, the filter button below)
+   gives it a 3rem square, so where both rows have one their fields' right
+   edges line up; a row without one lets its field run the full width. */
 .collection-picker-row .shelf-picker { flex: 1 1 auto; min-width: 0; width: auto; margin: 0; min-height: 3rem; height: 3rem; }
-.collection-ctrl-btn.btn,
-.collection-ctrl-slot {
+.collection-ctrl-btn.btn {
   flex: none;
   box-sizing: border-box;
   width: 3rem; height: 3rem; min-height: 3rem;
   padding: 0;
 }
-.collection-ctrl-slot { display: block; }
 
-/* A plain .btn-ghost, like #collection-filter-btn beside the search field. It
-   shows the active order: the A–Z glyph is text, sized to sit where that
-   button's icon does; the other two are icons. Hidden while its dial is open,
-   because the dial's first choice sits exactly over it. */
-.sort-toggle { flex: none; }
+/* The sort button is a tile of the dropdown's own material — the same tinted
+   fill, border, radius and press state as .shelf-picker — so the pair reads as
+   two controls of one family. Not a .btn-ghost: the spoke screens re-ink those
+   (.bgb-spoke-screen .btn.btn-ghost), and this one wears the accent. Doubled
+   class to out-rank DaisyUI's own .btn fill.
+   The mark inside shows the active order: the A–Z glyph is text, sized to sit
+   where an icon would. Hidden while its dial is open, because the dial's first
+   choice sits exactly over it. */
+.sort-toggle.collection-ctrl-btn {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 0.85rem;
+  color: var(--accent-ink);
+  transition: background 0.15s, border-color 0.15s;
+}
+@media (hover: hover) {
+  .sort-toggle.collection-ctrl-btn:hover {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border-color: var(--accent);
+  }
+}
+.sort-toggle.collection-ctrl-btn:active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.sort-toggle.collection-ctrl-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sort-toggle.is-dial-open { visibility: hidden; }
+.sort-toggle__mark { display: grid; place-items: center; }
+.sort-toggle__mark.is-swapped { animation: sort-mark-pop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+@keyframes sort-mark-pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+/* A re-order slides each tile from its old place (collection-view _slideTiles). */
+.collection-tile.is-flipping { transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .sort-toggle__mark.is-swapped { animation: none; }
+  .collection-tile.is-flipping { transition: none; }
+}
 .sort-toggle__az {
   font-family: var(--font-display);
   font-weight: 700;
