@@ -22225,6 +22225,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .rank-flow__done-actions .btn { min-height: 52px; }
 .rank-flow__undo { flex: none; color: var(--polaroid-ink); }
 .rank-flow__continue { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-flow__rankings { width: 100%; min-height: 48px; color: var(--polaroid-ink); }
 .rank-flow__num { font-family: var(--font-score); color: var(--accent-ink); }
 .rank-flow__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .rank-flow__row {

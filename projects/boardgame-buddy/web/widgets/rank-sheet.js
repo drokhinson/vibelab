@@ -139,6 +139,7 @@
         placeOpts: rerank ? { recategorize: true } : {},
         continueLabel: "Done",
         onContinue: () => this._sheet.close(),
+        onRankings: () => this._sheet.close(),
         onStep: (step) => {
           const title = step === "result" ? "Ranked" : `${verb} ${escapeHtml(this._game.name)}`;
           const el = this._sheet.el && this._sheet.el.querySelector("[data-rank-title]");
