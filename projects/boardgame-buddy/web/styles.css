@@ -9560,8 +9560,10 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   font-weight: 600;
 }
 /* Prev is the secondary move, so it takes the key's plain face; Next keeps the
-   solid accent as the move a scorer makes forty times a night. */
+   solid accent as the move a scorer makes forty times a night. Its auto margin
+   holds (−) at the left edge and the moves at the right. */
 .score-keypad__prev {
+  margin-left: auto;
   background: var(--bg-1);
   color: var(--ink);
   box-shadow: 0 1px 0 var(--shadow-c);
@@ -9573,19 +9575,6 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: var(--on-accent);
 }
 .score-keypad__next:active { filter: brightness(0.92); }
-/* Which cell the digits are going into ("Cat — R7"), between (−) and the
-   moves. It is the flexible slot, so it is also what pushes Prev and Next to
-   the right edge; on a narrow phone it gives its room up first and truncates. */
-.score-keypad__where {
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  text-align: center;
-  font-size: 14px;
-  color: var(--ink-muted);
-}
 /* + Round: the Play step's "Next round", which the docked bar would offer if the
    keypad were not sitting where it goes. Outlined in the accent rather than
    filled, so Next stays the one solid key. */

@@ -1,7 +1,7 @@
 // widgets/score-keypad.js — the bar that rides on top of the number pad while
 // a scoring-grid cell has focus: (−) to flip the cell's sign, Prev / Next to
-// move between cells, the cell being typed into, and — on the Play step — the
-// docked bar's "Next round" as + Round.
+// move between cells, and — on the Play step — the docked bar's "Next round"
+// as + Round.
 //
 // The cell asks for `inputmode="numeric"`, the iOS 10-key pad — big keys,
 // digits only, no sign and no return key. The two keys that pad is missing
@@ -111,7 +111,6 @@
     el.hidden = true;
     el.innerHTML = `
       <button type="button" tabindex="-1" class="score-keypad__key" data-key="sign" aria-label="Make negative or positive">(&minus;)</button>
-      <span class="score-keypad__where" aria-hidden="true"></span>
       <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__prev" data-key="prev">Prev</button>
       <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__next" data-key="next">Next</button>
       <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__round" data-key="round">+ Round</button>`;
@@ -159,8 +158,6 @@
     const prevBtn = /** @type {HTMLButtonElement|null} */ (bar.querySelector(".score-keypad__prev"));
     if (nextBtn) nextBtn.textContent = cells[cells.length - 1] === el ? "Done" : "Next";
     if (prevBtn) prevBtn.disabled = cells[0] === el;
-    const where = bar.querySelector(".score-keypad__where");
-    if (where) where.textContent = el.getAttribute("aria-label") || "";
     const roundBtn = /** @type {HTMLElement|null} */ (bar.querySelector(".score-keypad__round"));
     if (roundBtn) roundBtn.hidden = !el.closest("[data-kp-round]");
     bar.hidden = false;
