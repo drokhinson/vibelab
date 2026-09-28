@@ -17,7 +17,7 @@ behaviours working without a branch in each:
 The mirror is regenerated on every save and never hand-edited: `grid` is the
 source of truth and `content` is derived from it.
 
-This module exists at all so chapter_routes.py (already 728 lines against a ~300
+This module exists at all so chapter_routes.py (already well past the ~300-line
 guideline) does not grow further.
 """
 

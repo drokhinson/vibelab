@@ -106,8 +106,8 @@
   // listener fires async, outside the view lifecycle.
   //
   // Named for what it does, not for which provider backs it: domain/auth.js
-  // picks Firebase or Supabase from config.js, and everything below is written
-  // against the one session shape it publishes.
+  // stands up Identity Platform (Firebase Auth) from config.js, and everything
+  // below is written against the one session shape it publishes.
   function initAuth() {
     if (!window.BgbAuth || !window.BgbAuth.init()) {
       console.error("Auth config missing");
@@ -416,9 +416,8 @@
   // between two known parties, not a broadcast, and it stays greppable.
   window.bgbQrFlowEnded = releaseQrHold;
 
-  // Boot navigation happens exactly once per signed-in session. BOTH providers
-  // report more than once at boot — supabase-js fires INITIAL_SESSION then
-  // often TOKEN_REFRESHED, and Firebase's onIdTokenChanged fires on the
+  // Boot navigation happens exactly once per signed-in session. The provider
+  // reports more than once at boot — Firebase's onIdTokenChanged fires on the
   // restored user and again on every silent refresh — and each invocation is an
   // un-serialized async function, so
   // without this latch a second invocation resolves seconds later — after the

@@ -613,9 +613,10 @@ async def create_chapter(
 ) -> MyGuideChapterResponse:
     """Create a new chapter attached to a game and immediately add it to the creator's guide.
 
-    A rulebook link written by an admin is live immediately; anyone else's is
-    visible to them and their accepted buddies while it waits in the admin queue
-    (migration 052).
+    A rulebook link starts `pending` when its author asks for review and
+    `unlisted` when they don't (`chapter_rulebook.initial_status`), admins
+    included. Either way it is visible to its author and their accepted buddies;
+    only a pending one sits in the admin queue (migrations 052, 053).
     """
     sb = get_supabase()
     return await asyncio.to_thread(_create_chapter_sync, sb, game_id, body, user)

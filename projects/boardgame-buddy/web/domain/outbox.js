@@ -24,7 +24,7 @@
 /**
  * @typedef {Object} OutboxEntry
  * @property {string} clientKey     UUID, also carried on payload.client_key
- * @property {string|null} userId   Supabase uid that recorded it — see _mine()
+ * @property {string|null} userId   id of the account that recorded it — see _mine()
  * @property {Object} payload       A PlayCreate body (PlaySession.toPlayCreate())
  * @property {Object|null} gameSnapshot  {id,name,thumbnail_url} for the pending UI
  * @property {number} queuedAt      Date.now() at enqueue

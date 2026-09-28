@@ -1,4 +1,4 @@
-// domain/api.js — Singleton API client. Wraps fetch, attaches Supabase JWT,
+// domain/api.js — Singleton API client. Wraps fetch, attaches the Identity Platform ID token,
 // surfaces the FastAPI error envelope as `Error("detail or statusText")`.
 
 (function () {

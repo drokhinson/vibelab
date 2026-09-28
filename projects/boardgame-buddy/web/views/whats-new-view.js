@@ -12,7 +12,7 @@
 // of its own: they are one errand, talking to whoever builds this.
 //
 // It is its own SPOKE rather than a card rendered inline there, for three
-// reasons: settings-view.js is already 1258 lines (4x the CLAUDE.md cap),
+// reasons: settings-view.js is already several times the CLAUDE.md ~300-line cap,
 // Settings' entire vocabulary is the one-line .set-card__row while this is a
 // list of cards with rendered markdown in them, and it needs its own loading /
 // empty / error branches — which is a screen, not a card.

@@ -37,9 +37,9 @@
 //     review step the user has said so, and a list keyed on how the note wrote
 //     them would be showing the user their own note back rather than the plays
 //     they are about to import. `import_group_id` is that same identity at
-//     write time (groupKeyFor), minus the plays with something of their own to
-//     say: a score or a note disqualifies a play from the feed's group however
-//     the model counted it, because the group's card cannot say it.
+//     write time (groupKeyFor), so the review list and the feed stack the same
+//     plays. A play with a note or a score nobody else shares is alone at its
+//     key and gets its own card; only a play with no catalog game is ungrouped.
 //
 //   • THE DRAFT IS SAVED, NOT THE PARSE. localStorage holds the whole draft
 //     under a versioned key. A refresh three steps in resumes where it was; a

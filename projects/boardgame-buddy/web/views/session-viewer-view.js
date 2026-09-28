@@ -320,9 +320,9 @@
           this.render();
         } else if (participantsOnly) {
           // At a 2s cadence we cannot afford a full innerHTML rebuild of the
-          // whole cascade on every roster change — it would yank scroll and
-          // destroy DOM focus on the joiner's editable score input. Patch
-          // just the participant surfaces in place instead.
+          // whole cascade on every roster change — it would yank the joiner's
+          // scroll position every poll. Patch just the participant surfaces in
+          // place instead.
           this._patchParticipants();
         }
         if (next.phase !== prevPhase) {

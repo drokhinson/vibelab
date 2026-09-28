@@ -231,8 +231,8 @@ async function openFromPush(data) {
  *
  * Re-subscribing here keeps the OS-level registration alive, but the new
  * endpoint CANNOT be reported from a worker: the API needs a bearer token and
- * the Supabase session lives in the page's localStorage, which is unreachable
- * from here. So this is half of handling rotation, and domain/push.js's boot-time re-sync is
+ * the ID token is minted by the Firebase SDK in the page, which this worker does
+ * not load. So this is half of handling rotation, and domain/push.js's boot-time re-sync is
  * the other half — the authoritative one. Between the two, a rotation costs at
  * most the notifications sent before the app is next opened.
  *
@@ -257,7 +257,7 @@ self.addEventListener("pushsubscriptionchange", (event) => {
 /** The FastAPI backend and Supabase, wherever they're deployed. */
 function isBackend(url) {
   if (url.pathname.startsWith("/api/")) return true;
-  // Supabase Auth + Realtime + Storage all live under *.supabase.co. Matched
+  // Supabase Realtime + Storage live under *.supabase.co. Matched
   // by hostname because the SW has no access to window.APP_CONFIG.
   if (url.hostname.endsWith(".supabase.co")) return true;
   return false;

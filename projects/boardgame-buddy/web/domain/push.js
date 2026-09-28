@@ -270,13 +270,14 @@
      * THIS IS THE AUTHORITATIVE HALF OF HANDLING ROTATION. A browser can rotate
      * an endpoint whenever it likes; sw.js's pushsubscriptionchange handler
      * re-subscribes at the OS level but cannot tell the API, because it has no
-     * bearer token — the Supabase session lives in the page's localStorage.
+     * bearer token — the ID token is minted by the Firebase SDK in the page,
+     * which the worker does not load.
      * So the page re-posts whatever the device currently holds, and the upsert
      * on `endpoint` makes that free when nothing has changed. A rotation costs
      * at most the notifications sent before the app is next opened.
      *
      * WAITS FOR THE USER RATHER THAN READING IT. init.js calls this while the
-     * shell is coming up, and initSupabase() resolves auth asynchronously
+     * shell is coming up, and BgbAuth resolves the signed-in user asynchronously
      * afterwards — so at call time the store almost always holds no user, the
      * tier reads as "none", and a straight read would skip the sync on exactly
      * the cold launch it exists for. Subscribing instead means it runs on the

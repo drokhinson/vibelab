@@ -858,7 +858,7 @@
      * (views/imports-view.js). The second is not a second importer — it is the
      * list of past imports, where each one can be opened to see what it
      * wrote. It is a spoke
-     * for the reasons the What's new archive is: this file is past 1250 lines,
+     * for the reasons the What's new archive is: this file is far past the ~300-line guideline,
      * Settings' whole vocabulary is the one-line row below, and a list that
      * grows every time somebody imports wants its own screen.
      */

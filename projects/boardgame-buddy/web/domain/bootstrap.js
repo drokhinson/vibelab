@@ -56,8 +56,9 @@
     identity:    { fresh: 30 * 24 * 60 * 60 * 1000, stale: 30 * 24 * 60 * 60 * 1000 },
   };
 
-  // Single-flight guards. Supabase can fire two auth callbacks at boot and both
-  // reach for the profile; without these they'd each issue their own request.
+  // Single-flight guards. The auth listener (Firebase's onIdTokenChanged) can
+  // fire twice at boot and both reach for the profile; without these they'd
+  // each issue their own request.
   let _loadInflight = null;
   let _bundlesInflight = null;
 
