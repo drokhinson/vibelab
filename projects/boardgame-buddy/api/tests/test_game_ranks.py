@@ -258,6 +258,9 @@ def test_place_sends_the_server_decided_category_and_returns_the_new_number(sb):
     # The whole ranking after the write rides the echo, so the client replaces
     # its cache rather than refetching: Azul moved to #2 under the new game.
     assert {e.game_id: e.position for e in entry.ranks} == {"new": 1, "x": 2}
+    # ...and each carries its game, which is what lets the client build the
+    # next comparison list from cache.
+    assert {e.game_id: e.game.name for e in entry.ranks} == {"new": "Cascadia", "x": "Azul"}
 
 
 def test_rerank_moves_within_the_original_category(sb):

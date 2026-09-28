@@ -44,6 +44,17 @@
     }
 
     _load(seq) {
+      // From the cached ranking when it can answer — no "Opening…" at all. The
+      // category comes from the game's own rank, or from its unranked-queue
+      // item (both the server's decision); with neither, ask the server.
+      const queued = (window.Rank.cachedQueue() || []).find((it) => it.game && it.game.id === this._game.id);
+      const local = window.Rank.localContext(this._game, queued || {});
+      if (local) {
+        this._ctx = local;
+        if (local.rank) this._showList();
+        else this._startFlow();
+        return;
+      }
       window.Rank.context(this._game.id).then((ctx) => {
         if (seq !== this._seq || !this._sheet.isOpen) return;
         this._ctx = ctx;

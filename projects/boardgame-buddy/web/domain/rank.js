@@ -8,8 +8,9 @@
 //              game page pill and the Collection top-5 chips read it.
 //   queue()    played games with no rank yet, A to Z.
 //   context()  one game's category, current rank, and the list it is ranked
-//              against — fetched fresh each time the sheet opens, because the
-//              questions binary-search into exactly that list.
+//              against. localContext() builds the same thing from the cached
+//              summary (whose entries carry their game), so the sheet and the
+//              queue only fetch it when the cache cannot answer.
 //   place()    write a tier + index; the echo carries the whole ranking, which
 //              REPLACES the cached summary (and the game leaves the cached
 //              queue), then `ranks-changed` fires — so every surface repaints
@@ -154,6 +155,34 @@
       };
       if (Array.isArray(ranks)) put(SUMMARY_KEY, { ranks });
       if (Array.isArray(queue)) put(QUEUE_KEY, { items: queue });
+    }
+
+    /**
+     * The GET /ranks/games/{id} payload, built from the cached ranking instead
+     * of asked for: {game, category, category_label, rank, ranked}. A game
+     * already ranked keeps its stored category (as the server's _category_for
+     * does); otherwise `cats` supplies it — the queue item, which the server
+     * decided. Null when the cache cannot answer (no summary, no category, or
+     * a summary cached before entries carried their game): fetch then.
+     */
+    static localContext(game, cats = {}) {
+      const summary = Rank.cachedSummary();
+      if (!summary || !game || !game.id) return null;
+      const own = summary[game.id] || null;
+      const category = own ? own.category : cats.category;
+      const label = own ? own.category_label : cats.category_label;
+      if (!category) return null;
+      const others = Object.values(summary)
+        .filter((e) => e.category === category && e.game_id !== game.id);
+      if (others.some((e) => !e.game)) return null;
+      others.sort((a, b) => a.position - b.position);
+      return {
+        game: own && own.game ? { ...own.game, ...game } : game,
+        category,
+        category_label: label || category,
+        rank: own,
+        ranked: others.map((e, i) => ({ game: e.game, tier: e.tier, position: i + 1 })),
+      };
     }
 
     /** What counts as played changed (a play saved or deleted, a played-before

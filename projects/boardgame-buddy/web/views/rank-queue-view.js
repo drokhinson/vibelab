@@ -157,41 +157,35 @@
       this.render();
     }
 
-    async _mountFlow() {
+    // The gut check shows at once — the queue item already carries the game
+    // and the category the server decided. The list it is ranked against
+    // follows: built from the cached ranking when that can answer, fetched
+    // when not, and in either case only after the previous game's background
+    // save has landed (its echo is what puts that game in the cached list).
+    _mountFlow() {
       const host = this.container.querySelector("#rank-queue-flow");
       if (!host) return;
       if (this._flow) this._flow.destroy();
       this._flow = null;
-      const seq = ++this._seq;
       const item = this._items[this._idx];
-      host.innerHTML = window.buddyLoader({ size: 64, label: "Opening…" });
-      try {
-        // The previous game saves in the background; in the same category it
-        // has to be in this game's list, or the questions would skip it.
-        await this._lastWrite;
-        const ctx = await window.Rank.context(item.game.id);
-        if (seq !== this._seq || !this._mounted) return;
-        const next = this._items[this._idx + 1];
-        this._flow = new window.RankFlow({
-          host,
-          context: { ...ctx, rank: null },
-          continueLabel: next ? `Next: ${next.game.name}` : "Finish",
-          onContinue: () => this._next(),
-          // Counted when the place is shown, not when its save lands: Continue
-          // can leave before the background write finishes.
-          onStep: (step) => {
-            if (step === "result") this._rankedIds.add(item.game.id);
-            this._paintFoot(step);
-          },
-        });
-      } catch (_) {
-        if (seq !== this._seq || !this._mounted) return;
-        host.innerHTML = `
-          <div class="rank-flow__error">
-            <p>Couldn't load this game's ranking just now.</p>
-            <button type="button" class="btn btn-primary btn-sm" onclick="window.rankQueueView._mountFlow()">Try again</button>
-          </div>`;
-      }
+      const cats = { category: item.category, category_label: item.category_label };
+      const list = () => this._lastWrite.then(() =>
+        window.Rank.localContext(item.game, cats) || window.Rank.context(item.game.id));
+      const next = this._items[this._idx + 1];
+      this._flow = new window.RankFlow({
+        host,
+        context: { game: item.game, ...cats, rank: null, ranked: null },
+        ready: list(),
+        reload: list,
+        continueLabel: next ? `Next: ${next.game.name}` : "Finish",
+        onContinue: () => this._next(),
+        // Counted when the place is shown, not when its save lands: Continue
+        // can leave before the background write finishes.
+        onStep: (step) => {
+          if (step === "result") this._rankedIds.add(item.game.id);
+          this._paintFoot(step);
+        },
+      });
     }
 
     // Under the questions: skip this game. Under the result (whose Continue
