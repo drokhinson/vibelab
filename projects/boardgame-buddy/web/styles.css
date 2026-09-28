@@ -22017,6 +22017,12 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .rank-sheet__body { gap: 12px; padding: 4px 10px 8px; }
 .rank-sheet__foot { flex: none; padding: 0 2px; }
 .rank-sheet__foot:empty { display: none; }
+.rank-sheet__moved {
+  margin: 12px 0 0; padding: 10px 12px;
+  border-radius: 10px; background: var(--polaroid-bg-soft);
+  font-size: 0.85rem; color: var(--polaroid-muted);
+}
+.rank-sheet__moved b { color: var(--accent-ink); }
 .rank-sheet__sub { margin: 0; font-size: 0.85rem; color: var(--polaroid-muted); }
 .rank-sheet__rerank { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; }
 

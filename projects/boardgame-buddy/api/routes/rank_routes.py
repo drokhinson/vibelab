@@ -7,8 +7,9 @@ was first ranked in.
 """
 
 import asyncio
+from typing import Annotated
 
-from fastapi import Depends, Path
+from fastapi import Depends, Path, Query
 
 from db import get_supabase
 
@@ -55,9 +56,10 @@ async def rank_queue(user: CurrentUser = Depends(get_current_user)) -> RankQueue
 )
 async def rank_context(
     game_id: str = Path(..., description="Game UUID"),
+    current: Annotated[bool, Query(description="List the category the game belongs in now (Re-rank)")] = False,
     user: CurrentUser = Depends(get_current_user),
 ) -> RankContext:
-    return await asyncio.to_thread(rank_service.context, get_supabase(), user.user_id, game_id)
+    return await asyncio.to_thread(rank_service.context, get_supabase(), user.user_id, game_id, current)
 
 
 @router.put(
@@ -72,7 +74,8 @@ async def rank_game(
     user: CurrentUser = Depends(get_current_user),
 ) -> RankPlaced:
     return await asyncio.to_thread(
-        rank_service.place, get_supabase(), user.user_id, game_id, body.tier, body.index
+        rank_service.place, get_supabase(), user.user_id, game_id, body.tier, body.index,
+        body.recategorize,
     )
 
 

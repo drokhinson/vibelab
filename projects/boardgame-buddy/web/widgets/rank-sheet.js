@@ -96,18 +96,46 @@
       window.BgbIcons.render(root);
     }
 
+    /** Where the rules put this ranked game now — which may not be where it
+     *  was ranked (its BGG data was refreshed since). Null when unknown. */
+    _current() {
+      const own = (window.Rank.cachedSummary() || {})[this._game.id] || this._ctx.rank;
+      if (!own || !own.current_category) return null;
+      return { category: own.current_category, category_label: own.current_category_label || own.current_category };
+    }
+
     _startFlow() {
       if (this._flow) this._flow.destroy();
-      const verb = this._ctx.rank ? "Re-rank" : "Rank";
+      const rerank = !!this._ctx.rank;
+      const verb = rerank ? "Re-rank" : "Rank";
       this._patch(`${verb} ${escapeHtml(this._game.name)}`, "", "");
       const host = this._sheet.el.querySelector("[data-rank-body]");
       // Only the first flow of an open takes the preset tier; Re-rank asks again.
-      const tier = this._ctx.rank ? null : this._tier;
+      const tier = rerank ? null : this._tier;
       this._tier = null;
+      // A Re-rank ranks the game in the category it belongs in NOW, so a game
+      // whose BGG data changed (Pandemic, refreshed to co-op) moves there and
+      // leaves its old list. Same category: the stored list, exactly as before.
+      let context = { ...this._ctx, rank: null };
+      let ready = null;
+      let reload = null;
+      const cur = rerank ? this._current() : null;
+      if (cur && cur.category !== this._ctx.category) {
+        const local = window.Rank.localContext(this._game, cur, { current: true });
+        if (local) context = { ...local, rank: null };
+        else {
+          context = { game: this._ctx.game, ...cur, rank: null, ranked: null };
+          reload = () => window.Rank.context(this._game.id, { current: true });
+          ready = reload();
+        }
+      }
       this._flow = new window.RankFlow({
         host,
         tier,
-        context: { ...this._ctx, rank: null },
+        context,
+        ready,
+        reload,
+        placeOpts: rerank ? { recategorize: true } : {},
         continueLabel: "Done",
         onContinue: () => this._sheet.close(),
         onStep: (step) => {
@@ -135,9 +163,15 @@
               <span class="rank-flow__row-name">${escapeHtml(g.name)}</span>
             </li>`).join("")}
         </ol>`;
-      this._patch(`Your ${escapeHtml(ctx.category_label)} games`, list, `
+      const cur = this._current();
+      const moved = cur && cur.category !== ctx.category ? cur : null;
+      const note = moved
+        ? `<p class="rank-sheet__moved">BoardGameGeek now lists this as a <b>${escapeHtml(moved.category_label)}</b> game. Re-rank to move it.</p>`
+        : "";
+      this._patch(`Your ${escapeHtml(ctx.category_label)} games`, list + note, `
         <button class="bgb-sheet__cancel rank-sheet__rerank" type="button" data-rank-sheet="rerank">
-          <i data-icon="rotate-ccw" class="w-4 h-4"></i> Re-rank ${escapeHtml(ctx.game.name)}
+          <i data-icon="rotate-ccw" class="w-4 h-4"></i>
+          ${moved ? `Re-rank in ${escapeHtml(moved.category_label)}` : `Re-rank ${escapeHtml(ctx.game.name)}`}
         </button>`);
     }
 

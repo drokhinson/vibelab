@@ -132,12 +132,17 @@
       return (data && data.items) || [];
     }
 
-    static context(gameId) {
-      return window.api.get(`/ranks/games/${encodeURIComponent(gameId)}`);
+    /** @param {{current?: boolean}} [opts] current: the list for the category
+     *  the game belongs in NOW (a Re-rank), not the one it is stored in. */
+    static context(gameId, { current = false } = {}) {
+      return window.api.get(`/ranks/games/${encodeURIComponent(gameId)}${current ? "?current=true" : ""}`);
     }
 
-    static async place(gameId, tier, index) {
-      const entry = await window.api.put(`/ranks/games/${encodeURIComponent(gameId)}`, { tier, index });
+    /** @param {{recategorize?: boolean}} [opts] recategorize: a Re-rank —
+     *  place it in the category the rules give it now, leaving the old list. */
+    static async place(gameId, tier, index, { recategorize = false } = {}) {
+      const body = recategorize ? { tier, index, recategorize: true } : { tier, index };
+      const entry = await window.api.put(`/ranks/games/${encodeURIComponent(gameId)}`, body);
       _changed(gameId, entry);
       return entry;
     }
@@ -165,12 +170,14 @@
      * decided. Null when the cache cannot answer (no summary, no category, or
      * a summary cached before entries carried their game): fetch then.
      */
-    static localContext(game, cats = {}) {
+    static localContext(game, cats = {}, { current = false } = {}) {
       const summary = Rank.cachedSummary();
       if (!summary || !game || !game.id) return null;
       const own = summary[game.id] || null;
-      const category = own ? own.category : cats.category;
-      const label = own ? own.category_label : cats.category_label;
+      // `current`: a Re-rank into the category the game belongs in now.
+      const useOwn = own && !current;
+      const category = useOwn ? own.category : cats.category;
+      const label = useOwn ? own.category_label : cats.category_label;
       if (!category) return null;
       const others = Object.values(summary)
         .filter((e) => e.category === category && e.game_id !== game.id);
