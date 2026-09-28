@@ -1,4 +1,5 @@
-"""Game ranking: where the viewer's games sit, and moving them (migration 056).
+"""Game ranking: where the viewer's games sit, and moving them (migration 056),
+plus parking an unranked game until its next play (migration 058).
 
 Rows hold (category, tier, position-within-tier). Everything the player sees is
 derived here: "#3 Family" is the game's place in its category with the tiers
@@ -7,6 +8,7 @@ positions inside a tier never gain a hole or a collision.
 """
 
 import math
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
@@ -30,6 +32,7 @@ from ._helpers import (
 from .rank_category import category_label, rank_category
 
 TABLE = "boardgamebuddy_game_ranks"
+DEFERRALS = "boardgamebuddy_rank_deferrals"
 _TIER_INDEX = {t.value: i for i, t in enumerate(RANK_TIER_ORDER)}
 # The category decision reads these on top of the GameSummary columns.
 _GAME_COLS = game_select_clause() + ", categories, publishers, bgg_weight, bgg_family"
@@ -169,6 +172,7 @@ def place(
         "p_tier": tier.value, "p_index": index,
     }).execute().data
     raise_for_rpc_error(data, "Rank game")
+    sb.table(DEFERRALS).delete().eq("user_id", user_id).eq("game_id", game_id).execute()
     ranks = list_ranks(sb, user_id)
     entry = next((e for e in ranks if e.game_id == game_id), None)
     if entry is None:
@@ -182,8 +186,24 @@ def remove(sb: Client, user_id: str, game_id: str) -> bool:
     return bool(data.get("removed"))
 
 
+def defer(sb: Client, user_id: str, game_id: str) -> None:
+    """Park an unranked game until the player plays it again. Re-deferring
+    restamps it, so the next play is counted from now. The deferral lapses on
+    its own (bgb_rank_deferrals_active); ranking the game deletes it."""
+    game = _game_row(sb, game_id)
+    if game.get("is_expansion"):
+        raise HTTPException(status_code=400, detail="Expansions are ranked with their base game")
+    if any(r["game_id"] == game_id for r in _rank_rows(sb, user_id)):
+        raise HTTPException(status_code=400, detail="This game is already ranked")
+    sb.table(DEFERRALS).upsert(
+        {"user_id": user_id, "game_id": game_id, "deferred_at": datetime.now(timezone.utc).isoformat()},
+        on_conflict="user_id,game_id",
+    ).execute()
+
+
 def queue(sb: Client, user_id: str) -> list[RankQueueItem]:
-    """Played base games without a rank, A to Z.
+    """Played base games without a rank, A to Z, then the ones the player
+    parked until their next play (`deferred`), A to Z.
 
     A game you have never played has nothing to rank yet, so the Shelf of
     Shame stays out — and the rule is the shelf's own: a game counts as played
@@ -201,6 +221,7 @@ def queue(sb: Client, user_id: str) -> list[RankQueueItem]:
     stats = sb.rpc("bgb_play_stats", {"p_viewer": user_id, "p_game_ids": None}).execute().data or []
     played = [r["game_id"] for r in stats if (r.get("play_count") or 0) > 0 or r.get("last_played_at")]
     ranked = {r["game_id"] for r in _rank_rows(sb, user_id)}
+    deferred = set(sb.rpc("bgb_rank_deferrals_active", {"p_viewer": user_id}).execute().data or [])
     ids = [gid for gid in dict.fromkeys(played + [r["game_id"] for r in marked]) if gid not in ranked]
     games = _game_rows(sb, ids)
     items = []
@@ -209,6 +230,9 @@ def queue(sb: Client, user_id: str) -> list[RankQueueItem]:
         if not g or g.get("is_expansion"):
             continue
         cat = rank_category(g)
-        items.append(RankQueueItem(game=game_summary_from_row(g), category=cat, category_label=category_label(cat)))
-    items.sort(key=lambda i: (i.game.name.casefold(), i.game.id))
+        items.append(RankQueueItem(
+            game=game_summary_from_row(g), category=cat, category_label=category_label(cat),
+            deferred=gid in deferred,
+        ))
+    items.sort(key=lambda i: (i.deferred, i.game.name.casefold(), i.game.id))
     return items
