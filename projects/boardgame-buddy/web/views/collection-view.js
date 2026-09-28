@@ -779,8 +779,8 @@
             placeholder: this._searchPlaceholder(),
             oninput: "window.collectionView._onSearchInput(this.value)",
           })}
-          ${noFilters ? "" : `
-            <button id="collection-filter-btn" class="btn btn-ghost relative" title="Filters"
+          ${noFilters ? `<span class="collection-ctrl-slot" aria-hidden="true"></span>` : `
+            <button id="collection-filter-btn" class="btn btn-ghost relative collection-ctrl-btn" title="Filters"
                     onclick="window.collectionView._toggleFilters()">
               <i data-icon="sliders-horizontal" class="w-4 h-4"></i>
               ${activeFilters > 0 ? `<span class="search-filter-badge">${activeFilters}</span>` : ""}
@@ -814,7 +814,7 @@
       return `
         <div class="collection-picker-row">
           ${this._renderPickerButton()}
-          ${this._isOther() ? "" : this._renderSortButton()}
+          ${this._isOther() ? `<span class="collection-ctrl-slot" aria-hidden="true"></span>` : this._renderSortButton()}
         </div>
       `;
     }
@@ -823,7 +823,7 @@
     _renderSortButton() {
       const cur = SORTS.find((o) => o.id === (this._isAltSort() ? this._sort : SORT_AZ)) || SORTS[0];
       return `
-        <button type="button" id="collection-sort-btn" class="btn btn-ghost sort-toggle"
+        <button type="button" id="collection-sort-btn" class="btn btn-ghost sort-toggle collection-ctrl-btn"
                 aria-haspopup="menu" aria-expanded="false"
                 aria-label="Order: ${escapeAttr(cur.label)}. Change order" title="${escapeAttr(cur.label)}"
                 onclick="window.collectionView._openSortDial(this)">
