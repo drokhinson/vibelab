@@ -6,19 +6,29 @@
 //
 //   summary()  every ranked game's place and score, held whole (tens of rows). The
 //              game page pill and the Collection top-5 chips read it.
-//   queue()    owned or played games with no rank yet, A to Z.
+//   queue()    played games with no rank yet, A to Z.
 //   context()  one game's category, current rank, and the list it is ranked
 //              against — fetched fresh each time the sheet opens, because the
 //              questions binary-search into exactly that list.
-//   place()    write a tier + index; busts summary and queue and fires
-//              `ranks-changed` so every surface showing a rank repaints.
+//   place()    write a tier + index; the echo carries the whole ranking, which
+//              REPLACES the cached summary (and the game leaves the cached
+//              queue), then `ranks-changed` fires — so every surface repaints
+//              from cache and nothing refetches.
+//
+// Both reads are seeded at boot from /bootstrap (seed()), so they are cache
+// hits from the first screen. That, and place() writing the cache itself, is
+// why the TTLs are long: the only things that change a ranking are this
+// viewer's own writes, and the queue is dropped (invalidateQueue()) whenever a
+// play or a played-before mark changes what counts as played.
 
 (function () {
   const NS = "rank";
   const SUMMARY_KEY = "summary";
   const QUEUE_KEY = "queue";
-  const FRESH_TTL_MS = 60 * 1000;
-  const STALE_TTL_MS = 10 * 60 * 1000;
+  const TTLS = {
+    [SUMMARY_KEY]: { freshTtl: 30 * 60 * 1000, staleTtl: 24 * 60 * 60 * 1000 },
+    [QUEUE_KEY]: { freshTtl: 10 * 60 * 1000, staleTtl: 24 * 60 * 60 * 1000 },
+  };
 
   // Declared best first; a category's list stacks them in this order.
   const TIERS = [
@@ -33,9 +43,20 @@
     return map;
   }
 
-  function _changed(gameId) {
-    window.bgbCache.delete(NS, SUMMARY_KEY);
-    window.bgbCache.delete(NS, QUEUE_KEY);
+  function _changed(gameId, echo) {
+    if (echo && Array.isArray(echo.ranks)) {
+      window.bgbCache.setWithTtls(NS, SUMMARY_KEY, { ranks: echo.ranks }, TTLS[SUMMARY_KEY]);
+      const queued = window.bgbCache.peek(NS, QUEUE_KEY);
+      if (queued && Array.isArray(queued.items)) {
+        window.bgbCache.setWithTtls(NS, QUEUE_KEY,
+          { items: queued.items.filter((it) => !it.game || it.game.id !== gameId) },
+          TTLS[QUEUE_KEY]);
+      }
+    } else {
+      // A server from before the echo carried the ranking: refetch instead.
+      window.bgbCache.delete(NS, SUMMARY_KEY);
+      window.bgbCache.delete(NS, QUEUE_KEY);
+    }
     document.dispatchEvent(new CustomEvent("ranks-changed", { detail: { gameId } }));
   }
 
@@ -74,8 +95,7 @@
     static async summary({ force = false } = {}) {
       if (force) window.bgbCache.delete(NS, SUMMARY_KEY);
       const data = await window.bgbCache.swr(NS, SUMMARY_KEY,
-        () => window.api.get("/ranks"),
-        { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS });
+        () => window.api.get("/ranks"), TTLS[SUMMARY_KEY]);
       return _byGame(data);
     }
 
@@ -107,8 +127,7 @@
     static async queue({ force = false } = {}) {
       if (force) window.bgbCache.delete(NS, QUEUE_KEY);
       const data = await window.bgbCache.swr(NS, QUEUE_KEY,
-        () => window.api.get("/ranks/queue"),
-        { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS });
+        () => window.api.get("/ranks/queue"), TTLS[QUEUE_KEY]);
       return (data && data.items) || [];
     }
 
@@ -118,8 +137,29 @@
 
     static async place(gameId, tier, index) {
       const entry = await window.api.put(`/ranks/games/${encodeURIComponent(gameId)}`, { tier, index });
-      _changed(gameId);
+      _changed(gameId, entry);
       return entry;
+    }
+
+    /**
+     * Seed both reads from /bootstrap's `ranks` / `rank_queue` (null = that
+     * read failed server-side; leave the key to its own fetch). A key written
+     * after the boot request went out — a rank placed mid-boot — is newer than
+     * the payload and is kept.
+     */
+    static seed({ ranks, queue }, { startedAt = 0 } = {}) {
+      const put = (key, value) => {
+        if (startedAt && window.bgbCache.storedAt(NS, key) > startedAt) return;
+        window.bgbCache.setWithTtls(NS, key, value, TTLS[key]);
+      };
+      if (Array.isArray(ranks)) put(SUMMARY_KEY, { ranks });
+      if (Array.isArray(queue)) put(QUEUE_KEY, { items: queue });
+    }
+
+    /** What counts as played changed (a play saved or deleted, a played-before
+     *  mark): the queue has to be asked again. The ranking itself has not moved. */
+    static invalidateQueue() {
+      window.bgbCache.delete(NS, QUEUE_KEY);
     }
   }
 

@@ -168,7 +168,7 @@ def run(coro):
     (_game("1", "up to 4", min_p=2, max_p=4, weight=3), "strategy"),
     (_game("1", "gin rummy", cats=["Card Game"], pubs=["(Public Domain)"],
            min_p=2, max_p=2), "card"),                                       # Card comes first
-    # Co-op, after Card and 2-player.
+    # Co-op, after Card and Dueling.
     (_game("1", "pandemic", family="strategygames", mode="coop", min_p=2, max_p=4), "coop"),
     (_game("1", "duet", mode="coop", min_p=2, max_p=2), "two_player"),
     (_game("1", "coop cards", cats=["Card Game"], pubs=["(Public Domain)"], mode="coop"), "card"),
@@ -255,6 +255,9 @@ def test_place_sends_the_server_decided_category_and_returns_the_new_number(sb):
     })
     assert (entry.position, entry.category_label) == (1, "Family")
     assert {e.game_id: e.position for e in run(R.list_ranks(user=USER)).ranks} == {"new": 1, "x": 2}
+    # The whole ranking after the write rides the echo, so the client replaces
+    # its cache rather than refetching: Azul moved to #2 under the new game.
+    assert {e.game_id: e.position for e in entry.ranks} == {"new": 1, "x": 2}
 
 
 def test_rerank_moves_within_the_original_category(sb):

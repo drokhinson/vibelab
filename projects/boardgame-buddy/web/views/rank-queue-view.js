@@ -31,6 +31,13 @@
 
     async onMount() {
       this._reset();
+      // Seeded at boot and kept current by every rank write, so the list is
+      // usually on screen in the first frame; _load() then only confirms it.
+      const cached = window.Rank.cachedQueue();
+      if (cached) {
+        this._items = cached;
+        this._loaded = true;
+      }
       await this._load();
     }
 
@@ -40,6 +47,8 @@
 
     renderLoading() {
       this._reset();
+      const cached = window.Rank.cachedQueue();
+      if (cached) { this._items = cached; this._loaded = true; }
       this._loading = true;
       this.render();
     }
@@ -49,7 +58,10 @@
       this._failed = false;
       this.render();
       try {
-        this._items = await window.Rank.queue({ force: true });
+        const items = await window.Rank.queue();
+        // Once ranking has started the list is snapshotted (see the header):
+        // a late answer must not shift the index out from under the flow.
+        if (this._mode === "list") this._items = items;
         this._loaded = true;
       } catch (_) {
         if (!this._loaded) this._failed = true;

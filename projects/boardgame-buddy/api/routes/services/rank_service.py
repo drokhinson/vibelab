@@ -17,6 +17,7 @@ from ..rank_models import (
     RankContext,
     RankedGame,
     RankEntry,
+    RankPlaced,
     RankQueueItem,
 )
 from ._helpers import (
@@ -140,7 +141,7 @@ def context(sb: Client, user_id: str, game_id: str) -> RankContext:
     )
 
 
-def place(sb: Client, user_id: str, game_id: str, tier: RankTier, index: int) -> RankEntry:
+def place(sb: Client, user_id: str, game_id: str, tier: RankTier, index: int) -> RankPlaced:
     game = _game_row(sb, game_id)
     if game.get("is_expansion"):
         raise HTTPException(status_code=400, detail="Expansions are ranked with their base game")
@@ -150,10 +151,11 @@ def place(sb: Client, user_id: str, game_id: str, tier: RankTier, index: int) ->
         "p_tier": tier.value, "p_index": index,
     }).execute().data
     raise_for_rpc_error(data, "Rank game")
-    entry = next((e for e in list_ranks(sb, user_id) if e.game_id == game_id), None)
+    ranks = list_ranks(sb, user_id)
+    entry = next((e for e in ranks if e.game_id == game_id), None)
     if entry is None:
         raise HTTPException(status_code=500, detail="Rank was not saved")
-    return entry
+    return RankPlaced(**entry.model_dump(), ranks=ranks)
 
 
 def remove(sb: Client, user_id: str, game_id: str) -> bool:

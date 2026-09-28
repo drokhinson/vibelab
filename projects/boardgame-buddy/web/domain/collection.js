@@ -152,8 +152,8 @@
      * Deliberately does NOT bust the status map: the mark is scoped to the
      * shelf block of bgb_user_stats_detail, and the game keeps reading as
      * Owned everywhere else. Busting that cache would imply otherwise.
-     * views/stats-view.js invalidates the stats payload, which is the one
-     * cache this does move.
+     * It moves two caches: the stats payload (views/stats-view.js invalidates
+     * it) and the rank queue, dropped below.
      *
      * @param {string} gameId
      * @param {boolean} playedBefore
@@ -161,6 +161,11 @@
     static setPlayedBefore(gameId, playedBefore) {
       return window.api.patch(`/collection/${gameId}/played-before`, {
         played_before: playedBefore,
+      }).then((r) => {
+        // The mark decides whether an unplayed game may be ranked
+        // (services/rank_service.queue).
+        if (window.Rank && window.Rank.invalidateQueue) window.Rank.invalidateQueue();
+        return r;
       });
     }
 

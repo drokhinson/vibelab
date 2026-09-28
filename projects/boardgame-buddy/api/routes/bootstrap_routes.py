@@ -15,6 +15,8 @@ cached identity to boot from. It returns:
     one notification_service.list_notifications call)
   - release_notices_unseen (the what's-new popup's slides, oldest-first, capped;
     empty for almost every boot)
+  - ranks + rank_queue (the viewer's game ranking and the played games still
+    unranked; null when that read failed — see _soft)
   - bootstrap_version (int; FE wipes cache when this changes)
 
 GET /bootstrap/game-bundles is the deferred one — one bgb_game_detail_bundle
@@ -28,6 +30,7 @@ the entire app off that cache until SWR background-refresh kicks in.
 """
 
 import asyncio
+import logging
 from typing import Any
 
 from fastapi import Depends
@@ -42,8 +45,11 @@ from .services import (
     game_service,
     notification_service,
     played_with_service,
+    rank_service,
     release_notice_service,
 )
+
+logger = logging.getLogger(__name__)
 
 # Cap on how many owned games get a prebuilt detail bundle. Mirrors the RPC's
 # own default; the overflow is marked `truncated` and lazily fetched instead.
@@ -54,6 +60,20 @@ _MAX_GAME_BUNDLES = 250
 # pages on from its cursor, so a different size here would make the first scroll
 # either re-fetch rows it already has or skip past them.
 _NOTIFICATIONS_PAGE = 20
+
+
+async def _soft(label: str, fn, *args):
+    """Run a decoration read in a worker thread; a failure is None, not a 500.
+
+    For blocks the first screen can live without: the ranking decorates
+    Collection and the game page, which fetch it themselves on a miss, so it
+    must never be the reason the app fails to boot.
+    """
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except Exception:  # noqa: BLE001 — logged, and the FE refetches on a miss
+        logger.exception("bootstrap: %s failed", label)
+        return None
 
 
 @router.get(
@@ -109,6 +129,8 @@ async def get_bootstrap(
         partners,
         notifs,
         release_notices,
+        ranks,
+        rank_queue,
     ) = await asyncio.gather(
         asyncio.to_thread(
             lambda: sb.rpc(
@@ -125,6 +147,13 @@ async def get_bootstrap(
         asyncio.to_thread(played_with_service.fetch_play_partners, sb, viewer),
         notification_service.list_notifications(sb, viewer, limit=_NOTIFICATIONS_PAGE),
         asyncio.to_thread(release_notice_service.unseen, sb, viewer),
+        # The ranking rides here so Collection's chips and banner and the game
+        # page's pill paint from cache on the first visit after sign-in, not a
+        # round trip later. The queue (bgb_play_stats) is the heavier of the
+        # two, and in parallel it still only costs whatever it exceeds the
+        # slowest member by. Both are _soft: a failure boots without them.
+        _soft("ranks", rank_service.list_ranks, sb, viewer),
+        _soft("rank queue", rank_service.queue, sb, viewer),
     )
 
     payload: dict[str, Any] = dict(rpc_result.data or {})
@@ -137,6 +166,10 @@ async def get_bootstrap(
     payload["release_notices_unseen"] = [
         n.model_dump(mode="json") for n in release_notices
     ]
+    payload["ranks"] = None if ranks is None else [e.model_dump(mode="json") for e in ranks]
+    payload["rank_queue"] = (
+        None if rank_queue is None else [i.model_dump(mode="json") for i in rank_queue]
+    )
     return payload
 
 
