@@ -54,11 +54,19 @@
     owned: "On your shelf",
     prev_owned: "Sold, gifted or donated",
     wishlist: "Games you want",
+    played: "You've played it, but didn't log it on BoardgameBuddy",
   };
-  // The statuses the picker offers, in the order it lists them. Prev. owned
-  // sits directly under Owned because it IS a kind of owned — the game stays
-  // on the Owned shelf, dimmed. See the Remove row below for the distinction.
+  // The shelf statuses the picker offers, in the order it lists them. Prev.
+  // owned sits directly under Owned because it IS a kind of owned — the game
+  // stays on the Owned shelf, dimmed. See the Remove row below for the
+  // distinction.
   const CHOICES = ["owned", "prev_owned", "wishlist"];
+  // "Played" is the fourth row, offered only while the game is on none of the
+  // shelves above: it puts the game on the Played shelf without a logged play
+  // (a 'played' row, migration 057 — the same claim as the Shelf of Shame's
+  // "played before joining" mark, for a game you don't own). Offered beside an
+  // owned or wishlisted game it would read as replacing that status.
+  const PLAYED = "played";
 
   /**
    * A status's CSS class suffix. The status tokens are snake_case (they come
@@ -224,12 +232,12 @@
 
     _renderPanel() {
       const cur = this._currentStatus;
+      const mark = cur === PLAYED && window.Collection.isPlayedMark(this._gameId);
       const parts = [];
 
-      // "Played" is derived from logged plays — there's no collection row to
-      // set, so it can't be an option. Say so instead of silently omitting the
-      // state the user is actually in.
-      if (cur === "played") {
+      // "Played" from logged plays has no row to set or remove. Say where it
+      // comes from instead of leaving a checked row that looks editable.
+      if (cur === PLAYED && !mark) {
         parts.push(`
           <div class="status-sheet__note">
             <i data-icon="${ICON.played}" class="w-4 h-4"></i>
@@ -240,7 +248,8 @@
       // Unlike the old popover, the CURRENT status is listed and checked —
       // that's what makes this a radio group rather than a menu of "the other
       // things you could be".
-      for (const s of CHOICES) {
+      const rows = CHOICES.includes(cur) ? CHOICES : [...CHOICES, PLAYED];
+      for (const s of rows) {
         const on = s === cur;
         parts.push(`
           <button class="bgb-sheet__opt" type="button" role="radio"
@@ -260,13 +269,16 @@
       // different and both worth keeping: Prev. owned means "I had this and
       // let it go" and keeps the row; Remove means "this was never mine" and
       // deletes it.
-      if (CHOICES.includes(cur)) {
+      //
+      // A played mark is a row too, and removing it takes the game off the
+      // Played shelf — unless it also has logged plays, which keep it there.
+      if (CHOICES.includes(cur) || mark) {
         parts.push(`<div class="status-sheet__rule"></div>`);
         parts.push(`
           <button class="bgb-sheet__opt bgb-sheet__opt--danger" type="button"
                   data-action="remove">
             <i data-icon="trash-2" class="w-5 h-5"></i>
-            <span class="bgb-sheet__opt-label">Remove from collection</span>
+            <span class="bgb-sheet__opt-label">${mark ? "Remove played mark" : "Remove from collection"}</span>
           </button>`);
       }
 
@@ -332,13 +344,18 @@
     async _choose(status) {
       const gameId = this._gameId;
       const prev = this._currentStatus;
+      const prevMark = prev === PLAYED && window.Collection.isPlayedMark(gameId);
       this.close();
-      if (!gameId || !CHOICES.includes(status)) return;
+      if (!gameId || !(CHOICES.includes(status) || status === PLAYED)) return;
       if (status === prev) return;                 // re-picking the current row is a no-op
+      // A pick replaces a mark's row, so it stops being a mark; picking Played
+      // makes one.
+      window.Collection.applyLocalMark(gameId, status === PLAYED);
       window.Collection.applyLocalStatus(gameId, status);
       try {
         await window.Collection.add(gameId, status);
       } catch (e) {
+        window.Collection.applyLocalMark(gameId, prevMark);
         window.Collection.applyLocalStatus(gameId, prev);
         window.PolaroidPopup.alert({
           title: "Couldn't save that",
@@ -350,12 +367,17 @@
     async _remove() {
       const gameId = this._gameId;
       const prev = this._currentStatus;
+      const prevMark = prev === PLAYED && window.Collection.isPlayedMark(gameId);
       this.close();
       if (!gameId) return;
+      // A marked game with logged plays stays Played; the status-map read
+      // this write triggers puts it back.
+      window.Collection.applyLocalMark(gameId, false);
       window.Collection.applyLocalStatus(gameId, null);
       try {
         await window.Collection.removeByGame(gameId);
       } catch (e) {
+        window.Collection.applyLocalMark(gameId, prevMark);
         window.Collection.applyLocalStatus(gameId, prev);
         window.PolaroidPopup.alert({
           title: "Couldn't remove that",

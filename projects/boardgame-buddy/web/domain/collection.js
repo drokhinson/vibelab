@@ -30,6 +30,12 @@
   // truncated and the caller falls back to the paginated grid.
   const SHELF_LIMIT = 1000;
 
+  // Local answers to "is this a played mark?" (a 'played' row, migration 057)
+  // for games the viewer just marked or unmarked, until the next status-map
+  // read carries the server's own list. Every write busts that read, so
+  // without these the sheet would forget a mark in the gap before it lands.
+  const _markOverride = new Map();
+
   function _shelfKey(targetUserId, status, includeExpansions) {
     // The expansions dimension is part of the key because the two shapes are
     // a subset/superset pair over the same (target, status): without it the
@@ -78,8 +84,10 @@
     }
     const status = (data && data.status_map) || {};
     const expCount = (data && data.expansion_counts) || {};
+    const marks = (data && data.played_marks) || [];
+    _markOverride.clear();
     window.store.set("myCollectionMap", status);
-    return { status, expCount };
+    return { status, expCount, marks };
   }
 
   function _ensure({ force = false } = {}) {
@@ -104,7 +112,12 @@
     static add(gameId, status) {
       return window.api
         .post("/collection", { game_id: gameId, status })
-        .then((r) => { Collection.invalidateMyStatusMap(); return r; });
+        .then((r) => {
+          Collection.invalidateMyStatusMap();
+          // A played mark makes the game rankable (services/rank_service.queue).
+          if (status === "played" && window.Rank) window.Rank.invalidateQueue();
+          return r;
+        });
     }
 
     // Remove by game UUID — the path the status-tag picker uses to clear
@@ -112,7 +125,12 @@
     // (user_id, game_id), so the game UUID is all the backend needs.
     static removeByGame(gameId) {
       return window.api.del(`/collection/${gameId}`)
-        .then((r) => { Collection.invalidateMyStatusMap(); return r; });
+        .then((r) => {
+          Collection.invalidateMyStatusMap();
+          // The row may have been a played mark, which the rank queue offers.
+          if (window.Rank) window.Rank.invalidateQueue();
+          return r;
+        });
     }
 
     /**
@@ -185,6 +203,22 @@
       if (!window.bgbCache) return null;
       const entry = window.bgbCache.peek(NS, COMBINED_KEY);
       return (entry && entry.status) || null;
+    }
+
+    /**
+     * True when the viewer's 'played' status for this game is a mark they set
+     * (played it, never logged it here) rather than logged plays. The status
+     * map says "played" for both; only a mark has a row that can be removed.
+     */
+    static isPlayedMark(gameId) {
+      if (_markOverride.has(gameId)) return _markOverride.get(gameId);
+      const entry = window.bgbCache ? window.bgbCache.peek(NS, COMBINED_KEY) : null;
+      return !!(entry && Array.isArray(entry.marks) && entry.marks.includes(gameId));
+    }
+
+    /** The local half of a mark write — see _markOverride. */
+    static applyLocalMark(gameId, on) {
+      if (gameId) _markOverride.set(gameId, !!on);
     }
 
     /** Synchronous peek at the cached per-base-game owned-expansion counts. */
@@ -319,10 +353,13 @@
       if (!statusMap || !expansionCounts) return;
       const status = { ...statusMap };
       const expCount = { ...expansionCounts };
+      // The bundle carries no marks list, so the previous read's stands.
+      const prev = window.bgbCache.peek(NS, COMBINED_KEY);
+      const marks = (prev && prev.marks) || [];
       window.bgbCache.setWithTtls(
         NS,
         COMBINED_KEY,
-        { status, expCount },
+        { status, expCount, marks },
         { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS },
       );
       window.store.set("myCollectionMap", status);

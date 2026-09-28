@@ -45,7 +45,29 @@ def _upsert_collection(sb: Client, user_id: str, game_id: str, status: str) -> N
     trip, so the upsert can populate the game_* cache columns without a second
     select. Upsert rather than update because the row may not pre-exist — a
     wishlist->owned bump from a surface that never added the game.
+
+    'played' is the "played it, never logged it here" mark (migration 057): it
+    stamps played_before_at, and it is only for a game that is not otherwise
+    in the collection — marking would otherwise overwrite owned, prev-owned or
+    wishlist. Any status set later leaves played_before_at as it is, so a
+    marked game that is then bought keeps its mark as the owned game's.
     """
+    if status == CollectionStatus.PLAYED.value:
+        existing = (
+            sb.table("boardgamebuddy_collections")
+            .select("status")
+            .eq("user_id", user_id)
+            .eq("game_id", game_id)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if existing and existing[0].get("status") != CollectionStatus.PLAYED.value:
+            raise HTTPException(
+                status_code=409,
+                detail="This game is already in your collection",
+            )
     game = (
         sb.table("boardgamebuddy_games")
         .select(COLLECTION_DENORM_GAME_FIELDS)
@@ -55,12 +77,15 @@ def _upsert_collection(sb: Client, user_id: str, game_id: str, status: str) -> N
     if not game.data:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    sb.table("boardgamebuddy_collections").upsert({
+    row = {
         "user_id": user_id,
         "game_id": game_id,
         "status": status,
         **collection_denormalized_from_game(game.data[0]),
-    }, on_conflict="user_id,game_id").execute()
+    }
+    if status == CollectionStatus.PLAYED.value:
+        row["played_before_at"] = datetime.now(timezone.utc).isoformat()
+    sb.table("boardgamebuddy_collections").upsert(row, on_conflict="user_id,game_id").execute()
 
 
 @router.post(
@@ -193,6 +218,7 @@ async def collection_status_map(
     return CollectionStatusMapResponse(
         status_map=data.get("status_map") or {},
         expansion_counts={str(k): int(v) for k, v in (data.get("expansion_counts") or {}).items()},
+        played_marks=[str(g) for g in (data.get("played_marks") or [])],
     )
 
 

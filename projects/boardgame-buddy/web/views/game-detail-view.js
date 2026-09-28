@@ -31,7 +31,12 @@
       this.listenDom("status-changed", (e) => {
         const { gameId, status } = e.detail || {};
         if (gameId) this._statusMap[gameId] = status;
-        if (this._game && gameId === this._game.id) this._status = status;
+        if (this._game && gameId === this._game.id) {
+          this._status = status;
+          // The pill beside Log a play reads the status too: Add turns into
+          // Rank it once the game is marked played, and back on a removal.
+          this._paintRank();
+        }
         this._paintStatuses();
       });
       // The rank pill reads the viewer's whole ranking (tens of rows), not a
@@ -176,12 +181,25 @@
       }
     }
 
-    // Beside Log a play and BGG. Nothing until the ranking has loaded, so an
-    // already-ranked game never flashes "Rank it" first. Expansions are ranked
-    // with their base game, so they get no pill.
+    // Beside Log a play and BGG. A game that is nowhere in the viewer's
+    // collection — no shelf, no plays — has nothing to rank, so the slot
+    // offers to add it instead, through the same sheet as the hero's status
+    // tag (which is where "Played" lives for a game played elsewhere).
+    // Otherwise nothing until the ranking has loaded, so an already-ranked
+    // game never flashes "Rank it" first. Expansions are ranked with their
+    // base game, so they get no rank pill.
     _renderRankPill() {
       const g = this._game;
-      if (!g || g.is_expansion || !this._ranks) return "";
+      if (!g) return "";
+      if (!this._status && !this._viewerStats) {
+        return `
+          <button class="btn game-detail__action game-detail__rank-btn" type="button"
+                  aria-haspopup="dialog"
+                  onclick="window.gameDetailView._openAdd(event)">
+            <i data-icon="plus" class="w-4 h-4"></i> Add
+          </button>`;
+      }
+      if (g.is_expansion || !this._ranks) return "";
       const r = this._ranks[g.id];
       if (!r) {
         if (!this._rankable(g.id)) return "";
@@ -219,6 +237,12 @@
       if (!host) return;
       host.innerHTML = this._renderRankPill();
       this.refreshIcons(host);
+    }
+
+    _openAdd(ev) {
+      const g = this._game;
+      if (!g) return;
+      window.statusPicker.openFor(ev, g.id, "", g.name);
     }
 
     _openRank(ev) {

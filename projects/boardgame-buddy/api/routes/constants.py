@@ -45,9 +45,11 @@ class FeedbackStatus(StrEnum):
 
 class CollectionStatus(StrEnum):
     OWNED = "owned"
-    # Synthetic shelf — derived from boardgamebuddy_plays, never written to
-    # boardgamebuddy_collections (migration 010). On the enum so /collection
-    # endpoints can serve the "Played" filter.
+    # The Played shelf: every game with a play the user can see, derived from
+    # boardgamebuddy_plays, plus the games they marked played without logging
+    # one here — the only 'played' rows written to boardgamebuddy_collections
+    # (migration 057), each with played_before_at stamped. It is never a play:
+    # no play count or stat reads the mark.
     PLAYED = "played"
     WISHLIST = "wishlist"
     # A game the user sold, gifted or donated (migration 069). Persisted, and

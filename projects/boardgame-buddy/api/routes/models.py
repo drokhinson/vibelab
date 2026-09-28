@@ -883,9 +883,9 @@ class CollectionUpdate(BaseModel):
 class CollectionPlayedBefore(BaseModel):
     """Hand-mark an owned game as played before the user joined BoardgameBuddy.
 
-    Deliberately NOT a CollectionStatus value: migration 010 removed 'played'
-    from the status CHECK because played-ness is derived from
-    boardgamebuddy_plays everywhere else. This is a separate, narrower claim —
+    The owned game's half of the claim a 'played' collection row makes for a
+    game you do not own (migration 057): a flag on the owned row, not a status,
+    because the game is still owned. This is a separate, narrower claim —
     it clears the game off the Shelf of Shame and touches nothing else.
     """
 
@@ -930,6 +930,10 @@ class CollectionStatusMapResponse(BaseModel):
     # owns. prev_owned expansions are NOT counted — one you sold is no longer
     # clutter on the base game's shelf.
     expansion_counts: dict[str, int] = Field(default_factory=dict)
+    # Games marked played without a logged play (status 'played', migration
+    # 057). status_map says "played" for these and for games with plays alike;
+    # only these have a row the client can remove.
+    played_marks: list[str] = Field(default_factory=list)
 
 
 class CollectionShelfResponse(BaseModel):
