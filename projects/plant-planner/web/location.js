@@ -100,8 +100,8 @@
     var onPick = typeof opts.onPick === 'function' ? opts.onPick : function() {};
 
     // Selection state — local to this picker instance.
-    // Coerce a pre-migration "6b"-style value to integer "6" so the picker
-    // can still highlight a previously-saved zone after the realignment.
+    // Coerce a "6b"-style half-zone value to integer "6" so the picker can
+    // highlight a saved zone stored in that form.
     var selectedZone = opts.selectedZone
       ? String(opts.selectedZone).replace(/[ab]$/i, '')
       : null;

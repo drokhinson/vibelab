@@ -1,6 +1,6 @@
 // shopping.js — plant-shopping step + builder shortlist sidebar.
 //
-// Phase 1 of the plant-first refactor. After the wizard creates a planter
+// After the wizard creates a planter
 // with its conditions, we land here: a Pinterest-style grid of plants whose
 // hardiness, sunlight, and watering match the planter. The user picks the
 // ones they want; their shortlist is saved on the garden, and they continue
@@ -433,8 +433,7 @@ function _closeShoppingDetailPanel() {
 
 // ── Builder shortlist sidebar ───────────────────────────────────────────────
 //
-// Replaces the legacy catalog sidebar when the active garden has a populated
-// shortlist. Each card is draggable onto the 2D scene; placed plants are
+// The builder's sidebar when the active garden has a populated shortlist. Each card is draggable onto the 2D scene; placed plants are
 // shown with a checkmark.
 
 function renderShortlistSidebar(garden) {
