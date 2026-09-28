@@ -36,6 +36,8 @@
       this._counts = {};
       /** @type {((id: string) => void)|null} */
       this._onPick = null;
+      this._title = "Show";
+      this._listLabel = "Shelf";
 
       this._sheet = new window.BgbBottomSheet({
         id: "bgb-shelf-picker-sheet",
@@ -69,8 +71,8 @@
       return `
         <div class="bgb-sheet__panel">
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
-          <h3 class="bgb-sheet__title">Show</h3>
-          <div class="bgb-sheet__list" role="listbox" aria-label="Shelf">${rows}</div>
+          <h3 class="bgb-sheet__title">${escapeHtml(this._title)}</h3>
+          <div class="bgb-sheet__list" role="listbox" aria-label="${escapeAttr(this._listLabel)}">${rows}</div>
           <button class="bgb-sheet__cancel" type="button" data-action="close">Cancel</button>
         </div>
       `;
@@ -83,15 +85,21 @@
      * @param {Record<string, number>} [opts.counts]  id → row count.
      * @param {Element|null} [opts.returnFocus]
      * @param {(id: string) => void} opts.onPick
+     * @param {string} [opts.title]      Panel heading; "Show" by default.
+     * @param {string} [opts.listLabel]  The list's aria-label; "Shelf" by default.
+     * @param {string} [opts.label]      The dialog's aria-label.
      */
-    open({ options, selected, counts, returnFocus, onPick }) {
+    open({ options, selected, counts, returnFocus, onPick, title, listLabel, label }) {
       this._options = Array.isArray(options) ? options : [];
       this._selected = selected || "";
       this._counts = counts || {};
       this._onPick = onPick || null;
+      this._title = title || "Show";
+      this._listLabel = listLabel || "Shelf";
 
       this._sheet.open({
         html: this._renderPanel(),
+        label: label || undefined,
         returnFocus: returnFocus || null,
         onClick: (e) => {
           const row = e.target.closest("[data-shelf]");

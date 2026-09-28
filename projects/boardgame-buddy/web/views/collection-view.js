@@ -92,6 +92,12 @@
     { id: MODE_EXPANSIONS, label: "Expansions", noun: "expansion", icon: "puzzle" },
   ];
 
+  // The A–Z / ranking toggle beside the picker. Ranking lists every game the
+  // viewer has ranked, whatever shelf it is on, so while it is on the picker
+  // chooses a game category (domain/rank-shelf.js) instead of a shelf.
+  const SORT_AZ = "az";
+  const SORT_RANK = "rank";
+
   const PLAYTIME_BUCKETS = window.ShelfFilter.PLAYTIME_BUCKETS;
   const isActiveBucket = window.ShelfFilter.isActiveBucket;
 
@@ -141,6 +147,9 @@
       this._ranks = null;
       this._rankQueue = null;
       this._rankCardClosed = false;
+      this._sort = SORT_AZ;
+      this._rankCat = window.RankShelf.ALL;
+      this._ranksFailed = false;
       this._resetTreeState();
       if (this.ctl) this.ctl.reset();
     }
@@ -185,7 +194,12 @@
      * clearing the box is the whole way back to the picked shelf.
      */
     _isGlobalSearch() {
-      return !!this.ctl.query && this._mode !== MODE_EXPANSIONS;
+      return !!this.ctl.query && this._mode !== MODE_EXPANSIONS && !this._isRankView();
+    }
+
+    /** Ranking view: the viewer's own ranks, so never on someone else's shelf. */
+    _isRankView() {
+      return this._sort === SORT_RANK && !this._isOther();
     }
 
     /** The flat shelves this viewer may search — no wishlist on someone else's. */
@@ -215,6 +229,14 @@
     _modeFromParams() {
       const wanted = this.params && this.params.shelf;
       return this._availableModes().some((m) => m.id === wanted) ? wanted : MODE_OWNED;
+    }
+
+    /** ?sort=rank&type=<category>. The category is checked against the ranking
+     *  when the list paints, so an unknown one reads as "All Game Types". */
+    _sortFromParams() {
+      const p = this.params || {};
+      this._sort = p.sort === SORT_RANK ? SORT_RANK : SORT_AZ;
+      this._rankCat = p.type || window.RankShelf.ALL;
     }
 
     /** Cache/query target — the viewer's own id when no userId param is set. */
@@ -370,6 +392,7 @@
       // _mode, so a deep link to ?shelf=wishlist has to have picked its shelf
       // by now or the first frame paints Owned and then jumps.
       this._mode = this._modeFromParams();
+      this._sortFromParams();
 
       if (this._isOther()) {
         this._hydrateStatusMap();
@@ -427,6 +450,8 @@
       this._resetState();
       this._targetUserId = (this.params && this.params.userId) || null;
       this._mode = this._modeFromParams();
+      this._sortFromParams();
+      this._ranks = window.Rank.cachedSummary();
       this._hydrateStatusMap();
       this._hydrateFromCache();
       this._seedShelfCounts();
@@ -480,10 +505,13 @@
         this._mode,
         this._isOther() ? "other" : "self",
         (this._targetProfile && this._targetProfile.display_name) || "",
-        this._mode === MODE_EXPANSIONS ? treeState : (this.ctl.isColdLoad(this._mode) ? "cold" : "warm"),
+        this._mode === MODE_EXPANSIONS ? treeState
+          : this._isRankView() ? "ranks"
+          : (this.ctl.isColdLoad(this._mode) ? "cold" : "warm"),
         // Starting or clearing a search swaps the picker for its inert
         // "All shelves" twin — same slot, so the field under the thumb holds.
         this._isGlobalSearch() ? "all" : "",
+        this._isRankView() ? SORT_RANK : SORT_AZ,
       ].join("|");
     }
 
@@ -512,7 +540,7 @@
 
       const tree = this._mode === MODE_EXPANSIONS;
 
-      if (!tree && this.ctl.isColdLoad(this._mode)) {
+      if (!tree && !this._isRankView() && this.ctl.isColdLoad(this._mode)) {
         // The picker and the bar come up with the spinner rather than a frame
         // after it. They are chrome, not content: emitting only the header here
         // would make both pop in once the first shelf lands, and move the grid.
@@ -540,8 +568,8 @@
         <div id="collection-rank-host" class="rank-banner">${this._rankCardSlot()}</div>
         ${this._renderShelfPicker()}
         ${this._renderControls(tree)}
-        <div id="collection-tree-controls-host">${tree ? this._renderTreeControls() : ""}</div>
-        <div id="collection-filters-host">${!tree && this._filtersOpen ? this._renderFilters() : ""}</div>
+        <div id="collection-tree-controls-host">${tree && !this._isRankView() ? this._renderTreeControls() : ""}</div>
+        <div id="collection-filters-host">${!tree && !this._isRankView() && this._filtersOpen ? this._renderFilters() : ""}</div>
         <div id="collection-grid-host">${this._renderBody()}</div>
         <div id="collection-more-host">${this._renderMore()}</div>
       `;
@@ -614,6 +642,10 @@
      * what the shelf is worth.
      */
     _countLabel(mode, { rows = false } = {}) {
+      if (this._isRankView() && mode === this._mode) {
+        const n = this._rankList().length;
+        return `${n} ranked`;
+      }
       if (this._isGlobalSearch() && mode === this._mode) {
         // A result count, not a shelf's worth: every matching tile counts,
         // prev-owned ones included, so the header is the sum of the section
@@ -646,7 +678,7 @@
       // _filtersOpen survives a shelf switch, so without the tree check a panel
       // left open on Owned would reappear on Expansions — where the button that
       // closes it does not exist. Matches the guard in _renderShell.
-      const open = this._filtersOpen && this._mode !== MODE_EXPANSIONS;
+      const open = this._filtersOpen && this._mode !== MODE_EXPANSIONS && !this._isRankView();
       const host = this.container.querySelector("#collection-filters-host");
       if (host) {
         host.innerHTML = open ? this._renderFilters() : "";
@@ -716,6 +748,7 @@
      * @param {boolean} tree True on Expansions, where the button is dropped.
      */
     _renderControls(tree) {
+      const noFilters = tree || this._isRankView();
       const activeFilters = this.ctl.activeFilterCount();
       return `
         <div class="profile-panel__controls">
@@ -725,7 +758,7 @@
             placeholder: this._searchPlaceholder(),
             oninput: "window.collectionView._onSearchInput(this.value)",
           })}
-          ${tree ? "" : `
+          ${noFilters ? "" : `
             <button id="collection-filter-btn" class="btn btn-ghost relative" title="Filters"
                     onclick="window.collectionView._toggleFilters()">
               <i data-icon="sliders-horizontal" class="w-4 h-4"></i>
@@ -738,7 +771,8 @@
 
     /** Names the shelf being searched, so the field can't read as global. */
     _searchPlaceholder() {
-      if (this._mode === MODE_EXPANSIONS) return "Search expansions by name";
+      if (this._mode === MODE_EXPANSIONS && !this._isRankView()) return "Search expansions by name";
+      if (this._isRankView()) return "Search your ranked games by name";
       if (this._isOther()) {
         const who = this._targetProfile && this._targetProfile.display_name;
         // The name arrives on a later frame than the first paint, so the
@@ -755,6 +789,47 @@
      * next to the shelves they belong to.
      */
     _renderShelfPicker() {
+      return `
+        <div class="collection-picker-row">
+          ${this._renderPickerButton()}
+          ${this._isOther() ? "" : this._renderSortToggle()}
+        </div>
+      `;
+    }
+
+    /**
+     * One button that flips in place between A–Z (the shelves as they are) and
+     * the viewer's ranking. It shows the order on screen, as the filter button
+     * shows its filters, and carries the filter button's size and style.
+     */
+    _renderSortToggle() {
+      const rank = this._isRankView();
+      return `
+        <button type="button" id="collection-sort-btn" class="btn btn-ghost sort-toggle"
+                aria-pressed="${rank ? "true" : "false"}"
+                aria-label="${rank ? "Showing your ranking — switch to A to Z" : "Showing A to Z — switch to your ranking"}"
+                title="${rank ? "By ranking" : "A to Z"}"
+                onclick="window.collectionView._setSort('${rank ? SORT_AZ : SORT_RANK}')">
+          ${rank
+            ? `<i data-icon="list-numbers" class="w-4 h-4"></i>`
+            : `<span class="sort-toggle__az" aria-hidden="true">A–Z</span>`}
+        </button>`;
+    }
+
+    _renderPickerButton() {
+      if (this._isRankView()) {
+        const label = window.RankShelf.label(this._ranks, this._rankCatShown());
+        return `
+          <button type="button" class="shelf-picker" id="collection-shelf-picker"
+                  aria-haspopup="dialog"
+                  aria-label="Showing ${escapeAttr(label)} — choose a game type"
+                  onclick="window.collectionView._openRankCatPicker(this)">
+            <i data-icon="trophy" class="w-5 h-5 shelf-picker__icon"></i>
+            <span class="shelf-picker__label font-display">${escapeHtml(label)}</span>
+            <i data-icon="chevron-down" class="w-4 h-4 shelf-picker__chev"></i>
+          </button>
+        `;
+      }
       if (this._isGlobalSearch()) {
         // Nothing to choose while the search spans every shelf, so it is
         // disabled — but still a <button>: a <div> in the slot picks up the
@@ -844,6 +919,7 @@
 
     _renderBody() {
       const mode = this._mode;
+      if (this._isRankView()) return this._renderRankBody();
       if (mode === MODE_EXPANSIONS) return this._renderTreeBody();
       if (this._isGlobalSearch()) return this._renderSearchBody();
       if (this.ctl.error[mode]) {
@@ -922,7 +998,8 @@
       return `<div class="profile-empty">No matches on any shelf.</div>`;
     }
 
-    _renderTile(item) {
+    /** @param {{rankEntry?: Object}} [opts] rankEntry: chip every tile (ranking view). */
+    _renderTile(item, { rankEntry = null } = {}) {
       const g = item.game || {};
       // On someone else's shelf `item.status` is THEIR relationship to the
       // game, and the tag is always the viewer's — tapping it writes to the
@@ -953,7 +1030,7 @@
       // chip on every ranked tile would be noise, and on someone else's shelf
       // it would be YOUR rank on THEIR game. Reads as the game page pill does
       // (Rank.badge): "#2 Family" in the top 3, then "8.6/10".
-      const rankChip = other ? "" : this._rankChipHtml(g.id);
+      const rankChip = other ? "" : this._rankChipHtml(g.id, rankEntry);
       const stamp = parted
         ? `<div class="collection-tile__stamp" aria-hidden="true">Prev. owned</div>`
         : "";
@@ -977,19 +1054,39 @@
 
     async _loadRanks() {
       if (this._isOther()) return;
+      this._ranksFailed = false;
       try {
         const [ranks, queue] = await Promise.all([window.Rank.summary(), window.Rank.queue()]);
         if (!this._mounted || this._isOther()) return;
         this._ranks = ranks;
         this._rankQueue = queue;
         this._paintRankCard();
-        this._paintRankChips();
+        if (this._isRankView()) {
+          this._paintPicker();
+          this._paintCounts();
+          this._paintList();
+        } else {
+          this._paintRankChips();
+        }
       } catch (_) {
-        // No card and no chips is the right rendering for "could not ask".
+        // No card and no chips is the right rendering for "could not ask" —
+        // except in ranking view, where the list itself is what failed.
+        if (this._mounted && this._isRankView() && !this._ranks) {
+          this._ranksFailed = true;
+          this._paintList();
+        }
       }
     }
 
-    _rankChipHtml(gameId) {
+    _rankChipHtml(gameId, forced = null) {
+      if (forced) {
+        // One category: the place in it. All of them: the badge, since the
+        // merged order is by score and "#1" repeats once per category.
+        const text = this._rankCatShown() === window.RankShelf.ALL
+          ? (() => { const b = window.Rank.badge(forced); return b.num + b.rest; })()
+          : `#${forced.position}`;
+        return `<span class="collection-tile__rank">${escapeHtml(text)}</span>`;
+      }
       const rank = this._ranks && this._ranks[gameId];
       const badge = rank && rank.position <= 5 ? window.Rank.badge(rank) : null;
       return badge
@@ -1003,7 +1100,7 @@
      * the whole page looks like it loaded a second time.
      */
     _paintRankChips() {
-      if (this._isOther()) return;
+      if (this._isOther() || this._isRankView()) return;
       const grid = this.container && this.container.querySelector("#collection-grid-host");
       if (!grid) return;
       grid.querySelectorAll(".collection-tile[data-game-id]").forEach((tile) => {
@@ -1210,7 +1307,7 @@
     _paintTreeControls() {
       const host = this.container.querySelector("#collection-tree-controls-host");
       if (!host) return;
-      host.innerHTML = this._mode === MODE_EXPANSIONS ? this._renderTreeControls() : "";
+      host.innerHTML = this._mode === MODE_EXPANSIONS && !this._isRankView() ? this._renderTreeControls() : "";
       this.refreshIcons(host);
     }
 
@@ -1507,7 +1604,7 @@
       // The tree renders every group it has, so it has no window to grow and
       // must not carry a sentinel — the controller doesn't track "expansions"
       // as a mode, and asking it for one writes junk keys under that name.
-      if (this._mode === MODE_EXPANSIONS) return "";
+      if (this._mode === MODE_EXPANSIONS || this._isRankView()) return "";
       const global = this._isGlobalSearch();
       // Mid-search the strip belongs to the shelf still unrolling; with none
       // left it is the end-of-list line for the whole result set.
@@ -1566,6 +1663,110 @@
       else this.render();
     }
 
+    _setSort(sort) {
+      const next = sort === SORT_RANK ? SORT_RANK : SORT_AZ;
+      if (next === this._sort) return;
+      this._sort = next;
+      this._syncShelfUrl();
+      this._scrollToListTop();
+      if (next === SORT_RANK) {
+        if (!this._ranks) this._ranks = window.Rank.cachedSummary();
+        this.render();
+        this._loadRanks();
+        return;
+      }
+      // Back to the picked shelf. A query typed in ranking view carries over
+      // and goes through the shelf search, which loads what it spans.
+      this.render();
+      if (this._mode === MODE_EXPANSIONS) {
+        if (!this._treeLoadedOnce && !this._treeLoading) this._loadActiveShelf();
+        return;
+      }
+      if (this.ctl.query) this._onSearchInput(this.ctl.query);
+      else if (!this.ctl.shelf[this._mode] && !this.ctl.loading[this._mode]) this.ctl.load(this._mode);
+    }
+
+    /** The category on screen: the picked one while the ranking holds it. */
+    _rankCatShown() {
+      const cat = this._rankCat;
+      if (cat === window.RankShelf.ALL || !this._ranks) return cat;
+      return Object.values(this._ranks).some((e) => e.category === cat) ? cat : window.RankShelf.ALL;
+    }
+
+    _rankList() {
+      return window.RankShelf.list(this._ranks, this._rankCatShown(), this.ctl.query);
+    }
+
+    _retryRanks() {
+      this._ranksFailed = false;
+      this._paintList();
+      this._loadRanks();
+    }
+
+    _openRankCatPicker(anchor) {
+      const cats = window.RankShelf.categories(this._ranks);
+      const counts = {};
+      for (const c of cats) counts[c.id] = c.count;
+      window.ShelfPickerSheet.open({
+        options: cats,
+        selected: this._rankCatShown(),
+        counts,
+        title: "Game type",
+        listLabel: "Game type",
+        label: "Choose a game type",
+        returnFocus: anchor || null,
+        onPick: (id) => this._setRankCat(id),
+      });
+    }
+
+    _setRankCat(id) {
+      if (id === this._rankCat) return;
+      this._rankCat = id;
+      this._syncShelfUrl();
+      this._scrollToListTop();
+      this._paintPicker();
+      this._paintCounts();
+      this._paintList();
+    }
+
+    /** The picker trigger alone, so a category pick leaves the search field be. */
+    _paintPicker() {
+      const old = this.container.querySelector("#collection-shelf-picker");
+      if (!old) return;
+      old.outerHTML = this._renderPickerButton();
+      const fresh = this.container.querySelector("#collection-shelf-picker");
+      if (fresh) this.refreshIcons(fresh.parentElement);
+    }
+
+    _renderRankBody() {
+      if (!this._ranks && this._ranksFailed) {
+        return `
+          <div class="profile-empty">
+            <p>Couldn't load your ranking just now.</p>
+            <button class="btn btn-sm btn-primary mt-3" type="button"
+                    onclick="window.collectionView._retryRanks()">Try again</button>
+          </div>`;
+      }
+      if (!this._ranks) {
+        return `<div class="profile-loading">${window.buddyLoader({ size: 88, label: "Loading your ranking…" })}</div>`;
+      }
+      const list = this._rankList();
+      if (!list.length) {
+        if (this.ctl.query) return `<div class="profile-empty">No ranked games match.</div>`;
+        return `
+          <div class="profile-empty">
+            <p>You haven't ranked any games yet.</p>
+            <button class="btn btn-primary btn-sm mt-3" type="button"
+                    onclick="window.router.go('rank-queue')">Rank your games</button>
+          </div>`;
+      }
+      return `
+        <div class="profile-collection-grid">
+          ${list.map((e) => this._renderTile({ game: e.game, status: null }, { rankEntry: e })).join("")}
+        </div>
+      `;
+    }
+
     /**
      * Put the active shelf in the address bar. replaceUrl rather than go():
      * switching shelf is a lateral move inside one screen, so it should not
@@ -1576,9 +1777,21 @@
     _syncShelfUrl() {
       const params = { shelf: this._mode };
       if (this._targetUserId) params.userId = this._targetUserId;
+      if (this._isRankView()) {
+        params.sort = SORT_RANK;
+        if (this._rankCat !== window.RankShelf.ALL) params.type = this._rankCat;
+      }
       window.router.replaceUrl("collection", params);
     }
     _onSearchInput(value) {
+      if (this._isRankView()) {
+        // Name-only and local: the ranking is held whole. The query is kept
+        // on the controller so it survives a flip back to A–Z.
+        this.ctl.query = value;
+        this._paintCounts();
+        this._paintList();
+        return;
+      }
       this.ctl.onSearchInput(value, this._activeModes());
       // Wishlist and Played are lazy, so a search can be the first thing to
       // need them. The in-flight shelves show as a loader under the matches.
