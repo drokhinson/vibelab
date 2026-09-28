@@ -15167,6 +15167,27 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   .shelf-picker.is-all:hover { border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
 }
 
+/* The picker shares its row with the A–Z / ranking toggle. The row carries the
+   margin, so the picker's own is zeroed here rather than in its base rule. */
+.collection-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+.collection-picker-row .shelf-picker { flex: 1 1 auto; min-width: 0; width: auto; margin: 0; }
+
+/* A plain .btn-ghost, like #collection-filter-btn beside the search field; the
+   A–Z glyph is text, so it is sized to sit where that button's icon does. */
+.sort-toggle { flex: none; }
+.sort-toggle__az {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
 /* Cross-shelf search results: one group per shelf, headed by its name and
    match count. Chrome-surface tokens, like the rest of the spoke. */
 .collection-search__group + .collection-search__group { margin-top: 1rem; }
