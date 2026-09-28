@@ -340,6 +340,18 @@
         .then((r) => { Game.invalidateBundle(gameId); return r; });
     }
 
+    /** The game page's admin "Refresh from BoardGameGeek": re-read the whole
+     *  record, tags and play mode included. The game's rank category and its
+     *  tile (art, player counts) may both change, so those caches go too. */
+    static adminRefreshFromBgg(gameId) {
+      return window.api.post(`/games/admin/${gameId}/refresh-bgg`).then((r) => {
+        Game.invalidateBundle(gameId);
+        if (window.Rank && window.Rank.invalidateQueue) window.Rank.invalidateQueue();
+        if (window.Collection && window.Collection.invalidateShelves) window.Collection.invalidateShelves();
+        return r;
+      });
+    }
+
     /** Fill every missing field for a batch of games, in one bounded pass.
      *
      *  The server batches 20 games per BGG call and caps the pass at `limit`,

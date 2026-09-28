@@ -42,7 +42,7 @@
      *   its own chrome when the result is up. continueLabel + onContinue put
      *   the result screen's primary button ("Next: Azul", "Done").
      */
-    constructor({ host, context, onDone, onStep, tier, continueLabel, onContinue, ready, reload }) {
+    constructor({ host, context, onDone, onStep, tier, continueLabel, onContinue, ready, reload, placeOpts }) {
       this.host = host;
       this.ctx = context;
       this.onDone = onDone || (() => {});
@@ -64,6 +64,7 @@
       // `ready`: the context arrives later (the list to compare against), so
       // the gut check shows now and a pick made before it lands waits for it.
       this._reload = reload || null;
+      this.placeOpts = placeOpts || {};   // passed to Rank.place (Re-rank's recategorize)
       this._pendingTier = null;
       this._listError = false;
       if (ready) this._await(ready);
@@ -182,7 +183,7 @@
       // Chained, so an Undo-and-answer-again can never land before the write
       // it replaces; a failed write does not block the next one.
       this._write = this._write.catch(() => {})
-        .then(() => window.Rank.place(gameId, tier, index))
+        .then(() => window.Rank.place(gameId, tier, index, this.placeOpts))
         .then((entry) => {
           if (seq !== this._placeSeq) return;
           // A host that moved on (the queue's Continue) still hears the save.

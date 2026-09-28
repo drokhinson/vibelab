@@ -237,6 +237,47 @@ def test_a_ranked_game_keeps_its_category_when_bgg_disagrees_later(sb):
     assert ctx.rank.position == 1 and ctx.ranked == []
 
 
+def _pandemic_case(sb):
+    """Pandemic stored in family, while its game row (play_mode coop) now puts
+    it in coop. Two other family games sit around it."""
+    games = [
+        _game("p", "Pandemic", family="familygames", mode="coop", min_p=2, max_p=4),
+        _game("a", "Azul", family="familygames"),
+        _game("t", "Ticket to Ride", family="familygames"),
+        _game("s", "Spirit Island", family="strategygames", mode="coop", min_p=1, max_p=4),
+    ]
+    sb["sb"] = _SB(games, ranks=[
+        _rank("a", "family", "love", 0), _rank("p", "family", "love", 1), _rank("t", "family", "love", 2),
+        _rank("s", "coop", "love", 0),
+    ])
+
+
+def test_the_ranking_says_which_games_now_belong_elsewhere(sb):
+    _pandemic_case(sb)
+    by = {e.game_id: e for e in run(R.list_ranks(user=USER)).ranks}
+    assert (by["p"].category, by["p"].current_category, by["p"].current_category_label) == ("family", "coop", "Co-op")
+    assert by["a"].current_category == "family"
+
+
+def test_context_current_lists_the_category_it_belongs_in_now(sb):
+    _pandemic_case(sb)
+    ctx = run(R.rank_context(game_id="p", current=True, user=USER))
+    assert (ctx.category, ctx.category_label) == ("coop", "Co-op")
+    assert [r.game.id for r in ctx.ranked] == ["s"]
+    assert ctx.rank.category == "family"   # still where it is stored, until the write
+    assert run(R.rank_context(game_id="p", user=USER)).category == "family"
+
+
+def test_rerank_with_recategorize_moves_it_and_closes_the_old_gap(sb):
+    _pandemic_case(sb)
+    placed = run(R.rank_game(body=RankWrite(tier=RankTier.LOVE, index=1, recategorize=True),
+                             game_id="p", user=USER))
+    assert sb["sb"].calls[-1][1]["p_category"] == "coop"
+    assert (placed.category, placed.position) == ("coop", 2)
+    by = {e.game_id: (e.category, e.position) for e in placed.ranks}
+    assert by == {"a": ("family", 1), "t": ("family", 2), "s": ("coop", 1), "p": ("coop", 2)}
+
+
 def test_context_404s_for_an_unknown_game(sb):
     sb["sb"] = _SB([])
     with pytest.raises(HTTPException) as e:

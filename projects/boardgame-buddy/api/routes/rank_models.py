@@ -31,6 +31,11 @@ class RankEntry(BaseModel):
     # "which do you prefer?" list without asking for it (Rank.localContext).
     # Optional: absent from a row cached before it was added.
     game: GameSummary | None = None
+    # The category the rules give the game NOW. Differs from `category` when
+    # its BGG data changed after it was ranked (an admin refresh); Re-rank then
+    # moves it there. None where the game row was not read.
+    current_category: str | None = None
+    current_category_label: str | None = None
 
 
 class RankPlaced(RankEntry):
@@ -79,6 +84,9 @@ class RankWrite(BaseModel):
 
     tier: RankTier
     index: int = Field(..., ge=0, le=10_000)
+    # Re-rank: place the game in the category the rules give it now rather
+    # than the one it was first ranked in, leaving the old list.
+    recategorize: bool = False
 
 
 class RankQueueItem(BaseModel):

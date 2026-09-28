@@ -306,12 +306,44 @@
             ${this._renderReferenceGuide()}
             ${this._renderViewerStats()}
             ${this._renderRecentPlays()}
+            ${this._renderAdminRefresh(g)}
           </div>
         </article>
       `;
       this.refreshIcons();
       this._mountDescription();
       this._mountGuide();
+    }
+
+    // Admins only: re-read this game's whole BoardGameGeek record — tags, the
+    // play mode they imply, player counts, stats, and art if it has none.
+    _renderAdminRefresh(g) {
+      const me = window.store && window.store.get("user");
+      if (!me || !me.is_admin || !g.bgg_id) return "";
+      return `
+        <section class="game-detail__admin" aria-label="Admin">
+          <button type="button" class="btn btn-ghost btn-sm game-detail__admin-btn"
+                  onclick="window.gameDetailView._adminRefresh(this)">
+            <i data-icon="rotate-ccw" class="w-4 h-4"></i> Refresh from BoardGameGeek
+          </button>
+        </section>`;
+    }
+
+    async _adminRefresh(btn) {
+      const id = this._game && this._game.id;
+      if (!id || btn.disabled) return;
+      const label = btn.innerHTML;
+      btn.disabled = true;
+      btn.textContent = "Refreshing…";
+      try {
+        await window.Game.adminRefreshFromBgg(id);
+        if (!this._mounted || !this._game || this._game.id !== id) return;
+        window.showToast("Updated from BoardGameGeek", "success");
+        await this._load();
+      } catch (e) {
+        if (btn.isConnected) { btn.disabled = false; btn.innerHTML = label; }
+        window.showToast(escapeHtml((e && e.message) || "Couldn't refresh from BoardGameGeek"), "error");
+      }
     }
 
     // Publication year and publisher — the two edition facts a collector

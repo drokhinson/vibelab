@@ -92,8 +92,16 @@ def _entries(rows: list[dict[str, Any]], games: dict[str, dict[str, Any]] | None
                 tier=RankTier(r["tier"]), position=i + 1,
                 score=_score(r["tier"], idx, tier_sizes[r["tier"]]),
                 game=game_summary_from_row(games[r["game_id"]]) if games and r["game_id"] in games else None,
+                **_current(games.get(r["game_id"]) if games else None),
             ))
     return out
+
+
+def _current(game: dict[str, Any] | None) -> dict[str, Any]:
+    if not game:
+        return {}
+    cat = rank_category(game)
+    return {"current_category": cat, "current_category_label": category_label(cat)}
 
 
 def _game_rows(sb: Client, ids: list[str]) -> dict[str, dict[str, Any]]:
@@ -125,11 +133,14 @@ def list_ranks(sb: Client, user_id: str) -> list[RankEntry]:
     return _entries(rows, _game_rows(sb, [r["game_id"] for r in rows]))
 
 
-def context(sb: Client, user_id: str, game_id: str) -> RankContext:
+def context(sb: Client, user_id: str, game_id: str, current: bool = False) -> RankContext:
+    """`current`: the list for the category the rules give the game now — what
+    a Re-rank ranks it against — instead of the one it is stored in."""
     game = _game_row(sb, game_id)
     rows = _rank_rows(sb, user_id)
-    category = _category_for(game, rows)
-    mine = next((e for e in _entries(rows) if e.game_id == game_id), None)
+    category = rank_category(game) if current else _category_for(game, rows)
+    # With its own row, so the entry says where the rules would put it now.
+    mine = next((e for e in _entries(rows, {game_id: game}) if e.game_id == game_id), None)
     others = _ordered([r for r in rows if r["category"] == category and r["game_id"] != game_id])
     games = _game_rows(sb, [r["game_id"] for r in others])
     ranked = [
@@ -143,11 +154,16 @@ def context(sb: Client, user_id: str, game_id: str) -> RankContext:
     )
 
 
-def place(sb: Client, user_id: str, game_id: str, tier: RankTier, index: int) -> RankPlaced:
+def place(
+    sb: Client, user_id: str, game_id: str, tier: RankTier, index: int, recategorize: bool = False,
+) -> RankPlaced:
+    """Rank or move a game. It keeps the category it was first ranked in,
+    unless `recategorize` (a Re-rank) asks for the one the rules give it now;
+    bgb_rank_game removes the old row and closes that list's gap either way."""
     game = _game_row(sb, game_id)
     if game.get("is_expansion"):
         raise HTTPException(status_code=400, detail="Expansions are ranked with their base game")
-    category = _category_for(game, _rank_rows(sb, user_id))
+    category = rank_category(game) if recategorize else _category_for(game, _rank_rows(sb, user_id))
     data = sb.rpc("bgb_rank_game", {
         "p_user": user_id, "p_game": game_id, "p_category": category,
         "p_tier": tier.value, "p_index": index,

@@ -102,6 +102,17 @@ Domain-specific conventions (backend, frontend, database, native, performance) a
 - **After a PR merges, rebase any follow-up branches onto main before continuing work.** The user squash/rebase-merges, so commits land on main with new SHAs. A normal `git rebase main` will usually auto-skip the equivalent commits, but occasionally git fails to detect the dedup and shows spurious conflicts on a commit that's already in main — `git rebase --skip` in that case (do NOT try to resolve the conflict by hand). Then force-push with `--force-with-lease` so the open PR updates cleanly.
 - **After pushing a feature branch, open a pull request if one doesn't already exist for that branch (or if the previous PR for it is closed/merged).** This is standing authorization — no need to ask first. If an open PR already exists for the branch, just push and let it update; don't open a duplicate.
 
+### Comments Are Stateless
+A comment explains the code **as it stands**, in place: what it does and why it has to be this way. It never narrates history. That covers:
+- what the code used to do, or what was removed
+- what a past bug was
+- why an old approach was replaced
+- what a previous PR changed
+
+Write "a row whose bgg_id exists is returned as-is, so its fields are never rewritten here", not "the old seed rows blocked the import, so we removed them". If something was deleted, delete it without leaving a note in its place.
+
+History belongs in commit messages, PR descriptions and a project's `STRUCTURE.md` changelog entries, not in code, SQL, or docstrings. A constraint that still holds today (a deploy order, a trap a future edit could fall into) is not history: state it as a present-tense rule. Before opening a PR, run the `clean-code-comments` skill over the diff.
+
 ### Modular File Structure
 Keep individual files under ~300 lines. When a file grows beyond that, split it by domain. This reduces AI token usage — Claude only reads the relevant module instead of a full monolith.
 
