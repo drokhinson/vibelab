@@ -1,6 +1,9 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 056_game_ranks.sql (boardgamebuddy_games grows bgg_family —
+-- Last updated: 058_rank_deferrals.sql (the new
+--               boardgamebuddy_rank_deferrals table — "Rank after next play";
+--               hand-added below.)
+--               Before that: 056_game_ranks.sql (boardgamebuddy_games grows bgg_family —
 --               the BGG family rank list a game ranks highest in, which decides
 --               the category it is ranked in — and the new
 --               boardgamebuddy_game_ranks table; hand-added below. 056 also
@@ -512,6 +515,21 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_game_ranks (
 ALTER TABLE public.boardgamebuddy_game_ranks ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_game_ranks_list ON public.boardgamebuddy_game_ranks USING btree (user_id, category, tier, "position");
 GRANT SELECT ON public.boardgamebuddy_game_ranks TO boardgamebuddy_role;
+
+-- Unranked games a player parked with "Rank after next play" (migration 058).
+-- Held until a play the player can see is created after deferred_at and played
+-- on or after its date (bgb_rank_deferrals_active); deleted when the game is
+-- ranked.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_rank_deferrals (
+  user_id UUID NOT NULL,
+  game_id UUID NOT NULL,
+  deferred_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT boardgamebuddy_rank_deferrals_pkey PRIMARY KEY (user_id, game_id),
+  CONSTRAINT boardgamebuddy_rank_deferrals_user_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT boardgamebuddy_rank_deferrals_game_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE CASCADE
+);
+ALTER TABLE public.boardgamebuddy_rank_deferrals ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.boardgamebuddy_rank_deferrals TO boardgamebuddy_role;
 
 
 -- ── Owned expansions ──────────────────────────────────────────────────────────

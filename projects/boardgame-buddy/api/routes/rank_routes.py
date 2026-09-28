@@ -17,6 +17,7 @@ from . import router
 from .dependencies import CurrentUser, get_current_user
 from .rank_models import (
     RankContext,
+    RankDeferResponse,
     RankPlaced,
     RankQueueResponse,
     RankRemoveResponse,
@@ -91,3 +92,17 @@ async def unrank_game(
 ) -> RankRemoveResponse:
     removed = await asyncio.to_thread(rank_service.remove, get_supabase(), user.user_id, game_id)
     return RankRemoveResponse(removed=removed)
+
+
+@router.put(
+    "/ranks/games/{game_id}/defer",
+    response_model=RankDeferResponse,
+    status_code=200,
+    summary="Rank a game after its next play",
+)
+async def defer_rank(
+    game_id: str = Path(..., description="Game UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> RankDeferResponse:
+    await asyncio.to_thread(rank_service.defer, get_supabase(), user.user_id, game_id)
+    return RankDeferResponse(deferred=True)

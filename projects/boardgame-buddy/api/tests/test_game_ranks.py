@@ -9,7 +9,10 @@ everything the service decides on its own:
   * a ranked game keeps the category it was ranked in;
   * "#N" stacks the tiers love → good → not, whatever the stored positions;
   * the queue is played (a play, or the played-before mark), minus ranked,
-    minus expansions, A to Z — the shelf of shame is not offered.
+    minus expansions, A to Z — the shelf of shame is not offered;
+  * a deferred game ("Rank after next play", migration 058) stays in the
+    queue, flagged and after the rest, and ranking it drops the deferral. When
+    a deferral lapses is SQL, in db/tests/058_rank_deferrals.sql.
 """
 
 import asyncio
@@ -48,6 +51,14 @@ class _Q:
     def __init__(self, rows):
         self.rows = rows
 
+    def delete(self):
+        return _Delete(self.rows)
+
+    def upsert(self, row, on_conflict):
+        keys = on_conflict.split(",")
+        self.rows[:] = [r for r in self.rows if any(r[k] != row[k] for k in keys)] + [dict(row)]
+        return self
+
     def select(self, *_a, **_k):
         return self
 
@@ -78,16 +89,33 @@ class _Q:
         return type("Res", (), {"data": data})()
 
 
-class _SB:
-    """Tables as lists of dicts; the two rank RPCs mirror 056's SQL."""
+class _Delete:
+    def __init__(self, base, filters=()):
+        self.base, self.filters = base, filters
 
-    def __init__(self, games, collections=(), plays=(), ranks=()):
+    def eq(self, col, val):
+        return _Delete(self.base, self.filters + ((col, val),))
+
+    def execute(self):
+        self.base[:] = [r for r in self.base if not all(r.get(c) == v for c, v in self.filters)]
+        return type("Res", (), {"data": []})()
+
+
+class _SB:
+    """Tables as lists of dicts; the two rank RPCs mirror 056's SQL. `lapsed`
+    names the deferred games played since, which 058's RPC leaves out."""
+
+    def __init__(self, games, collections=(), plays=(), ranks=(), deferrals=(), lapsed=()):
         self.tables = {
             "boardgamebuddy_games": list(games),
             "boardgamebuddy_collections": [dict(r) for r in collections],
             "boardgamebuddy_game_ranks": [dict(r) for r in ranks],
+            "boardgamebuddy_rank_deferrals": [
+                {"user_id": ME, "game_id": g, "deferred_at": "2026-01-01T00:00:00Z"} for g in deferrals
+            ],
         }
         self.plays = list(plays)
+        self.lapsed = set(lapsed)
         self.calls = []
 
     def table(self, name):
@@ -100,6 +128,10 @@ class _SB:
 
     def _bgb_play_stats(self, p_viewer, p_game_ids):
         return [{"game_id": g, "play_count": 1, "last_played_at": "2026-01-01"} for g in self.plays]
+
+    def _bgb_rank_deferrals_active(self, p_viewer):
+        return [r["game_id"] for r in self.tables["boardgamebuddy_rank_deferrals"]
+                if r["user_id"] == p_viewer and r["game_id"] not in self.lapsed]
 
     def _ranks(self):
         return self.tables["boardgamebuddy_game_ranks"]
@@ -360,3 +392,54 @@ def test_queue_is_played_minus_ranked_and_expansions_a_to_z(sb):
     assert [(i.game.name, i.category_label) for i in items] == [
         ("Azul", "Family"), ("Codenames", "Party"), ("spirit Island", "Strategy"),
     ]
+
+
+# ── Rank after next play ─────────────────────────────────────────────────────
+
+def _deferrals(sb):
+    return [r["game_id"] for r in sb.tables["boardgamebuddy_rank_deferrals"] if r["user_id"] == ME]
+
+
+def test_a_deferred_game_stays_in_the_queue_flagged_and_last(sb):
+    games = [_game("1", "Azul"), _game("2", "Brass"), _game("3", "Cascadia"), _game("4", "Dune")]
+    sb["sb"] = _SB(games, plays=["1", "2", "3", "4"], deferrals=["1", "3"], lapsed=["3"])
+    items = run(R.rank_queue(user=USER)).items
+    # Azul is parked, so it drops below the rest; Cascadia was played since
+    # its deferral, so it is back in line.
+    assert [(i.game.name, i.deferred) for i in items] == [
+        ("Brass", False), ("Cascadia", False), ("Dune", False), ("Azul", True),
+    ]
+
+
+def test_defer_stamps_and_restamps_one_row(sb):
+    sb["sb"] = _SB([_game("1", "Azul")], plays=["1"], deferrals=["1"])
+    old = sb["sb"].tables["boardgamebuddy_rank_deferrals"][0]["deferred_at"]
+    assert run(R.defer_rank(game_id="1", user=USER)).deferred is True
+    rows = sb["sb"].tables["boardgamebuddy_rank_deferrals"]
+    assert len(rows) == 1 and rows[0]["deferred_at"] > old
+    assert [i.deferred for i in run(R.rank_queue(user=USER)).items] == [True]
+
+
+@pytest.mark.parametrize("game,ranks,status", [
+    (_game("1", "Azul"), [_rank("1", "family", "love", 0)], 400),     # already ranked
+    (_game("1", "Seafarers", expansion=True), [], 400),
+])
+def test_defer_refuses_ranked_games_and_expansions(sb, game, ranks, status):
+    sb["sb"] = _SB([game], ranks=ranks)
+    with pytest.raises(HTTPException) as e:
+        run(R.defer_rank(game_id="1", user=USER))
+    assert e.value.status_code == status
+    assert _deferrals(sb["sb"]) == []
+
+
+def test_defer_404s_for_an_unknown_game(sb):
+    sb["sb"] = _SB([])
+    with pytest.raises(HTTPException) as e:
+        run(R.defer_rank(game_id="nope", user=USER))
+    assert e.value.status_code == 404
+
+
+def test_ranking_a_deferred_game_drops_the_deferral(sb):
+    sb["sb"] = _SB([_game("1", "Azul"), _game("2", "Brass")], plays=["1", "2"], deferrals=["1", "2"])
+    run(R.rank_game(body=RankWrite(tier=RankTier.GOOD, index=0), game_id="1", user=USER))
+    assert _deferrals(sb["sb"]) == ["2"]

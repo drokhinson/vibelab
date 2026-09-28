@@ -93,13 +93,21 @@ class RankQueueItem(BaseModel):
     game: GameSummary
     category: str
     category_label: str
+    # Parked with "Rank after next play" and not played since (migration 058):
+    # still unranked, but left out of the count and the Start walk.
+    deferred: bool = False
 
 
 class RankQueueResponse(BaseModel):
-    """Owned or played games the viewer has not ranked yet, A to Z."""
+    """Played games the viewer has not ranked yet: A to Z, then the deferred
+    ones A to Z."""
 
     items: list[RankQueueItem]
 
 
 class RankRemoveResponse(BaseModel):
     removed: bool
+
+
+class RankDeferResponse(BaseModel):
+    deferred: bool
