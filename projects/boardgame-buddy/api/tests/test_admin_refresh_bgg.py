@@ -1,6 +1,6 @@
 """The game page's admin "Refresh from BoardGameGeek" re-reads what only the
 import used to write — tags, the play_mode they imply, player counts — which is
-what the starter catalog got wrong (every 002_seed.sql row is 'competitive',
+what the old starter catalog got wrong (every row 002_seed.sql used to insert was 'competitive',
 Pandemic included). One /thing call, admin-only."""
 
 import asyncio

@@ -1216,7 +1216,7 @@ async def refresh_single_game_from_bgg(
     refresh-metadata above rewrites what the backfill sweeps (description,
     stats, publishers, a missing year). This also rewrites what only the import
     ever wrote — categories, mechanics, the play_mode they imply, player counts
-    and playing time — which is what the starter catalog (002_seed.sql) got
+    and playing time — which is what the old starter catalog (once in 002_seed.sql) got
     wrong: every row there is play_mode 'competitive', Pandemic included. Art
     is fetched too when the row has none. The name is left alone.
     """

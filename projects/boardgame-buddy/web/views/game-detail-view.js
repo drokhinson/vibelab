@@ -317,8 +317,9 @@
 
     // Admins only: re-read this game's whole BoardGameGeek record — tags, the
     // play mode they imply, player counts, stats, and art if it has none.
-    // Mostly for the starter catalog (002_seed.sql), which stored every game
-    // as competitive, Pandemic included.
+    // Mostly for games left over from the old starter catalog (once seeded by
+    // 002_seed.sql, now removed), which stored every game as competitive,
+    // Pandemic included.
     _renderAdminRefresh(g) {
       const me = window.store && window.store.get("user");
       if (!me || !me.is_admin || !g.bgg_id) return "";
