@@ -7,20 +7,19 @@ APP_NAME = "travel-scrapbook"
 # Gemini model used for place extraction. This is a tiny structured-extraction
 # task (~500 in / ~150 out tokens per scrap) that sits well inside the free
 # tier. We use the Google-maintained "-latest" alias rather than a pinned model
-# ID: the previously pinned gemini-2.5-flash was pulled from the API on
-# 2026-07-09 (ahead of its announced shutdown), 404-ing every request. The alias
-# hot-swaps to the current Flash-Lite release (gemini-3.1-flash-lite as of
-# 2026-07) with a 2-week email notice before any behavior change, so a silent
-# early deprecation can't take the app down again. Swap to gemini-flash-latest
+# ID: a pinned model can be pulled from the API ahead of its announced shutdown,
+# 404-ing every request. The alias hot-swaps to the current Flash-Lite release
+# with a 2-week email notice before any behavior change, so a silent early
+# deprecation can't take the app down. Swap to gemini-flash-latest
 # for a stronger (still free-tier) model if extraction quality needs it.
 GEMINI_MODEL = "gemini-flash-lite-latest"
 
 # Cache namespaces (shared-backend/cache.py)
 CACHE_NS_CATEGORIES = "ts.categories"
 CACHE_NS_REGIONS = "ts.regions"
-# v2: GeocodeResult gained structured address components (city/region/country).
-# v3: results now requested in English (accept-language=en) — a fresh namespace
-# avoids serving pre-upgrade cached results (local-language, missing components).
+# Versioned: bump the suffix whenever GeocodeResult's shape or the request
+# params change (structured city/region/country components, accept-language=en)
+# so a fresh namespace never serves results cached under the old contract.
 CACHE_NS_GEOCODE = "ts.geocode3"
 
 CATEGORIES_TTL_SECONDS = 60 * 60          # 1 hour
@@ -102,11 +101,11 @@ class GeocodeConfidence(StrEnum):
 
 class CheckpointRole(StrEnum):
     """A checkpoint is the stay/travel combo that frames a trip. travel is a
-    mid-trip leg (multi-city); stay is lodging. (026: arrival/departure are no
-    longer roles — they're ordinary stops flagged is_arrival/is_departure on the
+    mid-trip leg (multi-city); stay is lodging. (026: arrival/departure are not
+    roles — they're ordinary stops flagged is_arrival/is_departure on the
     membership, surfaced to the user as checkpoints too; see Bookend.)
 
-    NB: the underlying scrap_trips.role DB values are unchanged ('stay'/'travel');
+    NB: the underlying scrap_trips.role DB values are 'stay'/'travel';
     this enum is the code-side name only."""
     STAY = "stay"
     TRAVEL = "travel"

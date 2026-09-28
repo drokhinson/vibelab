@@ -32,9 +32,8 @@
 //
 // Note the unit throughout: browsers charge localStorage in UTF-16 code units,
 // two bytes per character, so every budget here counts STORED CHARACTERS rather
-// than bytes. Mixing the two is how the first version of this file ended up with
-// a cap of roughly twice the real ceiling, which meant it never fired and the
-// browser threw first.
+// than bytes. Mixing the two gives a cap of roughly twice the real ceiling,
+// which never fires, so the browser throws first.
 (function () {
   "use strict";
 
@@ -49,9 +48,9 @@
   var BUDGET_CHARS = 2.5 * 1024 * 1024;
 
   // Stored values are prefixed so the store describes its own format and can be
-  // changed later without a migration step. An entry with NO prefix is raw JSON
-  // from the first shipped version of this file; read() still understands it and
-  // the next refresh rewrites it compressed.
+  // changed later without a migration step. An entry with NO prefix is raw,
+  // uncompressed JSON; read() understands it and the next refresh rewrites it
+  // compressed.
   var GZIP_TAG = "gz1:";
   var RAW_TAG = "raw1:";
 
@@ -192,7 +191,7 @@
       } else if (stored.indexOf(RAW_TAG) === 0) {
         json = stored.slice(RAW_TAG.length);
       } else {
-        json = stored; // untagged: raw JSON from the first shipped version
+        json = stored; // untagged: raw, uncompressed JSON
       }
       var parsed = JSON.parse(json);
       if (!parsed || !parsed.trip) { clear(slug); return null; }

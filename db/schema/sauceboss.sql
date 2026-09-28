@@ -10,8 +10,7 @@
 -- have parent_id IS NULL (e.g. Rice, Bread, Chicken, Romaine). dish_level=
 -- 'subtype' rows point at a 'dish' parent (e.g. Basmati under Rice, Pretzel
 -- under Bread). The sauceboss_dish_level_check trigger enforces this two-tier
--- shape. Replaces the legacy sauceboss_carbs / sauceboss_addons /
--- sauceboss_salad_bases / sauceboss_carb_preparations tables.
+-- shape.
 CREATE TABLE IF NOT EXISTS public.sauceboss_dish (
   id                 TEXT PRIMARY KEY,
   category           TEXT NOT NULL CHECK (category IN ('carb', 'protein', 'salad')),
@@ -31,9 +30,8 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_dish (
 ALTER TABLE public.sauceboss_dish ENABLE ROW LEVEL SECURITY;
 
 
--- Cuisine display info. cuisine_emoji previously lived denormalized on every
--- sauce row; now a sauce just stores the cuisine name and the emoji + image
--- are looked up here. Auto-upserted by create_sauceboss_sauce / update_sauceboss_sauce
+-- Cuisine display info. A sauce stores just the cuisine name; the emoji +
+-- image are looked up here. Auto-upserted by create_sauceboss_sauce / update_sauceboss_sauce
 -- whenever a sauce is saved with a non-empty emoji.
 CREATE TABLE IF NOT EXISTS public.sauceboss_cuisine_info (
   cuisine           TEXT PRIMARY KEY,
@@ -65,8 +63,8 @@ ALTER TABLE public.sauceboss_unit ENABLE ROW LEVEL SECURITY;
 
 -- Ingredient registry. One row per distinct ingredient food, keyed by
 -- lower(trim(name)). Auto-populated by create_sauceboss_sauce on insert.
--- `category` (was its own lookup table) drives the pantry filter panel.
--- `substitutions` (was its own lookup table) is shown when an ingredient is
+-- `category` drives the pantry filter panel.
+-- `substitutions` is shown when an ingredient is
 -- marked unavailable.
 -- TODO: add density_g_per_ml column when a curated density map is added —
 -- this unlocks volume↔mass conversion. See routes/sauceboss/units.py
@@ -232,8 +230,8 @@ ALTER TABLE public.sauceboss_user_pantry_missing ENABLE ROW LEVEL SECURITY;
 --   get_sauceboss_browse_authors(p_q)                  → author autocomplete for the Browse filter
 --   get_sauceboss_pantry_for_user(p_user_id)           → ingredients in saucebook with `category`
 --                                                         (sauceboss_ingredient.category, NULL when uncategorized)
---                                                         + missing flag — one round-trip; eliminates the
---                                                         standalone /ingredient-categories call on the pantry path (migration 015).
+--                                                         + missing flag — one round-trip, so the pantry path
+--                                                         needs no standalone /ingredient-categories call (migration 015).
 --   set_sauceboss_pantry_missing(p_user_id, p_ingredient_ids[]) → replace user's missing set in one round-trip
 --   list_sauceboss_ingredients_with_usage()            → ingredients with recipe usage counts
 --   merge_sauceboss_ingredients(keep, merge_ids[])     → atomic merge + repoint
@@ -241,18 +239,18 @@ ALTER TABLE public.sauceboss_user_pantry_missing ENABLE ROW LEVEL SECURITY;
 --
 -- JSON contract: every sauce envelope emits cuisineEmoji (joined from
 -- sauceboss_cuisine_info), attachments[], and ingredient rows with
--- ingredientId (was foodId before migration 013). compatibleItems[] is no
--- longer emitted — frontends now read attachments directly.
+-- ingredientId. Current frontends read attachments[] directly; foodId and
+-- compatibleItems[] exist only for the compat layer below.
 --
 -- ── release/sauceboss-1.0 compat layer (migration 014) ─────────────────────
 -- The release-branch web/native (commit 13d7461 on origin/release/sauceboss-1.0)
--- predates 013 and reads legacy field names. Migration 014 makes every read
+-- reads the pre-013 field names. Migration 014 makes every read
 -- RPC dual-emit:
 --   * each ingredient row carries BOTH `foodId` and `ingredientId` (same value);
 --   * each sauce envelope emits a `compatibleItems[]` array synthesized from
 --     sauceboss_sauce_to_dish where target_kind='dish';
---   * `cuisineEmoji` continues to come from the sauceboss_cuisine_info JOIN.
--- 014 also re-adds `get_sauceboss_ingredient_categories` /
+--   * `cuisineEmoji` comes from the sauceboss_cuisine_info JOIN.
+-- 014 also defines `get_sauceboss_ingredient_categories` /
 -- `get_sauceboss_substitutions` / `upsert_sauceboss_ingredient_category` —
 -- all reading from `sauceboss_ingredient.{category, substitutions[]}`.
 --
@@ -261,7 +259,7 @@ ALTER TABLE public.sauceboss_user_pantry_missing ENABLE ROW LEVEL SECURITY;
 --     that wrap the post-013 /ingredients endpoints with the legacy
 --     `{foods: [...]}` envelope.
 --   * /api/v1/sauceboss/favorites GET/PUT/DELETE — backed by
---     sauceboss_user_saucebook (favorites table is NOT resurrected).
+--     sauceboss_user_saucebook (there is no favorites table).
 --   * POST /api/v1/sauceboss/ingredient-categories — writes through to
 --     `sauceboss_ingredient.category` via the upsert RPC.
 --   * PUT /pantry accepts BOTH `missingFoodIds` and `missingIngredientIds`;

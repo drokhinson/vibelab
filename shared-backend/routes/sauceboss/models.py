@@ -31,7 +31,7 @@ class AdminKeyBody(BaseModel):
 class FavoriteEntry(BaseModel):
     """One entry in the legacy favorites response (release/sauceboss-1.0 compat).
 
-    Backed by sauceboss_user_saucebook post-013; ``createdAt`` mirrors
+    Backed by sauceboss_user_saucebook; ``createdAt`` mirrors
     ``added_at`` so the release-branch UI keeps sorting correctly.
     """
     sauceId: str
@@ -128,7 +128,7 @@ class CreateSauceRequest(BaseModel):
 
     Targeting: send `attachments` (preferred) — a list of {kind, value} rows
     pointing at category, dish, or subtype targets. The legacy `itemIds`
-    field is still accepted for one release: each entry is treated as a
+    field is accepted for one release window: each entry is treated as a
     dish-level attachment. The route validates that at least one of the two
     is non-empty.
     """

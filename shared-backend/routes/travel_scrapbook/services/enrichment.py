@@ -169,7 +169,7 @@ async def _materialize_place(
     if _user_has_scrap_for_place(sb, source["user_id"], place["id"]):
         return  # already saved — the new source chip is the only change
 
-    # The scrap is just the saved place now — its trip links live in
+    # The scrap is just the saved place — its trip links live in
     # travelscrapbook_scrap_trips.
     inserted = (
         sb.table("travelscrapbook_scraps")
@@ -212,8 +212,8 @@ async def _materialize_checkpoint(
     dates filled in from the page (020). Without a trip there is nowhere to
     hang the role — the caller falls back to the place flow, which still files
     the lodging/transport place itself. Re-capturing the same booking updates
-    the existing checkpoint's dates (place dedupe replaces the old label
-    matching). Returns True when a checkpoint membership was written."""
+    the existing checkpoint's dates (matched by deduped place or booking
+    label). Returns True when a checkpoint membership was written."""
     trip_id = source.get("trip_hint_id")
     if not trip_id:
         return False
@@ -250,7 +250,7 @@ async def _materialize_checkpoint(
             "plan_time": booking.time,
         }
 
-    # Re-capture matching, in legacy spirit: the same booking (same label) on
+    # Re-capture matching: the same booking (same label) on
     # this trip updates its checkpoint in place — including REPOINTING to a new
     # place when the property moved beyond the dedupe radius — instead of
     # stacking a second stay. Match by scrap OR by the booking label's

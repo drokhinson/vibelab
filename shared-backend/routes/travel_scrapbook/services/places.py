@@ -367,8 +367,8 @@ def place_matches_trip_scope(
     from trip_scope_sets). A place matches when its country/region is in either
     union set, OR it matches the trip's own destination at the trip's scope
     granularity: country/region scope by tag equality, city scope by
-    destination-centroid radius or same city name. Empty union sets ⇒ the
-    pre-union behavior, so callers that don't supply members are unaffected.
+    destination-centroid radius or same city name. Empty union sets ⇒
+    destination-only matching, for callers that don't supply members.
     """
     # Member-union match (always additive, regardless of scope level).
     if country and country.strip().casefold() in union_countries:

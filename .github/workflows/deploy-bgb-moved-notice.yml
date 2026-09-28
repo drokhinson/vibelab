@@ -22,9 +22,7 @@ name: Deploy BoardgameBuddy Moved Notice (Vercel)
 #
 # Two things about moved/vercel.json that its JSON cannot say:
 #   * The blanket rewrite to /index.html does NOT swallow /sw.js. Vercel checks
-#     the filesystem before applying `rewrites`, so real files win — the same
-#     reason web/vercel.json could rewrite everything while still serving the
-#     hashed bundle.
+#     the filesystem before applying `rewrites`, so real files win.
 #   * no-store on everything is so this notice can itself be replaced, or the
 #     project finally deleted, without a cached copy outliving the decision.
 on:

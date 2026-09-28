@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_garden_plants (
   id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   garden_id       UUID    NOT NULL REFERENCES public.plantplanner_gardens(id) ON DELETE CASCADE,
   plant_id        UUID    REFERENCES public.plantplanner_plants(id),                        -- legacy seed-table reference (nullable)
-  plant_cache_id  UUID    REFERENCES public.plantplanner_plant_cache(id),                   -- new API-backed reference (nullable)
+  plant_cache_id  UUID    REFERENCES public.plantplanner_plant_cache(id),                   -- API-backed reference (nullable)
   pos_x           REAL    NOT NULL,
   pos_y           REAL    NOT NULL,
   radius_feet     REAL    NOT NULL DEFAULT 0.5,
@@ -123,8 +123,8 @@ CREATE INDEX IF NOT EXISTS idx_plantplanner_garden_plants_cache
   ON public.plantplanner_garden_plants(plant_cache_id);
 ALTER TABLE public.plantplanner_garden_plants ENABLE ROW LEVEL SECURITY;
 
--- API-backed plant cache (Phase 1, post-011). Source-of-truth for the new
--- shopping flow. Three image sizes mirrored to Supabase Storage so the UI
+-- API-backed plant cache (011_plant_cache_and_shortlist). Source-of-truth for
+-- the shopping flow. Three image sizes mirrored to Supabase Storage so the UI
 -- never round-trips to third-party CDNs at read time.
 CREATE TABLE IF NOT EXISTS public.plantplanner_plant_cache (
   id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
