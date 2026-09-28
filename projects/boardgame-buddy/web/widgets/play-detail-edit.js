@@ -626,8 +626,17 @@
   function resyncScores(players) {
     const n = normalizeRounds(players);
     if (n === 0) return n;
+    settleMergedSides(players, n);
     for (const p of players) p.score = String(playerTotal(p, players));
     return n;
+  }
+
+  // A team side the grid draws as ONE column saves that column's number on
+  // every seat, blanks included — see window.roundGridSettleMerged. The mode
+  // comes off the play, as in gridSeatsFor.
+  function settleMergedSides(players, n) {
+    const mode = (state.play && state.play.play_mode) || "competitive";
+    window.roundGridSettleMerged(players, mode, n);
   }
 
   // ── Adding players ────────────────────────────────────────────────────────
@@ -982,6 +991,7 @@
     // grid's round count, so `round_scores` has to be that long too or the
     // saved play would carry a total its own breakdown doesn't add up to.
     const gridRounds = gridActive ? normalizeRounds(state.draft.players) : 0;
+    if (gridActive) settleMergedSides(state.draft.players, gridRounds);
     const payload = {
       played_at: state.draft.played_at,
       notes: state.draft.notes || null,

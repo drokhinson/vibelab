@@ -431,48 +431,34 @@
      * design) while this seat quietly saved zeroes and dragged the side's own
      * result down with it.
      *
-     * Only ever fills BLANKS, and only onto a seat that has no numbers of its
-     * own. A seat that was scored before it joined the side is a real
+     * Only ever fills BLANKS, and only while the side is drawn as one column.
+     * A seat that holds a DIFFERENT number in any round is a real
      * disagreement: the grid splits the side back into seats and shows both
      * numbers, which is the honest answer and the one a host can act on. The
      * alternative — overwriting — is the same mistake applyTeamTag's own
      * docstring is a monument to, where naming a team threw away something
-     * already recorded.
+     * already recorded. A seat that is merely partly scored, though, is not a
+     * disagreement: the side merges, and its blanks (and its teammates') take
+     * the column's number — see window.roundGridSettleMerged.
      *
      * Mutates `players` in place and reports whether anything moved, so the
      * caller can skip a repaint and a live-scores republish.
      *
      * @param {any[]} players the draft roster
      * @param {number} i the seat that was just tagged
-     * @returns {boolean} true when this seat took the side's numbers
+     * @returns {boolean} true when any seat on a merged side took a number
      */
     static adoptTeamScores(players, i) {
       const p = players && players[i];
       if (!p) return false;
       const tag = String((p.team || "")).trim().toLowerCase();
       if (!tag) return false;
-      // Its own numbers, so there is nothing to adopt and no blank to fill.
-      const mine = Array.isArray(p.roundScores) ? p.roundScores : [];
-      if (mine.some((v) => window.parseRoundScore(v) != null)) return false;
       const side = players.filter(
         (o, j) => j !== i && o && String((o.team || "")).trim().toLowerCase() === tag
       );
       if (!side.length) return false;
-      let moved = false;
       const n = Math.max(0, ...players.map((o) => ((o && o.roundScores) || []).length));
-      if (!Array.isArray(p.roundScores)) p.roundScores = [];
-      for (let r = 0; r < n; r++) {
-        let v = null;
-        for (const o of side) {
-          const cell = (o.roundScores || [])[r];
-          if (window.parseRoundScore(cell) != null) { v = cell; break; }
-        }
-        if (v == null) continue;
-        if (p.roundScores[r] === v) continue;
-        p.roundScores[r] = v;
-        moved = true;
-      }
-      return moved;
+      return window.roundGridSettleMerged(players, "team", n);
     }
 
     // Remote lobby helpers ──────────────────────────────────────────────────────

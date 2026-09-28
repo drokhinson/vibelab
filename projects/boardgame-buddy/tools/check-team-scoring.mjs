@@ -184,6 +184,41 @@ console.log("\n...but a seat that was already scored keeps its own numbers:");
      ["Ana:0", "Bo:1", "Cy:2"]);
 }
 
+console.log("\n...and a partly-scored seat that agrees fills its blanks, both ways:");
+{
+  // Ana scored round 1, Bo scored round 2, then both were tagged Red. No round
+  // holds two different numbers, so the grid merges them and prints 17 under
+  // the column — and each seat used to save only its own cells, 10 and 7.
+  const roster = [seat("Ana", null, [10, null]), seat("Bo", null, [null, 7])];
+  win.PlaySession.applyTeamTag(roster, 0, "Red");
+  win.PlaySession.applyTeamTag(roster, 1, "Red");
+  ok("the numbers move", win.PlaySession.adoptTeamScores(roster, 1) === true);
+  eq("both seats hold the column", roster.map((p) => p.roundScores), [[10, 7], [10, 7]]);
+  const col = columns(roster, "team", 2)[0];
+  eq("every seat saves the column's Total",
+     roster.map((p) => win.roundGridTotal(p, 2)),
+     [win.roundGridColumnTotal(col, 2, null), win.roundGridColumnTotal(col, 2, null)]);
+}
+
+console.log("\nsettling at save: a merged side's seats total what the column shows:");
+{
+  // A split side whose cells come to agree merges with a blank still on one
+  // seat. roundGridSettleMerged is what Save runs before it sums a seat.
+  const roster = [seat("Ana", "Red", ["10", "3"]), seat("Bo", "Red", [null, "3"]),
+                  seat("Cy", "Blue", ["4", "9"]), seat("Di", "Blue", ["5", "9"])];
+  ok("the agreeing side moves", win.roundGridSettleMerged(roster, "team", 2) === true);
+  eq("the blank took the column's number", roster[1].roundScores, ["10", "3"]);
+  eq("the disagreeing side is untouched",
+     [roster[2].roundScores, roster[3].roundScores], [["4", "9"], ["5", "9"]]);
+  for (const c of columns(roster, "team", 2)) {
+    const total = win.roundGridColumnTotal(c, 2, null);
+    ok(`${c.merged ? c.label : c.players[0].name} saves ${total}`,
+       c.players.every((p) => win.roundGridTotal(p, 2) === total));
+  }
+  ok("competitive never moves",
+     win.roundGridSettleMerged([seat("A", "Red", [1]), seat("B", "Red", [null])], "competitive", 1) === false);
+}
+
 console.log("\nnothing is adopted where there is nothing to adopt:");
 {
   const lone = [seat("Ana", "Red", []), seat("Bo", "Blue", [5])];
