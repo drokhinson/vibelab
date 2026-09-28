@@ -1,6 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 058_rank_deferrals.sql (the new
+-- Last updated: the 2026-09-28 squash of 001–058 into migrations/001_baseline.sql
+--               (no shape changed; the baseline is the generated full form).
+--               Before that: 058_rank_deferrals.sql (the new
 --               boardgamebuddy_rank_deferrals table — "Rank after next play";
 --               hand-added below.)
 --               Before that: 056_game_ranks.sql (boardgamebuddy_games grows bgg_family —
@@ -567,7 +569,7 @@ GRANT SELECT ON public.boardgamebuddy_buddies TO boardgamebuddy_role;
 -- user_a < user_b, so the row itself is undirected and every read decides which
 -- side the viewer is on. status carries the request lifecycle, and a request you
 -- have merely SENT already counts as a first-hop link for the suggestion RPCs
--- (archive/072).
+-- (archive/2026-09-01/072).
 --
 -- This table is also a NOTIFICATION SOURCE (migration 009): created_at dates an
 -- incoming request on the bell and accepted_at dates an acceptance, both read
@@ -1249,7 +1251,7 @@ CREATE POLICY bgb_session_scores_select ON public.boardgamebuddy_play_session_sc
 
 -- …but only the host writes them, and only while the session is being played.
 -- Both halves of the check are load-bearing: without the phase test a host
--- could rewrite scores after finalizing (archive/053).
+-- could rewrite scores after finalizing (archive/2026-09-01/053).
 CREATE POLICY bgb_session_scores_write ON public.boardgamebuddy_play_session_scores
   FOR ALL TO authenticated USING (
     EXISTS (

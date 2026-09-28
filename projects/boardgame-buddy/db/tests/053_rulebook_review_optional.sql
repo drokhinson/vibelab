@@ -50,8 +50,8 @@ INSERT INTO public.boardgamebuddy_games (id, name) VALUES
 -- pass a no-op, and a constraint that came back subtly different on the replay
 -- would fail the same assertions below. Both passes roll back with everything
 -- else.
-\i db/migrations/053_rulebook_review_optional.sql
-\i db/migrations/053_rulebook_review_optional.sql
+\i db/migrations/archive/2026-09-28/053_rulebook_review_optional.sql
+\i db/migrations/archive/2026-09-28/053_rulebook_review_optional.sql
 
 DO $test$
 DECLARE

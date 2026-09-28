@@ -339,7 +339,7 @@ signature changes.
 
 1. **The blocking function** (Part B, redeploy) — tokens start carrying
    `app_uid`.
-2. **`db/migrations/037_app_uid_claim.sql`** in the Supabase SQL editor — the
+2. **`db/migrations/archive/2026-09-28/037_app_uid_claim.sql`** in the Supabase SQL editor — the
    seven RLS policies stop reading `auth.uid()` and read the claim.
 3. **The API** (merge to main; Railway redeploys) — `jwt_auth.py` reads the
    claim instead of `sub`.

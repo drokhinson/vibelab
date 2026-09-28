@@ -19,7 +19,7 @@ rule that no longer applies.
 
 Why the hint is the column and not the constraint name: PostgREST accepts
 either, and `created_by` says what it means. The constraint is still called
-`boardgamebuddy_guide_chunks_created_by_fkey` — a name from before archive/018
+`boardgamebuddy_guide_chunks_created_by_fkey` — a name from before archive/2026-09-01/018
 renamed the tables — and a select that quoted it would read as though it joined
 some other table entirely.
 """

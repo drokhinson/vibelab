@@ -136,7 +136,7 @@ the first partner, and record the outcome here.
 
 | What | Where |
 |---|---|
-| The tables and the seeded rows | `db/migrations/046_affiliate_partners.sql` |
+| The tables and the seeded rows | `db/migrations/archive/2026-09-28/046_affiliate_partners.sql` |
 | The live rule and the URL builder | `api/routes/services/affiliate_service.py` |
 | The endpoints | `api/routes/affiliate_routes.py` (`GET /affiliate/links`, `POST /affiliate/click`, `/affiliate/admin/*`) |
 | The pills | `web/ui/buy-links.js`, painted by `web/views/game-detail-view.js` |

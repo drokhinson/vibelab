@@ -38,7 +38,7 @@
 -- Standing up a throwaway database to run it against needs the same four
 -- Supabase-isms 051's test lists (the three roles, `auth.users`, the
 -- `extensions` schema with pg_trgm, and an `auth.uid()` stub), then
--- db/schema/boardgamebuddy.sql, then db/migrations/052_rulebook_links.sql.
+-- db/schema/boardgamebuddy.sql, then db/migrations/archive/2026-09-28/052_rulebook_links.sql.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
@@ -64,8 +64,8 @@ INSERT INTO public.boardgamebuddy_games (id, name, rulebook_url) VALUES
 -- above; the second is the idempotency claim in 052's own header, and the
 -- "exactly one chapter" assertions below are what prove it. Both passes are
 -- inside this transaction, so both roll back.
-\i db/migrations/052_rulebook_links.sql
-\i db/migrations/052_rulebook_links.sql
+\i db/migrations/archive/2026-09-28/052_rulebook_links.sql
+\i db/migrations/archive/2026-09-28/052_rulebook_links.sql
 
 DO $test$
 DECLARE

@@ -1,6 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 058_rank_deferrals.sql (adds bgb_rank_deferrals_active — which
+-- Last updated: the 2026-09-28 squash of 001–058 into migrations/001_baseline.sql
+--               (no function changed; the baseline is the generated full form).
+--               Before that: 058_rank_deferrals.sql (adds bgb_rank_deferrals_active — which
 --               "Rank after next play" deferrals still hold, i.e. which parked
 --               games have not been played since. db/tests/058_rank_deferrals.sql
 --               is the behavioural test.)
@@ -78,7 +80,7 @@
 --               participant table has no team and the tags live on the host's
 --               local draft until finalize.
 --
---               NOTE THE NUMBER. archive/048_play_client_key.sql is a
+--               NOTE THE NUMBER. archive/2026-09-01/048_play_client_key.sql is a
 --               different 048, and a few code comments saying "migration 048"
 --               mean that one.)
 --               Before that: 047_usage_stats.sql (adds bgb_admin_usage_stats — the admin
@@ -217,7 +219,7 @@
 --               never updated this header — hence the jump from 007.
 --               The other 48
 --               functions come from the 2026-09-01 collapse and live
---               in db/migrations/boardgamebuddy/003_rpcs.sql; each entry below
+--               in db/migrations/archive/2026-09-28/003_rpcs.sql; each entry below
 --               also names the archived migration its surviving definition
 --               came from, since that file is where the reasoning is.
 --               Reconciled against a database built from the collapsed
@@ -228,8 +230,8 @@
 
 -- bgb_hot_games(window_days INT DEFAULT 7, lim INT DEFAULT 10)
 --   → TABLE (game_id UUID, play_count BIGINT)
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/012_rpcs_feed_and_stats.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/012_rpcs_feed_and_stats.sql)
 --   Last updated in: db/migrations/boardgamebuddy/013_hot_games_exclude_imports.sql
 --               (imported plays do not count: rows with a non-NULL
 --                import_batch_id (one per paste, 007) or import_group_id (a
@@ -282,8 +284,8 @@
 --            last_played_at DATE, hours_played NUMERIC, owned_games BIGINT,
 --            owned_expansions BIGINT, favorite_game_id UUID,
 --            favorite_game_name TEXT, favorite_play_count BIGINT)
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/015_user_stats_with_favorite.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/015_user_stats_with_favorite.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/stats_service.py
 --   Purpose:    Per-user stats card on the Profile view (Played Games,
 --               Owned Games, Wins, Favorite Game). owned_games excludes
@@ -292,8 +294,8 @@
 -- bgb_user_stats_detail(uid UUID)
 --   → JSONB { career, podium, games, nemesis, rhythm, shelf, table_size,
 --             taste, comeback, coop, personal_bests }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/058_user_stats_detail.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/058_user_stats_detail.sql)
 --   Last updated in: db/migrations/boardgamebuddy/018_unscored_plays.sql
 --               (`mine` carries a `decided` flag — EXISTS over the play's whole
 --                roster for a winner OR a score — and every RATIO is filtered
@@ -351,8 +353,8 @@
 --   `players` entries carry `team` (048), because the detail popup seeds
 --   itself from this roster and repainting it a moment later is the exact
 --   thing that seed exists to avoid.
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/014_feed_order_by_played_at.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/014_feed_order_by_played_at.sql)
 --   Last updated in: db/migrations/boardgamebuddy/031_feed_scoring_template.sql
 --               (scoring_template, carried straight off the `page` CTE — the
 --               same field bgb_plays_page emits (018), so the play-detail
@@ -428,8 +430,8 @@
 
 -- bgb_dormant_collection(uid UUID, days_since INT DEFAULT 60, lim INT DEFAULT 5)
 --   → TABLE (game_id UUID, last_played_at DATE)
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/012_rpcs_feed_and_stats.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/012_rpcs_feed_and_stats.sql)
 --               db/migrations/boardgamebuddy/045_participated_play_stats.sql
 --                 (counts participated plays, not just logged ones, so a game
 --                  the user played but a buddy logged is not nudged at them as
@@ -442,8 +444,8 @@
 -- bgb_suggested_buddies(uid UUID, lim INT DEFAULT 5)
 --   → TABLE (user_id UUID, mutual_count BIGINT, play_count BIGINT,
 --            pending_mutual_count BIGINT, via_user_id UUID)
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/012_rpcs_feed_and_stats.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/012_rpcs_feed_and_stats.sql)
 --               db/migrations/boardgamebuddy/057_suggested_buddies_mutuals.sql
 --                 (play_count: played-with candidates alongside
 --                  friends-of-friends, shared plays ranked above graph paths;
@@ -491,8 +493,8 @@
 --                                  active_window_days INT DEFAULT 90)
 --   → TABLE (user_id UUID, mutual_count BIGINT, play_count BIGINT,
 --            pending_mutual_count BIGINT, via_user_id UUID, source TEXT)
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/063_onboarding_buddy_suggestions.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/063_onboarding_buddy_suggestions.sql)
 --               db/migrations/boardgamebuddy/072_suggestions_from_sent_requests.sql
 --                 (the same two columns and the same sent-request traversal as
 --                  bgb_suggested_buddies above, so the two functions stay
@@ -525,8 +527,8 @@
 --                                   per_seed INT DEFAULT 6, lim INT DEFAULT 48)
 --   → TABLE (via_user_id UUID, user_id UUID, buddy_count BIGINT,
 --            rank_in_seed INT)
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/072_suggestions_from_sent_requests.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/072_suggestions_from_sent_requests.sql)
 --               db/migrations/boardgamebuddy/014_buddy_suggestion_dismissals.sql
 --                 (excludes dismissed candidates
 --                  too: without it a dismissed person would be absent from the
@@ -550,8 +552,8 @@
 
 -- bgb_distinct_mechanics()
 --   → TABLE (mechanic TEXT)
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/019_perf_indexes.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/019_perf_indexes.sql)
 --   Called by:  (nothing. Kept because the mechanics filter is a plausible
 --               near-term feature and the function is free to keep.)
 --   Purpose:    Sorted distinct mechanic strings across the games catalog,
@@ -559,8 +561,8 @@
 
 -- bgb_game_detail_bundle(game_uuid UUID, viewer UUID, plays_limit INT DEFAULT 5)
 --   → JSONB
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/021_profile_and_game_detail_bundles.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/021_profile_and_game_detail_bundles.sql)
 --   Last updated in: db/migrations/boardgamebuddy/030_game_viewer_stats.sql
 --               (`viewer_stats` — the viewer's own record with this one
 --                game: plays, wins, decided_plays, scored_plays,
@@ -592,8 +594,8 @@
 -- bgb_profile_bundle(viewer UUID, target UUID, col_per_page INT DEFAULT 12,
 --                    plays_per_page INT DEFAULT 10)
 --   → JSONB
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/021_profile_and_game_detail_bundles.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/021_profile_and_game_detail_bundles.sql)
 --   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
 --               (played_page / played_total widened exactly as
 --                bgb_collection_shelf's played shelf; marks sort last.)
@@ -670,8 +672,8 @@
 --   → JSONB { bootstrap_version, generated_at, current_user, profile_bundle,
 --             game_detail_bundles (object keyed by game_id), owned_count,
 --             truncated }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/033_bootstrap_bundle.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/033_bootstrap_bundle.sql)
 --   Last updated in: db/migrations/boardgamebuddy/043_feed_perf_and_bootstrap_split.sql
 --               (bootstrap_version 2; the game-bundle block is skipped
 --               when max_game_bundles <= 0, which is how the backend calls it)
@@ -688,8 +690,8 @@
 --                  max_bundles INT DEFAULT 250)
 --   → JSONB { game_detail_bundles (object keyed by game_id), owned_count,
 --             truncated }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/043_feed_perf_and_bootstrap_split.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/043_feed_perf_and_bootstrap_split.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/bootstrap_routes.py
 --               (GET /bootstrap/game-bundles)
 --   Purpose:    Deferred second stage of the boot warm-up — one
@@ -707,8 +709,8 @@
 --     host_user_id, game_id, game, participants[], scores[], created_at,
 --     expires_at, finalized_play_id, scoring_template }
 --     or {"error": "not_found"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/036_session_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/036_session_rpcs.sql)
 --   Last updated in: db/migrations/boardgamebuddy/050_session_participant_teams.sql
 --               (each participant carries `team`, the side that seat is on, so
 --               a spectator's mirror can band its grid columns while the game
@@ -734,8 +736,8 @@
 -- bgb_create_session(p_host UUID, p_host_display_name TEXT,
 --                    p_game UUID DEFAULT NULL)
 --   → JSONB (SessionResponse bundle) or {"error": "code_allocation_failed"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/036_session_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/036_session_rpcs.sql)
 --   Last updated in: db/migrations/boardgamebuddy/056_participant_order.sql
 --               (seats the host at position 0 — with a NULL there the host
 --               would sort LAST the moment bgb_add_participant gives everyone
@@ -754,8 +756,8 @@
 
 -- bgb_get_session(p_code TEXT)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/036_session_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/036_session_rpcs.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (get_session — GET /sessions/{code}, the 2s lobby poll)
 --   Purpose:    Open/expiry-gated session fetch. Expired sessions are marked
@@ -767,8 +769,8 @@
 --                  p_guest_display_name TEXT DEFAULT NULL)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
 --     "guest_name_required"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/036_session_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/036_session_rpcs.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (join_session — POST /sessions/{code}/join)
 --   Purpose:    Idempotent one-call join. During Gather, adds authed callers
@@ -793,8 +795,8 @@
 -- bgb_game_summary(p_game_id UUID)
 --   → JSONB shaped like models.GameSummary (bgg_url / expansion_count are
 --     computed/defaulted Pydantic-side), or NULL for NULL/unknown ids
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/037_joinable_sessions_rpc.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/037_joinable_sessions_rpc.sql)
 --   Called by:  (SQL-internal only) bgb_session_bundle, bgb_joinable_sessions
 --   Purpose:    Canonical GameSummary JSON builder so every session RPC
 --               emits the same game shape. Keys mirror _helpers._GAME_SELECT.
@@ -803,8 +805,8 @@
 --   → JSONB array of models.JoinableSession { id, code, host_user_id,
 --     host_display_name, host_avatar, game, phase, participant_count,
 --     is_participant, is_host_buddy, created_at }, newest first
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/037_joinable_sessions_rpc.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/037_joinable_sessions_rpc.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (list_joinable — GET /sessions/joinable, the Join chooser)
 --   Purpose:    One-call Join chooser payload: open unexpired sessions in
@@ -827,8 +829,8 @@
 --     p_payload.bgg_play_id is a BoardGameGeek play they already have
 --     (044) — the caller re-reads that row.
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/042_write_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/042_write_rpcs.sql)
 --   Last updated in: db/migrations/boardgamebuddy/005_play_import_groups.sql
 --               (persists p_payload.import_group_id, the tag the Settings
 --               importer puts on each run of identical plays, and echoes
@@ -861,7 +863,7 @@
 --                  anything that isn't ^[A-Z]{2}$ to NULL rather than failing
 --                  the save, writes plays.country_code and echoes the
 --                  NORMALIZED value back)
---               db/migrations/043_bga_import.sql
+--               db/migrations/archive/2026-09-28/043_bga_import.sql
 --                 (reads p_payload.bga_table_id, pre-checks it the same way as
 --                  client_key and writes the column. The unique_violation
 --                  handler resolves the winner on every unique key a play can
@@ -910,8 +912,8 @@
 --   → JSONB (PlayResponse, via bgb_log_play), {"duplicate": true, "id": UUID}
 --     when the payload's client_key is one bgb_log_play already stored, or
 --     {"error": "not_found" | "expired" | "forbidden" | "game_not_found"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/042_write_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/042_write_rpcs.sql)
 --               (body from 053_host_only_live_scores.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (finalize_session — POST /sessions/{code}/finalize)
@@ -935,8 +937,8 @@
 --                p_search TEXT DEFAULT NULL, p_own_only BOOLEAN DEFAULT false)
 --   → JSONB { plays: [models.PlayResponse-shaped...], total }
 --   `players` entries carry `team` (048), same roster shape as bgb_feed_plays.
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/039_perf_rpcs_and_indexes.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/039_perf_rpcs_and_indexes.sql)
 --               (body from 065_play_country.sql, which carries the
 --                country_code key so a play keeps its country past the
 --                response to its own POST)
@@ -960,8 +962,8 @@
 
 -- bgb_play_stats(p_viewer UUID, p_game_ids UUID[] DEFAULT NULL)
 --   → JSONB [ { game_id, play_count, last_played_at } ... ]
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/039_perf_rpcs_and_indexes.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/039_perf_rpcs_and_indexes.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/collection_routes.py
 --               (_play_stats — GET /collection AND GET /collection/grid, both
 --               shelves). Also services/game_service.py (recently_played —
@@ -977,8 +979,8 @@
 --             catalog_session_started_at, catalog_session_total,
 --             catalog_session_done, catalog_session_errored,
 --             catalog_session_game_names[] }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/039_perf_rpcs_and_indexes.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/039_perf_rpcs_and_indexes.sql)
 --   Last updated in: db/migrations/boardgamebuddy/006_bgg_check_session.sql
 --               (the import roll-up carries `AND kind <> 'catalog'`, because a
 --                POST /bgg/check queues catalog rows into the same table and
@@ -1001,8 +1003,8 @@
 --             last_completed_at, session_started_at, session_total,
 --             session_done, session_errored, session_game_names[],
 --             session_errors[{game_name, message}] }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/073_bgg_push_queue.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/073_bgg_push_queue.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/bgg_push_routes.py
 --               (get_push_status — GET /bgg/push/status, FE poll target)
 --   Purpose:    The outbound twin of bgb_bgg_sync_status. Simpler: the queue
@@ -1022,8 +1024,8 @@
 --            theme_color TEXT, is_expansion BOOLEAN, base_game_bgg_id INT,
 --            expansion_color TEXT, rulebook_url TEXT, play_mode TEXT,
 --            collection_status TEXT, in_collection BOOLEAN)
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/040_search_rpc.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/040_search_rpc.sql)
 --               db/migrations/boardgamebuddy/041_search_exclude_expansions.sql
 --                 (adds p_include_expansions)
 --   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
@@ -1048,8 +1050,8 @@
 -- bgb_session_gate(p_code TEXT, p_host UUID, p_require_gather BOOLEAN DEFAULT FALSE)
 --   → JSONB {'session_id', 'host_user_id', 'game_id', 'phase'} or
 --     {"error": "not_found" | "expired" | "host_only" | "roster_locked"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/046_session_write_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/046_session_write_rpcs.sql)
 --   Called by:  (SQL-internal only) the five host-write RPCs below
 --   Purpose:    Shared open/expiry/host/phase gate covering each write's own
 --               checks. The expiry path sets `status` only, not `phase`,
@@ -1060,8 +1062,8 @@
 -- bgb_add_participant(p_host UUID, p_code TEXT, p_user UUID, p_display_name TEXT)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
 --     "host_only" | "roster_locked" | "display_name_required"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/046_session_write_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/046_session_write_rpcs.sql)
 --   Last updated in: db/migrations/boardgamebuddy/056_participant_order.sql
 --               (seats at position = max+1 so a host-added player lands at the
 --               end of one ordering rather than in a second, NULL one)
@@ -1077,8 +1079,8 @@
 -- bgb_reorder_participants(p_host UUID, p_code TEXT, p_order UUID[])
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
 --     "host_only" | "roster_locked"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/056_participant_order.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/056_participant_order.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (reorder_participants — PUT /sessions/{code}/participants/order)
 --   Purpose:    Host sets the roster's column order by handing over the full
@@ -1124,8 +1126,8 @@
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
 --     "host_only" | "roster_locked" | "participant_not_found" |
 --     "cannot_remove_host"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/046_session_write_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/046_session_write_rpcs.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (remove_participant — DELETE /sessions/{code}/participants/{id})
 --   Purpose:    Gather-only roster removal in one round trip. The host can't
@@ -1134,8 +1136,8 @@
 -- bgb_update_session_game(p_host UUID, p_code TEXT, p_game UUID)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
 --     "host_only"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/046_session_write_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/046_session_write_rpcs.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (update_session_game — PATCH /sessions/{code})
 --   Purpose:    Change or clear the lobby's game so joiners see the pick on
@@ -1159,8 +1161,8 @@
 -- bgb_advance_phase(p_host UUID, p_code TEXT, p_phase TEXT, p_transitions JSONB)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
 --     "host_only"} or {"error": "invalid_transition", "from": …, "to": …}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/046_session_write_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/046_session_write_rpcs.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (update_phase — PATCH /sessions/{code}/phase)
 --   Purpose:    Move the Gather → Play → Settle cursor. p_transitions is
@@ -1172,8 +1174,8 @@
 
 -- bgb_abandon_session(p_host UUID, p_code TEXT)
 --   → JSONB {"ok": true} or {"error": "not_found" | "expired" | "host_only"}
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/046_session_write_rpcs.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/046_session_write_rpcs.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (abandon_session — DELETE /sessions/{code})
 --   Purpose:    Close an open lobby. Every session_service write path is one RPC.
@@ -1181,9 +1183,9 @@
 -- bgb_play_partners(p_viewer UUID)
 --   → JSONB { "accounts": [BuddyEdgeResponse…], "pending": [PendingBuddyEdge…],
 --             "ghosts": [GhostPlayer…], "recent": [PlayedWithUser…] }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/047_play_partners_rpc.sql)
---   Last updated in: projects/boardgame-buddy/db/migrations/049_play_partners_pending.sql
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/047_play_partners_rpc.sql)
+--   Last updated in: projects/boardgame-buddy/db/migrations/archive/2026-09-28/049_play_partners_pending.sql
 --               (`pending`: one row per LIVE buddy request the viewer is
 --                a party to, either direction, newest first —
 --                {id, other_user_id, other_display_name, other_username,
@@ -1275,8 +1277,8 @@
 --                      p_limit INT DEFAULT 1000)
 --   → JSONB { "items": [CollectionItem…], "total": BIGINT,
 --              "parted_total": BIGINT, "truncated": BOOLEAN }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/049_collection_shelf.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/049_collection_shelf.sql)
 --   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
 --               (the 'played' shelf is every game with a visible play
 --                plus the target's 'played' rows, each once; a 'played' row
@@ -1323,8 +1325,8 @@
 
 -- bgb_link_ghost(p_viewer UUID, p_display_name TEXT, p_target UUID)
 --   → JSONB { "updated": INT } | { "error": "not_found" }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/050_ghost_rpcs_and_status_map.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/050_ghost_rpcs_and_status_map.sql)
 --   Last updated in: 070_ghost_claims.sql — a thin wrapper over
 --               bgb_link_ghost_rows, matching on lower(btrim(...)) rather
 --               than ILIKE, so ' Davo ' is caught too. That is what
@@ -1339,8 +1341,8 @@
 
 -- bgb_merge_ghosts(p_viewer UUID, p_source TEXT, p_target TEXT)
 --   → JSONB { "updated": INT }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/050_ghost_rpcs_and_status_map.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/050_ghost_rpcs_and_status_map.sql)
 --   Called by:  services/played_with_service.merge_ghosts (POST /ghost-players/merge)
 --   Purpose:    Collapse two spellings of one ghost. Same query-string cliff as
 --               bgb_link_ghost. Name validation (blank, identical) stays in
@@ -1349,8 +1351,8 @@
 -- bgb_collection_status_map(p_viewer UUID)
 --   → JSONB { "status_map": {game_id: status}, "expansion_counts": {base_bgg_id: n},
 --              "played_marks": [game_id…] }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/050_ghost_rpcs_and_status_map.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/050_ghost_rpcs_and_status_map.sql)
 --   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
 --               (played_marks lists every game the viewer marked played
 --                without a logged play, on a row of any status. status_map
@@ -1373,8 +1375,8 @@
 
 -- bgb_sync_achievements(uid UUID)
 --   → JSONB { total, earned_count, metrics, groups[], achievements[] }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/062_achievements.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/062_achievements.sql)
 --               (body from 068_location_achievements.sql, which carries
 --                plays.country_code through the my_plays CTE and adds the
 --                countries / continents metrics)
@@ -1447,8 +1449,8 @@
 
 -- bgb_link_ghost_rows(p_owner UUID, p_name_key TEXT, p_target UUID)
 --   → INT (rows moved)
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/070_ghost_claims.sql)
 --   Called by:  bgb_link_ghost, bgb_accept_ghost_claim (SQL only — no route)
 --   Purpose:    THE ghost→account merge, extracted so the owner-initiated link
 --               and the claimant-initiated claim move exactly the same rows.
@@ -1458,8 +1460,8 @@
 -- bgb_ghost_summary(p_viewer UUID, p_owner UUID, p_name_key TEXT)
 --   → JSONB { exists, play_count, last_played_at, last_game_name,
 --             ghost_display_name, collides, visible }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/070_ghost_claims.sql)
 --   Called by:  bgb_ghost_claim_detail, bgb_create_ghost_claim,
 --               bgb_accept_ghost_claim, bgb_dismiss_ghost_claim (SQL only)
 --   Purpose:    The four facts every single-ghost path needs, computed once so
@@ -1475,8 +1477,8 @@
 --   → JSONB [ {owner_user_id, owner_display_name, owner_username, owner_avatar,
 --              ghost_display_name, ghost_name_key, play_count, last_played_at,
 --              last_game_name, match_score, claim_status, claim_id} ]
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/070_ghost_claims.sql)
 --   Called by:  services/ghost_claim_service.fetch_suggestions
 --               (GET /ghost-claims/suggestions)
 --   Purpose:    The Buddies screen's "Is this you?" list. Scans ACCEPTED
@@ -1494,8 +1496,8 @@
 -- bgb_ghost_claim_detail(p_viewer UUID, p_play_id UUID, p_display_name TEXT)
 --   → JSONB { …suggestion fields…, can_claim, blocked_reason }
 --            | { "error": "not_visible" | "ghost_gone" | ... }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/070_ghost_claims.sql)
 --   Called by:  services/ghost_claim_service.fetch_detail (GET /ghost-claims/lookup)
 --   Purpose:    Backs the claim sheet opened from a polaroid back or the
 --               play-detail players list. Takes the PLAY id because that is
@@ -1506,8 +1508,8 @@
 
 -- bgb_ghost_claims(p_viewer UUID)
 --   → JSONB { incoming: [...], outgoing: [...] }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/070_ghost_claims.sql)
 --   Called by:  services/ghost_claim_service.list_claims (GET /ghost-claims)
 --   Purpose:    Both sides of the request list, mirroring GET /buddies/requests.
 --               An RPC because every row needs a live play_count /
@@ -1517,8 +1519,8 @@
 -- bgb_create_ghost_claim(p_claimant UUID, p_owner UUID, p_display_name TEXT)
 --   → JSONB (the outgoing claim) | { "error": "own_roster" | "ghost_gone" |
 --     "not_visible" | "already_seated" | "already_linked" | "declined_twice" }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/070_ghost_claims.sql)
 --   Called by:  services/ghost_claim_service.create_claim (POST /ghost-claims)
 --   Purpose:    Send a claim. Validation and upsert in one call so there is no
 --               window between "the ghost exists, is visible, does not collide"
@@ -1529,8 +1531,8 @@
 -- bgb_accept_ghost_claim(p_owner UUID, p_claim_id UUID)
 --   → JSONB { updated: INT, claim: {...} } | { "error": "claim_not_found" |
 --     "not_pending" | "already_seated" | "ghost_gone" }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/070_ghost_claims.sql)
 --   Called by:  services/ghost_claim_service.accept_claim
 --               (POST /ghost-claims/{id}/accept)
 --   Purpose:    Approve and merge, in one transaction. Re-checks the double-seat
@@ -1543,8 +1545,8 @@
 
 -- bgb_reject_ghost_claim(p_owner UUID, p_claim_id UUID)
 --   → JSONB { "rejected": true } | { "error": "claim_not_found" | "not_pending" }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/070_ghost_claims.sql)
 --   Called by:  services/ghost_claim_service.reject_claim
 --               (POST /ghost-claims/{id}/reject)
 --   Purpose:    Owner declines, and reject_count is incremented — an RPC
@@ -1555,8 +1557,8 @@
 
 -- bgb_dismiss_ghost_claim(p_claimant UUID, p_owner UUID, p_display_name TEXT)
 --   → JSONB { "dismissed": true } | { "error": "own_roster" | ... }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/archive/2026-09-28/003_rpcs.sql
+--               (collapsed from archive/2026-09-01/070_ghost_claims.sql)
 --   Called by:  services/ghost_claim_service.dismiss_suggestion
 --               (POST /ghost-claims/dismiss)
 --   Purpose:    The claimant's "Not me". Writes the same row a real claim would,
@@ -1566,7 +1568,7 @@
 
 -- bgb_delete_import_group(p_user UUID, p_group UUID)
 --   → JSONB { deleted: INT }
---   Defined in: db/migrations/007_play_import_batches.sql
+--   Defined in: db/migrations/archive/2026-09-28/007_play_import_batches.sql
 --   Called by:  api/routes/services/play_import_service.py
 --               (delete_import_group — DELETE /plays/import-group/{id})
 --   Purpose:    Drop one run of identical imported plays, from its own feed
@@ -1579,7 +1581,7 @@
 
 -- bgb_delete_import_batch(p_user UUID, p_batch UUID)
 --   → JSONB { deleted: INT }
---   Defined in: db/migrations/007_play_import_batches.sql
+--   Defined in: db/migrations/archive/2026-09-28/007_play_import_batches.sql
 --   Called by:  api/routes/services/play_import_service.py
 --               (delete_import_batch — DELETE /plays/import-batch/{id})
 --   Purpose:    Undo a whole import — every play one paste wrote, including the
@@ -1589,7 +1591,7 @@
 -- bgb_list_imports(p_user UUID)
 --   → JSONB [ { batch_id, imported_at, play_count, game_count, game_names[],
 --               first_played_at, last_played_at } ], newest first
---   Defined in: db/migrations/007_play_import_batches.sql
+--   Defined in: db/migrations/archive/2026-09-28/007_play_import_batches.sql
 --   Called by:  api/routes/services/play_import_service.py
 --               (list_imports — GET /plays/imports)
 --   Purpose:    The index of the imports spoke (/settings/imports), and the
@@ -1649,7 +1651,7 @@
 -- bgb_rank_game(p_user UUID, p_game UUID, p_category TEXT, p_tier TEXT,
 --               p_index INTEGER)
 --   → JSONB {category, tier, position} | {error: invalid_tier | game_not_found}
---   Defined in: db/migrations/056_game_ranks.sql
+--   Defined in: db/migrations/archive/2026-09-28/056_game_ranks.sql
 --   Called by:  services/rank_service.place (PUT /ranks/games/{game_id})
 --   Purpose:    Insert a game into the player's ranking, or move it: remove any
 --               existing row and close the gap it leaves, clamp p_index to the
@@ -1661,14 +1663,14 @@
 
 -- bgb_unrank_game(p_user UUID, p_game UUID)
 --   → JSONB {removed: boolean}
---   Defined in: db/migrations/056_game_ranks.sql
+--   Defined in: db/migrations/archive/2026-09-28/056_game_ranks.sql
 --   Called by:  services/rank_service.remove (DELETE /ranks/games/{game_id})
 --   Purpose:    Remove a game from the ranking and close the gap in its tier.
 --               A second call is {removed: false}, not an error.
 
 -- bgb_rank_deferrals_active(p_viewer UUID)
 --   → JSONB [game_id, ...]
---   Defined in: db/migrations/058_rank_deferrals.sql
+--   Defined in: db/migrations/archive/2026-09-28/058_rank_deferrals.sql
 --   Called by:  services/rank_service.queue (GET /ranks/queue + the /bootstrap
 --               seed)
 --   Purpose:    The games p_viewer parked with "Rank after next play" that are
@@ -1822,7 +1824,7 @@
 --   → TABLE (id, user_id, author_name, feedback_type, feedback_type_label,
 --            feedback_type_icon, topic, topic_label, topic_icon, body, status,
 --            resolved_at, resolver_name, created_at, like_count, viewer_liked)
---   Defined in: projects/boardgame-buddy/db/migrations/041_dev_feedback.sql
+--   Defined in: projects/boardgame-buddy/db/migrations/archive/2026-09-28/041_dev_feedback.sql
 --   Called by:  services/feedback_service.list_feedback (GET /feedback)
 --   Purpose:    The Dev feedback board as the screen renders it. Exists ONLY
 --               because the board's sort key is `like_count DESC` — an
@@ -1839,13 +1841,13 @@
 -- bgb_admin_usage_stats(p_exclude_admins BOOLEAN DEFAULT false)
 --   → JSONB { generated_at, exclude_admins, users, active, database, screens,
 --             events, domain, play_origins }
---   Defined in: projects/boardgame-buddy/db/migrations/055_usage_exclude_admins.sql
+--   Defined in: projects/boardgame-buddy/db/migrations/archive/2026-09-28/055_usage_exclude_admins.sql
 --               (first 047_usage_stats.sql)
 --   Called by:  services/usage_service.fetch_usage (GET /admin/usage)
 --   Purpose:    App-wide usage for the admin Usage spoke — accounts, active
 --               accounts, the Postgres footprint, the screen leaderboard, the
 --               per-feature counters and where plays come from. One function
---               for eleven unrelated aggregates, on archive/058's reasoning:
+--               for eleven unrelated aggregates, on archive/2026-09-01/058's reasoning:
 --               the screen wants them all at once and a dozen round trips to
 --               draw one page is the wrong price.
 --

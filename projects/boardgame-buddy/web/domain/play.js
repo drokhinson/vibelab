@@ -81,7 +81,7 @@
    *    the same rule keeps applyToCachedLists from swapping one for 58.
    * 2. The row must actually carry `scoring_template` AND a roster. This is why
    *    the fallback lives here rather than at the call sites: plays-view falls
-   *    back to the profile bundle's `recent_plays` (003_rpcs.sql), whose players
+   *    back to the profile bundle's `recent_plays` (001_baseline.sql), whose players
    *    carry no round_scores and which has no template at all, and preview-card
    *    renders from the same rows. Seeding off those would paint a popup with
    *    no grid and no template — from a second source.

@@ -1,202 +1,366 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- boardgamebuddy 002 — reference data
+-- boardgamebuddy 002 — seed: reference rows
 --
--- Collapsed from the 73-file history now in archive/. Reference data only:
--- rows a fresh database needs in order to work at all. Every one-time backfill
--- from the archive is deliberately absent — on an empty database they are all
--- no-ops, and carrying them forward would imply they still do something.
+-- Every row the 58 migrations in archive/2026-09-28/ leave behind in an
+-- otherwise empty database, squashed on 2026-09-28. On a fresh database a one-time
+-- backfill in the archive touches nothing, so what remains is exactly the
+-- reference data the app needs to work at all.
 --
--- FRESH-DB ONLY. Production is already at this state. Do not run on existing DB.
+-- FRESH-DB ONLY. Run after 001_baseline.sql. ON CONFLICT DO NOTHING, so a
+-- second run changes nothing.
 --
--- Run after 001_baseline.sql, before 003_rpcs.sql.
---
--- Four tables plus the two storage buckets. Values are the FINAL text after
--- every later edit in the archive — notably archive/067 rewrote all 19
--- achievement taglines into plain second-person prose, and those rewritten
--- taglines are what appear below, not the originals from archive/062.
---
--- Deliberately NOT seeded: the Evo and Seven Wonders guide chapters that
--- archive/002_seed.sql inserted. archive/018_chapters_rename.sql line 19
--- (`DELETE FROM ... WHERE created_by IS NULL`) removed every seeded chapter
--- when the chunk→chapter rename landed, so the end state of the chain has
--- boardgamebuddy_guide_chapters empty. Chapters are user-authored now.
+-- Tables: boardgamebuddy_achievement_groups (5),
+--   boardgamebuddy_achievements (23), boardgamebuddy_affiliate_partners (4),
+--   boardgamebuddy_chapter_types (8), boardgamebuddy_countries (247),
+--   boardgamebuddy_feedback_topics (7), boardgamebuddy_feedback_types (3),
+--   storage.buckets
 -- ─────────────────────────────────────────────────────────────────────────────
 
 
--- ── Chapter types ────────────────────────────────────────────────────────────
--- The fixed vocabulary of guide-chapter kinds. `icon` is a slug resolved to a
--- vendored icon in the web/native client, never an emoji (.claude/rules/assets.md).
-INSERT INTO public.boardgamebuddy_chapter_types (id, label, icon, display_order) VALUES
-  ('setup',           'Setup',           'box',         10),
-  ('player_turn',     'Player Turn',     'gamepad-2',   20),
-  ('scoring',         'Scoring',         'trophy',      30),
-  ('card_reference',  'Card Reference',  'layers',      40),
-  ('tips',            'Tips & Tricks',   'lightbulb',   50),
-  ('variant',         'Variants',        'shuffle',     60)
-ON CONFLICT (id) DO NOTHING;
-
-
--- ── Achievement groups ───────────────────────────────────────────────────────
--- The five sections the achievements screen renders, in display order.
+-- ── public.boardgamebuddy_achievement_groups ─────────────────────────────────
+-- rows from archive/2026-09-28/: 002_seed.sql
 INSERT INTO public.boardgamebuddy_achievement_groups (id, label, blurb, display_order) VALUES
-  ('table', 'At the table',
-   'Plays logged, and the size of the crowd around them.', 10),
-  ('travel', 'On the road',
-   'Not just what you played — where.', 15),
-  ('victories', 'Victories',
-   'What the scorepad says when the dust settles.', 20),
-  ('guide', 'The reference guide',
-   'Chapters you keep, and chapters you write.', 30),
-  ('setup', 'Making it yours',
-   'The small acts that turn the app into your app.', 40)
-ON CONFLICT (id) DO NOTHING;
+  ('guide',     'The reference guide', 'Chapters you keep, and chapters you write.',           30),
+  ('setup',     'Making it yours',     'The small acts that turn the app into your app.',      40),
+  ('table',     'At the table',        'Plays logged, and the size of the crowd around them.', 10),
+  ('travel',    'On the road',         'Not just what you played — where.',                    15),
+  ('victories', 'Victories',           'What the scorepad says when the dust settles.',        20)
+ON CONFLICT DO NOTHING;
 
 
--- ── Achievement catalog ──────────────────────────────────────────────────────
--- What bgb_sync_achievements(uuid) evaluates against. `metric` names the
--- counter the RPC computes and `threshold` the value that unlocks the row, so
--- adding an achievement for an existing metric is a data change, not a code
--- change. Taglines are archive/067's plain second-person text.
-INSERT INTO public.boardgamebuddy_achievements
-  (id, group_id, name, tagline, requirement, metric, threshold, icon, display_order) VALUES
-  ('plays_10', 'table', 'Table Regular',
-   'You''ve logged 10 plays.',
-   'Log 10 plays',
-   'plays_logged', 10, 'table-regular', 10),
-  ('plays_100', 'table', 'Century Club',
-   'You''ve logged 100 plays.',
-   'Log 100 plays',
-   'plays_logged', 100, 'century-club', 20),
-  ('plays_300', 'table', 'Table Titan',
-   'You''ve logged 300 plays.',
-   'Log 300 plays',
-   'plays_logged', 300, 'table-titan', 30),
-  ('duelist', 'table', 'Duelist',
-   'Played a game made specifically for 2 players.',
-   'Play a game made specifically for 2 players',
-   'two_player_games', 1, 'duelist', 40),
-  ('full_table', 'table', 'Full Table',
-   'Logged a play with 5 or more players at the table.',
-   'Log a play with 5 or more players',
-   'biggest_table', 5, 'full-table', 50),
-  ('countries_2', 'travel', 'Border Hopper',
-   'Logged plays in 2 different countries.',
-   'Log plays in 2 different countries',
-   'countries', 2, 'border-hopper', 52),
-  ('continents_2', 'travel', 'Globe Trotter',
-   'Logged plays on 2 different continents.',
-   'Log plays on 2 different continents',
-   'continents', 2, 'globe-trotter', 54),
-  ('countries_5', 'travel', 'Country Counter',
-   'Logged plays in 5 different countries.',
-   'Log plays in 5 different countries',
-   'countries', 5, 'country-counter', 56),
-  ('wins_10', 'victories', 'Crowned',
-   'Logged 10 game wins.',
-   'Log 10 game wins',
-   'wins', 10, 'crowned', 60),
-  ('wins_100', 'victories', 'King of the Hill',
-   'Logged 100 game wins.',
-   'Log 100 game wins',
-   'wins', 100, 'king-of-the-hill', 70),
-  ('wins_300', 'victories', 'Dynasty',
-   'Logged 300 game wins.',
-   'Log 300 game wins',
-   'wins', 300, 'dynasty', 80),
-  ('chapters_1', 'guide', 'First Page',
-   'Authored 1 reference guide chapter.',
-   'Author 1 reference guide chapter',
-   'guide_chapters', 1, 'first-page', 90),
-  ('chapters_10', 'guide', 'Rules Lawyer',
-   'Authored 10 reference guide chapters.',
-   'Author 10 reference guide chapters',
-   'guide_chapters', 10, 'rules-lawyer', 100),
-  ('chapters_50', 'guide', 'Loremaster',
-   'Authored 50 reference guide chapters.',
-   'Author 50 reference guide chapters',
-   'guide_chapters', 50, 'loremaster', 110),
-  ('chapter_borrowed', 'guide', 'Cited Source',
-   'Another player cited your chapter in their reference guide.',
-   'Have another player cite your chapter in their reference guide',
-   'chapters_borrowed', 1, 'cited-source', 120),
-  ('buddy_1', 'setup', 'Buddy System',
-   'Added your first buddy.',
-   'Add your first buddy',
-   'buddies', 1, 'buddy-system', 130),
-  ('play_notes_1', 'setup', 'Table Chronicler',
-   'Added a description to a play you logged.',
-   'Add a description to a play you logged',
-   'plays_with_notes', 1, 'table-chronicler', 140),
-  ('bgg_linked', 'setup', 'Geek Certified',
-   'Linked your BoardGameGeek account.',
-   'Link your BoardGameGeek account',
-   'bgg_linked', 1, 'geek-certified', 150),
-  ('app_installed', 'setup', 'Pocket Buddy',
-   'Installed the web app on your phone.',
-   'Install the web app on your phone',
-   'app_installed', 1, 'pocket-buddy', 160)
-ON CONFLICT (id) DO NOTHING;
+-- ── public.boardgamebuddy_achievements ───────────────────────────────────────
+-- rows from archive/2026-09-28/: 002_seed.sql,
+--   019_scoring_grid_achievements.sql, 034_team_coop_win_achievements.sql
+INSERT INTO public.boardgamebuddy_achievements (id, group_id, name, tagline, requirement, metric, threshold, icon, display_order) VALUES
+  ('app_installed',      'setup',     'Pocket Buddy',     'Installed the web app on your phone.',                        'Install the web app on your phone',                              'app_installed',     1,   'pocket-buddy',     160),
+  ('bgg_linked',         'setup',     'Geek Certified',   'Linked your BoardGameGeek account.',                          'Link your BoardGameGeek account',                                'bgg_linked',        1,   'geek-certified',   150),
+  ('buddy_1',            'setup',     'Buddy System',     'Added your first buddy.',                                     'Add your first buddy',                                           'buddies',           1,   'buddy-system',     130),
+  ('chapter_borrowed',   'guide',     'Cited Source',     'Another player cited your chapter in their reference guide.', 'Have another player cite your chapter in their reference guide', 'chapters_borrowed', 1,   'cited-source',     120),
+  ('chapters_1',         'guide',     'First Page',       'Authored 1 reference guide chapter.',                         'Author 1 reference guide chapter',                               'guide_chapters',    1,   'first-page',       90),
+  ('chapters_10',        'guide',     'Rules Lawyer',     'Authored 10 reference guide chapters.',                       'Author 10 reference guide chapters',                             'guide_chapters',    10,  'rules-lawyer',     100),
+  ('chapters_50',        'guide',     'Loremaster',       'Authored 50 reference guide chapters.',                       'Author 50 reference guide chapters',                             'guide_chapters',    50,  'loremaster',       110),
+  ('continents_2',       'travel',    'Globe Trotter',    'Logged plays on 2 different continents.',                     'Log plays on 2 different continents',                            'continents',        2,   'globe-trotter',    54),
+  ('coop_wins_20',       'victories', 'Machine Breaker',  'Beat the game itself 20 times.',                              'Win 20 co-op games',                                             'coop_wins',         20,  'machine-breaker',  84),
+  ('countries_2',        'travel',    'Border Hopper',    'Logged plays in 2 different countries.',                      'Log plays in 2 different countries',                             'countries',         2,   'border-hopper',    52),
+  ('countries_5',        'travel',    'Country Counter',  'Logged plays in 5 different countries.',                      'Log plays in 5 different countries',                             'countries',         5,   'country-counter',  56),
+  ('duelist',            'table',     'Duelist',          'Played a game made specifically for 2 players.',              'Play a game made specifically for 2 players',                    'two_player_games',  1,   'duelist',          40),
+  ('full_table',         'table',     'Full Table',       'Logged a play with 5 or more players at the table.',          'Log a play with 5 or more players',                              'biggest_table',     5,   'full-table',       50),
+  ('grid_gold_standard', 'guide',     'Gold Standard',    'A scoring grid you wrote is kept by 5 other players.',        'Have 5 other players keep one of your scoring grids',            'grid_adopters',     5,   'gold-standard',    124),
+  ('grid_play',          'guide',     'Ruled Lines',      'Recorded a play on a custom scoring grid.',                   'Record a play on a custom scoring grid',                         'plays_with_grid',   1,   'ruled-lines',      122),
+  ('play_notes_1',       'setup',     'Table Chronicler', 'Added a description to a play you logged.',                   'Add a description to a play you logged',                         'plays_with_notes',  1,   'table-chronicler', 140),
+  ('plays_10',           'table',     'Table Regular',    'You''ve logged 10 plays.',                                    'Log 10 plays',                                                   'plays_logged',      10,  'table-regular',    10),
+  ('plays_100',          'table',     'Century Club',     'You''ve logged 100 plays.',                                   'Log 100 plays',                                                  'plays_logged',      100, 'century-club',     20),
+  ('plays_300',          'table',     'Table Titan',      'You''ve logged 300 plays.',                                   'Log 300 plays',                                                  'plays_logged',      300, 'table-titan',      30),
+  ('team_wins_20',       'victories', 'Dream Team',       'Won 20 games played in teams.',                               'Win 20 games played in teams',                                   'team_wins',         20,  'dream-team',       82),
+  ('wins_10',            'victories', 'Crowned',          'Logged 10 game wins.',                                        'Log 10 game wins',                                               'wins',              10,  'crowned',          60),
+  ('wins_100',           'victories', 'King of the Hill', 'Logged 100 game wins.',                                       'Log 100 game wins',                                              'wins',              100, 'king-of-the-hill', 70),
+  ('wins_300',           'victories', 'Dynasty',          'Logged 300 game wins.',                                       'Log 300 game wins',                                              'wins',              300, 'dynasty',          80)
+ON CONFLICT DO NOTHING;
 
 
--- ── Country → continent lookup ───────────────────────────────────────────────
--- ISO 3166-1 alpha-2 → continent, backing the location achievements introduced
--- in archive/068. plays.country_code (archive/065) joins here so "played on N
--- continents" is one join rather than a hard-coded map in Python.
+-- ── public.boardgamebuddy_affiliate_partners ─────────────────────────────────
+-- rows from archive/2026-09-28/: 046_affiliate_partners.sql
+INSERT INTO public.boardgamebuddy_affiliate_partners (id, label, url_template, wrapper_template, tracking_tag, disclosure, notes, display_order, enabled) VALUES
+  ('amazon',           'Amazon',             'https://www.amazon.com/s?k={query}&tag={tag}',                   NULL, NULL, 'As an Amazon Associate, BoardgameBuddy earns from qualifying purchases.', 'Amazon Associates issues a Store ID (looks like bgbuddy-20). Paste it into Tracking tag. Leave Wrapper empty. Amazon requires the disclosure sentence above wherever its links appear — do not remove it.',                                              10, false),
+  ('gamenerdz',        'GameNerdz',          'https://www.gamenerdz.com/search.php?search_query={query}',      NULL, NULL, NULL,                                                                      'Apply at gamenerdz.com/partners-affiliates. If they issue a redirect link, paste it into Wrapper with {url} where the destination goes; if they issue a URL parameter, add it to the URL template as &ref={tag} and paste the value into Tracking tag.', 30, false),
+  ('miniature-market', 'Miniature Market',   'https://www.miniaturemarket.com/searchresults/?q={query}',       NULL, NULL, NULL,                                                                      'Runs on Impact. Once approved, create a tracking link there and paste it into Wrapper with the destination replaced by {url}, e.g. https://miniaturemarket.sjv.io/c/1234/5678/9012?u={url}. Leave Tracking tag empty.',                                  20, false),
+  ('noble-knight',     'Noble Knight Games', 'https://www.nobleknight.com/Products/Search?searchTerm={query}', NULL, NULL, NULL,                                                                      'No formal program was found; they credit referrals on request. Ask them for a referral parameter, add it to the URL template as &ref={tag}, and paste the value into Tracking tag.',                                                                     40, false)
+ON CONFLICT DO NOTHING;
+
+
+-- ── public.boardgamebuddy_chapter_types ──────────────────────────────────────
+-- rows from archive/2026-09-28/: 002_seed.sql,
+--   021_scoring_grid_chapter_type.sql, 052_rulebook_links.sql
+INSERT INTO public.boardgamebuddy_chapter_types (id, label, icon, display_order) VALUES
+  ('card_reference', 'Card Reference',        'layers',    40),
+  ('player_turn',    'Player Turn',           'gamepad-2', 20),
+  ('rulebook',       'Rulebook',              'book-open', 6),
+  ('scoring',        'Scoring',               'trophy',    30),
+  ('scoring_grid',   'Scoring Grid Template', 'table',     5),
+  ('setup',          'Setup',                 'box',       10),
+  ('tips',           'Tips & Tricks',         'lightbulb', 50),
+  ('variant',        'Variants',              'shuffle',   60)
+ON CONFLICT DO NOTHING;
+
+
+-- ── public.boardgamebuddy_countries ──────────────────────────────────────────
+-- rows from archive/2026-09-28/: 002_seed.sql
 INSERT INTO public.boardgamebuddy_countries (code, continent) VALUES
-  ('AO','AF'), ('BF','AF'), ('BI','AF'), ('BJ','AF'), ('BW','AF'), ('CD','AF'),
-  ('CF','AF'), ('CG','AF'), ('CI','AF'), ('CM','AF'), ('CV','AF'), ('DJ','AF'),
-  ('DZ','AF'), ('EG','AF'), ('EH','AF'), ('ER','AF'), ('ET','AF'), ('GA','AF'),
-  ('GH','AF'), ('GM','AF'), ('GN','AF'), ('GQ','AF'), ('GW','AF'), ('KE','AF'),
-  ('KM','AF'), ('LR','AF'), ('LS','AF'), ('LY','AF'), ('MA','AF'), ('MG','AF'),
-  ('ML','AF'), ('MR','AF'), ('MU','AF'), ('MW','AF'), ('MZ','AF'), ('NA','AF'),
-  ('NE','AF'), ('NG','AF'), ('RE','AF'), ('RW','AF'), ('SC','AF'), ('SD','AF'),
-  ('SH','AF'), ('SL','AF'), ('SN','AF'), ('SO','AF'), ('SS','AF'), ('ST','AF'),
-  ('SZ','AF'), ('TD','AF'), ('TG','AF'), ('TN','AF'), ('TZ','AF'), ('UG','AF'),
-  ('YT','AF'), ('ZA','AF'), ('ZM','AF'), ('ZW','AF'), ('AQ','AN'), ('GS','AN'),
-  ('TF','AN'), ('AE','AS'), ('AF','AS'), ('AM','AS'), ('AZ','AS'), ('BD','AS'),
-  ('BH','AS'), ('BN','AS'), ('BT','AS'), ('CC','AS'), ('CN','AS'), ('CX','AS'),
-  ('CY','AS'), ('GE','AS'), ('HK','AS'), ('ID','AS'), ('IL','AS'), ('IN','AS'),
-  ('IO','AS'), ('IQ','AS'), ('IR','AS'), ('JO','AS'), ('JP','AS'), ('KG','AS'),
-  ('KH','AS'), ('KP','AS'), ('KR','AS'), ('KW','AS'), ('KZ','AS'), ('LA','AS'),
-  ('LB','AS'), ('LK','AS'), ('MM','AS'), ('MN','AS'), ('MO','AS'), ('MV','AS'),
-  ('MY','AS'), ('NP','AS'), ('OM','AS'), ('PH','AS'), ('PK','AS'), ('PS','AS'),
-  ('QA','AS'), ('SA','AS'), ('SG','AS'), ('SY','AS'), ('TH','AS'), ('TJ','AS'),
-  ('TL','AS'), ('TM','AS'), ('TR','AS'), ('TW','AS'), ('UZ','AS'), ('VN','AS'),
-  ('YE','AS'), ('AD','EU'), ('AL','EU'), ('AT','EU'), ('AX','EU'), ('BA','EU'),
-  ('BE','EU'), ('BG','EU'), ('BY','EU'), ('CH','EU'), ('CZ','EU'), ('DE','EU'),
-  ('DK','EU'), ('EE','EU'), ('ES','EU'), ('FI','EU'), ('FO','EU'), ('FR','EU'),
-  ('GB','EU'), ('GG','EU'), ('GI','EU'), ('GR','EU'), ('HR','EU'), ('HU','EU'),
-  ('IE','EU'), ('IM','EU'), ('IS','EU'), ('IT','EU'), ('JE','EU'), ('LI','EU'),
-  ('LT','EU'), ('LU','EU'), ('LV','EU'), ('MC','EU'), ('MD','EU'), ('ME','EU'),
-  ('MK','EU'), ('MT','EU'), ('NL','EU'), ('NO','EU'), ('PL','EU'), ('PT','EU'),
-  ('RO','EU'), ('RS','EU'), ('RU','EU'), ('SE','EU'), ('SI','EU'), ('SJ','EU'),
-  ('SK','EU'), ('SM','EU'), ('UA','EU'), ('VA','EU'), ('AG','NA'), ('AI','NA'),
-  ('AW','NA'), ('BB','NA'), ('BL','NA'), ('BM','NA'), ('BQ','NA'), ('BS','NA'),
-  ('BZ','NA'), ('CA','NA'), ('CR','NA'), ('CU','NA'), ('CW','NA'), ('DM','NA'),
-  ('DO','NA'), ('GD','NA'), ('GL','NA'), ('GP','NA'), ('GT','NA'), ('HN','NA'),
-  ('HT','NA'), ('JM','NA'), ('KN','NA'), ('KY','NA'), ('LC','NA'), ('MF','NA'),
-  ('MQ','NA'), ('MS','NA'), ('MX','NA'), ('NI','NA'), ('PA','NA'), ('PM','NA'),
-  ('PR','NA'), ('SV','NA'), ('SX','NA'), ('TC','NA'), ('TT','NA'), ('US','NA'),
-  ('VC','NA'), ('VG','NA'), ('VI','NA'), ('AS','OC'), ('AU','OC'), ('CK','OC'),
-  ('FJ','OC'), ('FM','OC'), ('GU','OC'), ('KI','OC'), ('MH','OC'), ('MP','OC'),
-  ('NC','OC'), ('NF','OC'), ('NR','OC'), ('NU','OC'), ('NZ','OC'), ('PF','OC'),
-  ('PG','OC'), ('PN','OC'), ('PW','OC'), ('SB','OC'), ('TK','OC'), ('TO','OC'),
-  ('TV','OC'), ('UM','OC'), ('VU','OC'), ('WF','OC'), ('WS','OC'), ('AR','SA'),
-  ('BO','SA'), ('BR','SA'), ('CL','SA'), ('CO','SA'), ('EC','SA'), ('FK','SA'),
-  ('GF','SA'), ('GY','SA'), ('PE','SA'), ('PY','SA'), ('SR','SA'), ('UY','SA'),
-  ('VE','SA')
-ON CONFLICT (code) DO NOTHING;
+  ('AD', 'EU'),
+  ('AE', 'AS'),
+  ('AF', 'AS'),
+  ('AG', 'NA'),
+  ('AI', 'NA'),
+  ('AL', 'EU'),
+  ('AM', 'AS'),
+  ('AO', 'AF'),
+  ('AQ', 'AN'),
+  ('AR', 'SA'),
+  ('AS', 'OC'),
+  ('AT', 'EU'),
+  ('AU', 'OC'),
+  ('AW', 'NA'),
+  ('AX', 'EU'),
+  ('AZ', 'AS'),
+  ('BA', 'EU'),
+  ('BB', 'NA'),
+  ('BD', 'AS'),
+  ('BE', 'EU'),
+  ('BF', 'AF'),
+  ('BG', 'EU'),
+  ('BH', 'AS'),
+  ('BI', 'AF'),
+  ('BJ', 'AF'),
+  ('BL', 'NA'),
+  ('BM', 'NA'),
+  ('BN', 'AS'),
+  ('BO', 'SA'),
+  ('BQ', 'NA'),
+  ('BR', 'SA'),
+  ('BS', 'NA'),
+  ('BT', 'AS'),
+  ('BW', 'AF'),
+  ('BY', 'EU'),
+  ('BZ', 'NA'),
+  ('CA', 'NA'),
+  ('CC', 'AS'),
+  ('CD', 'AF'),
+  ('CF', 'AF'),
+  ('CG', 'AF'),
+  ('CH', 'EU'),
+  ('CI', 'AF'),
+  ('CK', 'OC'),
+  ('CL', 'SA'),
+  ('CM', 'AF'),
+  ('CN', 'AS'),
+  ('CO', 'SA'),
+  ('CR', 'NA'),
+  ('CU', 'NA'),
+  ('CV', 'AF'),
+  ('CW', 'NA'),
+  ('CX', 'AS'),
+  ('CY', 'AS'),
+  ('CZ', 'EU'),
+  ('DE', 'EU'),
+  ('DJ', 'AF'),
+  ('DK', 'EU'),
+  ('DM', 'NA'),
+  ('DO', 'NA'),
+  ('DZ', 'AF'),
+  ('EC', 'SA'),
+  ('EE', 'EU'),
+  ('EG', 'AF'),
+  ('EH', 'AF'),
+  ('ER', 'AF'),
+  ('ES', 'EU'),
+  ('ET', 'AF'),
+  ('FI', 'EU'),
+  ('FJ', 'OC'),
+  ('FK', 'SA'),
+  ('FM', 'OC'),
+  ('FO', 'EU'),
+  ('FR', 'EU'),
+  ('GA', 'AF'),
+  ('GB', 'EU'),
+  ('GD', 'NA'),
+  ('GE', 'AS'),
+  ('GF', 'SA'),
+  ('GG', 'EU'),
+  ('GH', 'AF'),
+  ('GI', 'EU'),
+  ('GL', 'NA'),
+  ('GM', 'AF'),
+  ('GN', 'AF'),
+  ('GP', 'NA'),
+  ('GQ', 'AF'),
+  ('GR', 'EU'),
+  ('GS', 'AN'),
+  ('GT', 'NA'),
+  ('GU', 'OC'),
+  ('GW', 'AF'),
+  ('GY', 'SA'),
+  ('HK', 'AS'),
+  ('HN', 'NA'),
+  ('HR', 'EU'),
+  ('HT', 'NA'),
+  ('HU', 'EU'),
+  ('ID', 'AS'),
+  ('IE', 'EU'),
+  ('IL', 'AS'),
+  ('IM', 'EU'),
+  ('IN', 'AS'),
+  ('IO', 'AS'),
+  ('IQ', 'AS'),
+  ('IR', 'AS'),
+  ('IS', 'EU'),
+  ('IT', 'EU'),
+  ('JE', 'EU'),
+  ('JM', 'NA'),
+  ('JO', 'AS'),
+  ('JP', 'AS'),
+  ('KE', 'AF'),
+  ('KG', 'AS'),
+  ('KH', 'AS'),
+  ('KI', 'OC'),
+  ('KM', 'AF'),
+  ('KN', 'NA'),
+  ('KP', 'AS'),
+  ('KR', 'AS'),
+  ('KW', 'AS'),
+  ('KY', 'NA'),
+  ('KZ', 'AS'),
+  ('LA', 'AS'),
+  ('LB', 'AS'),
+  ('LC', 'NA'),
+  ('LI', 'EU'),
+  ('LK', 'AS'),
+  ('LR', 'AF'),
+  ('LS', 'AF'),
+  ('LT', 'EU'),
+  ('LU', 'EU'),
+  ('LV', 'EU'),
+  ('LY', 'AF'),
+  ('MA', 'AF'),
+  ('MC', 'EU'),
+  ('MD', 'EU'),
+  ('ME', 'EU'),
+  ('MF', 'NA'),
+  ('MG', 'AF'),
+  ('MH', 'OC'),
+  ('MK', 'EU'),
+  ('ML', 'AF'),
+  ('MM', 'AS'),
+  ('MN', 'AS'),
+  ('MO', 'AS'),
+  ('MP', 'OC'),
+  ('MQ', 'NA'),
+  ('MR', 'AF'),
+  ('MS', 'NA'),
+  ('MT', 'EU'),
+  ('MU', 'AF'),
+  ('MV', 'AS'),
+  ('MW', 'AF'),
+  ('MX', 'NA'),
+  ('MY', 'AS'),
+  ('MZ', 'AF'),
+  ('NA', 'AF'),
+  ('NC', 'OC'),
+  ('NE', 'AF'),
+  ('NF', 'OC'),
+  ('NG', 'AF'),
+  ('NI', 'NA'),
+  ('NL', 'EU'),
+  ('NO', 'EU'),
+  ('NP', 'AS'),
+  ('NR', 'OC'),
+  ('NU', 'OC'),
+  ('NZ', 'OC'),
+  ('OM', 'AS'),
+  ('PA', 'NA'),
+  ('PE', 'SA'),
+  ('PF', 'OC'),
+  ('PG', 'OC'),
+  ('PH', 'AS'),
+  ('PK', 'AS'),
+  ('PL', 'EU'),
+  ('PM', 'NA'),
+  ('PN', 'OC'),
+  ('PR', 'NA'),
+  ('PS', 'AS'),
+  ('PT', 'EU'),
+  ('PW', 'OC'),
+  ('PY', 'SA'),
+  ('QA', 'AS'),
+  ('RE', 'AF'),
+  ('RO', 'EU'),
+  ('RS', 'EU'),
+  ('RU', 'EU'),
+  ('RW', 'AF'),
+  ('SA', 'AS'),
+  ('SB', 'OC'),
+  ('SC', 'AF'),
+  ('SD', 'AF'),
+  ('SE', 'EU'),
+  ('SG', 'AS'),
+  ('SH', 'AF'),
+  ('SI', 'EU'),
+  ('SJ', 'EU'),
+  ('SK', 'EU'),
+  ('SL', 'AF'),
+  ('SM', 'EU'),
+  ('SN', 'AF'),
+  ('SO', 'AF'),
+  ('SR', 'SA'),
+  ('SS', 'AF'),
+  ('ST', 'AF'),
+  ('SV', 'NA'),
+  ('SX', 'NA'),
+  ('SY', 'AS'),
+  ('SZ', 'AF'),
+  ('TC', 'NA'),
+  ('TD', 'AF'),
+  ('TF', 'AN'),
+  ('TG', 'AF'),
+  ('TH', 'AS'),
+  ('TJ', 'AS'),
+  ('TK', 'OC'),
+  ('TL', 'AS'),
+  ('TM', 'AS'),
+  ('TN', 'AF'),
+  ('TO', 'OC'),
+  ('TR', 'AS'),
+  ('TT', 'NA'),
+  ('TV', 'OC'),
+  ('TW', 'AS'),
+  ('TZ', 'AF'),
+  ('UA', 'EU'),
+  ('UG', 'AF'),
+  ('UM', 'OC'),
+  ('US', 'NA'),
+  ('UY', 'SA'),
+  ('UZ', 'AS'),
+  ('VA', 'EU'),
+  ('VC', 'NA'),
+  ('VE', 'SA'),
+  ('VG', 'NA'),
+  ('VI', 'NA'),
+  ('VN', 'AS'),
+  ('VU', 'OC'),
+  ('WF', 'OC'),
+  ('WS', 'OC'),
+  ('YE', 'AS'),
+  ('YT', 'AF'),
+  ('ZA', 'AF'),
+  ('ZM', 'AF'),
+  ('ZW', 'AF')
+ON CONFLICT DO NOTHING;
 
 
--- ── Storage buckets ──────────────────────────────────────────────────────────
--- Supabase Storage. Both are public read: BGG cover art is re-hosted at import
--- time so the app doesn't depend on the BGG CDN at runtime, and play photos are
--- uploaded by users. On a non-Supabase database this block has no storage
--- schema to write to and can be skipped.
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES
-  ('boardgamebuddy-games', 'boardgamebuddy-games', true, 5242880,
-   ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
-  ('boardgamebuddy-plays', 'boardgamebuddy-plays', true, 5242880,
-   ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
-ON CONFLICT (id) DO NOTHING;
+-- ── public.boardgamebuddy_feedback_topics ────────────────────────────────────
+-- rows from archive/2026-09-28/: 041_dev_feedback.sql
+INSERT INTO public.boardgamebuddy_feedback_topics (id, label, icon, display_order) VALUES
+  ('discover',      'Discover',      'compass', 70),
+  ('feed',          'Feed',          'home',    10),
+  ('game',          'Games',         'puzzle',  30),
+  ('notifications', 'Notifications', 'bell',    60),
+  ('play',          'Play',          'dices',   20),
+  ('profile',       'Profile',       'user',    40),
+  ('settings',      'Settings',      'gear',    50)
+ON CONFLICT DO NOTHING;
+
+
+-- ── public.boardgamebuddy_feedback_types ─────────────────────────────────────
+-- rows from archive/2026-09-28/: 041_dev_feedback.sql
+INSERT INTO public.boardgamebuddy_feedback_types (id, label, icon, display_order) VALUES
+  ('bug',        'Bug',             'alert-triangle', 10),
+  ('feature',    'Feature request', 'sparkles',       20),
+  ('suggestion', 'Suggestion',      'lightbulb',      30)
+ON CONFLICT DO NOTHING;
+
+
+-- ── storage.buckets ──────────────────────────────────────────────────────────
+-- rows from archive/2026-09-28/: 002_seed.sql
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types) VALUES
+  ('boardgamebuddy-games', 'boardgamebuddy-games', true, 5242880, '{image/jpeg,image/png,image/webp,image/gif}'),
+  ('boardgamebuddy-plays', 'boardgamebuddy-plays', true, 5242880, '{image/jpeg,image/png,image/webp,image/gif}')
+ON CONFLICT DO NOTHING;

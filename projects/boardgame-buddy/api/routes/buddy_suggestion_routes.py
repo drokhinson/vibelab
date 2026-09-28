@@ -88,10 +88,10 @@ async def dismiss_buddy_suggestion(
 ) -> MessageResponse:
     """Remove one person from every list this app volunteers.
 
-    Backed by migration `014_buddy_suggestion_dismissals`. Named in full
-    because the collapsed per-app counter restarted at 001, so a bare number
-    can also name an archived migration — several comments in this package say
-    "migration 013" and mean `archive/013_drop_buddy_id`.
+    Backed by `archive/2026-09-28/014_buddy_suggestion_dismissals`. Named in
+    full because a bare number can name either archive generation — several
+    comments in this package say "migration 013" and mean
+    `archive/2026-09-01/013_drop_buddy_id`.
 
     Per-viewer and silent — the person dismissed is never told, is not blocked,
     and can still be found through `/profiles/search`, which is what makes a

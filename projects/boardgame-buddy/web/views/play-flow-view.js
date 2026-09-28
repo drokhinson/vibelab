@@ -3019,7 +3019,7 @@
      *   2. Settle, and anything after it. A queued keystroke, a debounced
      *      write, or a syncGrid from a superseded transition can land after
      *      Wrap up; the policy's phase test is what stops a finalized play
-     *      being rewritten (archive/053), so it refuses them, correctly.
+     *      being rewritten (archive/2026-09-01/053), so it refuses them, correctly.
      *   3. The PATCH round trip itself, in either direction.
      *
      * None of the three is a session that cannot save. Each one is a write
