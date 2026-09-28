@@ -1,11 +1,7 @@
 // widgets/import-review-step.js — the last three screens of every import.
 //
 // Review, summary, progress: one implementation, whatever the plays came from.
-// Before this there were two of each — the notes importer's and the photo
-// importer's — and the two `renderImport`s were already ~85% the same file,
-// differing in the third summary tile and the wording of two warnings. Two
-// copies of a screen is two screens to keep agreeing, and they had begun not
-// to: only one of them could edit a table, only one could record a score.
+// Two copies of a screen is two screens to keep agreeing.
 //
 // Every source reaches these through the adapter on its draft model
 // (`reviewGroups`, `summaryTile`, `reviewNotices`, `progressHeading`, …), so
@@ -14,8 +10,8 @@
 // row carries a count and a run note.
 //
 // `opts.host` is the global the inline handlers resolve against at click time
-// — `"window.importWizardView"` in the wizard, and either of the two importer
-// views while they still exist. The host must implement every `_method` named
+// — `"window.importWizardView"` in the wizard. The host must implement every
+// `_method` named
 // below; tools/check-import-wizard.mjs gates that.
 
 (function () {
@@ -284,11 +280,10 @@
     const ready = model.importable();
     const byGame = new Map();
     for (const item of ready) {
-      // model.gameOf(), not a branch on model.sourceKey. This line used to
-      // read `sourceKey === "notes" ? model.playGame(item) : item.game`, which
-      // silently assumed every non-note source had the PHOTO shape — so the
-      // third source threw here and nowhere else. A shared step that names a
-      // source is a shared step with a countdown on it.
+      // model.gameOf(), not a branch on model.sourceKey: a branch has to assume
+      // the shape of every source it does not name, and the next source breaks
+      // it. A shared step that names a source is a shared step with a countdown
+      // on it.
       const game = model.gameOf(item);
       const row = byGame.get(game.id);
       if (row) { row.plays++; continue; }

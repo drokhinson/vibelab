@@ -2,12 +2,12 @@
 // widgets/shelf-of-shame-sheet.js — the list behind the Stats spoke's Shelf of
 // shame card.
 //
-// The card says "63 of 74 games have never hit the table" and, until this, gave
-// you no way to see WHICH 63 — and no way to argue with the number. It is wrong
-// for anyone whose gaming predates their BoardgameBuddy account: a game played
-// for years before signing up has no play rows, so it reads as shame, and the
-// only way to clear it was to log a fake session — which would then land in the
-// podium, the rhythm heatmap and personal bests. So every row here is a toggle
+// The card says "63 of 74 games have never hit the table"; this sheet shows
+// WHICH 63 — and lets you argue with the number. It is wrong for anyone whose
+// gaming predates their BoardgameBuddy account: a game played for years before
+// signing up has no play rows, so it reads as shame, and logging a fake session
+// to clear it would land in the podium, the rhythm heatmap and personal bests.
+// So every row here is a toggle
 // that writes `collections.played_before_at` (migration 059), a mark scoped to
 // the shelf block of bgb_user_stats_detail and to nothing else.
 //

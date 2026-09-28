@@ -1,9 +1,9 @@
 // widgets/onboarding-buddies-slide.js — first-run slide 2, "Add your buddies".
 //
-// Split out of widgets/onboarding-deck-slides.js when it grew a search field:
-// the other four slides are twenty lines of markup and a handler each, this one
-// is a small application (a query, a debounce, a sequence guard, two lists and
-// a promotion rule). Keeping it here is the ~300-line split CLAUDE.md asks for,
+// Its own file, apart from widgets/onboarding-deck-slides.js: the other four
+// slides are twenty lines of markup and a handler each, this one is a small
+// application (a query, a debounce, a sequence guard, two lists and a
+// promotion rule). Keeping it here is the ~300-line split CLAUDE.md asks for,
 // along the seam that matters — one slide that has state versus four that do
 // not.
 //

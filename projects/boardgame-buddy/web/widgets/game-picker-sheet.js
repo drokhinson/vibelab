@@ -1,10 +1,10 @@
 // @ts-check
 // widgets/game-picker-sheet.js — "which game?" as a searchable bottom sheet.
 //
-// Built for the Stats spoke's By-game breakdown, which used to hang an inline
-// 15rem scroller off its trigger: it shoved the panel below it down the page,
-// and with no search a player past their top handful of games had to scroll a
-// letterbox to find one.
+// Built for the Stats spoke's By-game breakdown. A sheet rather than an inline
+// scroller off the trigger: an inline list shoves the panel below it down the
+// page, and with no search a player past their top handful of games has to
+// scroll a letterbox to find one.
 //
 // Deliberately NOT a GameFinder: that widget searches the whole library over
 // the network. Everything here is already in memory — the caller hands over

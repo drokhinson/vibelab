@@ -5,15 +5,13 @@
 // and an optional hook run when it arrives on screen. Nothing here knows how
 // the deck moves — a slide calls deck.next() when it is done and stops caring.
 //
-// Every one of them reuses a component that already existed, because these are
-// the same three screens first-run always had; only their container changed:
-//   1 · profile — ui/avatar-picker.js, the picker extracted out of
-//       PolaroidPopup.avatarCustomizer when this became its second caller
+// Each one reuses a component the rest of the app shares:
+//   1 · profile — ui/avatar-picker.js, the same picker
+//       PolaroidPopup.avatarCustomizer uses
 //   2 · buddies — its own file, widgets/onboarding-buddies-slide.js: a
 //       search field, a suggestion grid and the second-hop promotion are a
 //       small application rather than a panel, and the other three are not
-//   3 · BoardGameGeek — the fields and copy of the deleted
-//       widgets/onboarding-bgg-modal.js, whose import readout stays shared
+//   3 · BoardGameGeek — the account link, whose import readout is shared
 //       with Settings as ui/bgg-import-log.js
 //   4 · notifications — the offer, sharing its decline receipt with
 //       ui/push-prompt.js so the boot-time card does not re-ask a question
@@ -358,10 +356,9 @@
         "Importing your collection",
         () => link.promise.then(() => window.api.post("/bgg/sync", {}, { timeoutMs: 120000 })),
         (res) => {
-          // Read off BggSyncSummary's real field names. This asked for
-          // `games_imported ?? collection_count`, neither of which that model
-          // has ever carried, so the line has always said "0 games" however
-          // large the shelf that landed.
+          // Read off BggSyncSummary's real field names: a name that model
+          // does not carry reads as "0 games" however large the shelf that
+          // landed.
           const games = ((res && res.collection_imported) || 0)
                       + ((res && res.collection_pending) || 0);
           const shelf = `${games} game${games === 1 ? "" : "s"}`;

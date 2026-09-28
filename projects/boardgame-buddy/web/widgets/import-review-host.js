@@ -11,8 +11,8 @@
 // nothing here knows whether it is editing a line somebody's AI read out of a
 // notebook or a photograph off a camera roll.
 //
-// EVERY EDIT APPLIES TO THE WHOLE ROW. That is what this screen already did
-// for dates and per-row game overrides, and the row's own copy says so. The
+// EVERY EDIT APPLIES TO THE WHOLE ROW, dates and per-row game overrides
+// included, and the row's own copy says so. The
 // consequence that needs handling rather than merely knowing is that two rows
 // can MERGE when an edit makes their identities equal — correct, they are now
 // indistinguishable — which orphans one of the two anchor ids. `_reanchor` is
@@ -37,8 +37,7 @@
     // adapter, so nothing here knows whether it is editing a parsed line or a
     // photograph.
     //
-    // EVERY EDIT APPLIES TO THE WHOLE ROW, which is what this screen already
-    // did for dates and per-row games. Two rows can therefore merge, which
+    // EVERY EDIT APPLIES TO THE WHOLE ROW. Two rows can therefore merge, which
     // orphans one of the two anchor ids — hence _reanchor below.
 
     _toggleRow(rowId) {

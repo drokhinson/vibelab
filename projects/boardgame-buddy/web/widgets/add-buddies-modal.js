@@ -1,30 +1,26 @@
-// widgets/add-buddies-modal.js — the "Add buddies" card, shared by two callers.
+// widgets/add-buddies-modal.js — the "Add buddies" card.
 //
-// Both of them put the same question to the user — who do you want to add? —
-// so they get the same screen rather than two that drift:
-//   • first-run setup, as step 2 of 3 — until widgets/onboarding-deck.js
-//     replaced that sequence with one deck. The deck's own slide 2 lives in
-//     widgets/onboarding-buddies-slide.js and is this card's twin: the same
-//     select-mode tile, the same /profiles/search field with the same debounce
-//     and sequence guard, and the same promote logic (domain/buddy-network.js).
-//     Only the shell differs, which is the lifecycle-vs-appearance split
-//     .claude/rules/ui-object-design.md §4 asks for.
-//   • the Buddies screen's Add button, which replaced the profile-search bar
-//     that used to sit at the top of that page (views/buddies-view.js).
+// It puts the same question to the user as the first-run deck's slide 2 —
+// who do you want to add? — so the two get the same screen rather than two
+// that drift. That slide lives in widgets/onboarding-buddies-slide.js and is
+// this card's twin: the same select-mode tile, the same /profiles/search field
+// with the same debounce and sequence guard, and the same promote logic
+// (domain/buddy-network.js). Only the shell differs, which is the
+// lifecycle-vs-appearance split .claude/rules/ui-object-design.md §4 asks for.
+// This card opens from the Buddies screen's Add button (views/buddies-view.js).
 //
 // Tiles multi-select; one button sends every tick as a single batch
 // (POST /buddies/requests/bulk), the other backs out. The search field above
 // the grid reaches past the ranked suggestions to anyone in the app, by display
 // name or username (GET /profiles/search).
 //
-// What the two callers do NOT share is the dismiss wording — see dismissLabel.
-// "Skip" is honest inside a sequence and wrong outside one.
+// The dismiss wording is the caller's — see dismissLabel. "Skip" is honest
+// inside a sequence and wrong outside one.
 //
-// Why a modal and not a router view: it began as step 2 of 3 in a sequence that
-// starts in a modal, it has no URL worth deep-linking, and a real view would
-// need a back-stack entry that means nothing once setup is done. It borrows
-// the .polaroid-popup__* chrome so the three steps read as one flow — the same
-// thing the first-run deck's own slides do.
+// Why a modal and not a router view: it has no URL worth deep-linking, and a
+// real view would need a back-stack entry that means nothing once it closes.
+// It borrows the .polaroid-popup__* chrome — the same thing the first-run
+// deck's own slides do.
 //
 // The tiles are NOT bespoke markup: they are the canonical buddy-suggestion
 // tile in its "select" mode (ui/buddy-suggestion-rail.js), which is what the
@@ -76,9 +72,7 @@
    * so the boot path can `await` it without a try/catch around the whole of
    * first-time setup.
    *
-   * `suggestions` may be empty. It used to be the caller's job to prevent that,
-   * on the grounds that a screen with nothing to add is worse than no screen;
-   * the search field retired that argument, because there is now always
+   * `suggestions` may be empty: the search field means there is always
    * something to do here. init.js keeps a guard of its own for a DIFFERENT
    * reason — see the note there.
    *
@@ -99,7 +93,7 @@
    *   GET /buddies/suggested/onboarding (migration 072). Ticking someone
    *   appends the people THEY know to the bottom of the grid, in the same
    *   frame, with no request. Omitted by the Buddies-screen caller, which has
-   *   no such payload — the card then behaves exactly as it did before.
+   *   no such payload — the card then never promotes anyone.
    * @returns {Promise<AddBuddiesResult>}
    */
   function open(opts) {
@@ -283,8 +277,8 @@
         // tile stays an empty <i> — blank on iOS (.claude/rules/mobile-web.md §4).
         window.BgbIcons.render(grid);
         grid.classList.toggle("is-message", !!message);
-        // A scroll cue that costs no layout, so it cannot reintroduce the
-        // resizing the fixed height exists to remove.
+        // A scroll cue that costs no layout, so it cannot cause the resizing
+        // the fixed height exists to prevent.
         grid.classList.toggle("is-scrollable", grid.scrollHeight > grid.clientHeight + 1);
       }
 

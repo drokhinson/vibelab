@@ -1,9 +1,8 @@
 // widgets/play-detail-popup.js — expanded polaroid modal for a single play.
 //
-// Replaces the play-detail page route as the "tap-to-expand" surface from
-// the polaroid play card. Shows the full play record (photo, scoreboard
-// with winners highlighted, notes), supports an edit mode that mirrors
-// the play-detail page (date, players, notes, photo upload, delete), and
+// The "tap-to-expand" surface from the polaroid play card. Shows the full
+// play record (photo, scoreboard with winners highlighted, notes), supports
+// an edit mode (date, players, notes, photo upload, delete), and
 // lives in-place over whatever view the user came from — no navigation.
 //
 // This file is the SHELL and the read-only card: the modal, the fetch and
@@ -12,8 +11,8 @@
 // a buddy in it). Everything behind the Edit pill — the draft, the form, the
 // write handlers, save and delete — is widgets/play-detail-edit.js, which
 // loads first and is wired by the init() call at the bottom of this file.
-// One popup, one `state`, two files: together they were 1,444 lines, which is
-// several times CLAUDE.md's ~300-line guidance, and view and edit are the one
+// One popup, one `state`, two files: together they would be several times
+// CLAUDE.md's ~300-line guidance, and view and edit are the one
 // seam that splits this card without cutting through a shared concern.
 //
 // API:
@@ -29,9 +28,9 @@
     label: "Play details",
     // This card has its own CSS family, so the shell has to be told what its
     // card and × are. Left on the shared `.polaroid-popup__*` defaults, the
-    // outside-tap test matched nothing inside this card and every press on it
-    // — Edit, Upload photo, Save, a score field — read as a tap outside and
-    // closed the popup instead (overlays.md §8a).
+    // outside-tap test matches nothing inside this card and every press on it
+    // — Edit, Upload photo, Save, a score field — reads as a tap outside and
+    // closes the popup instead (overlays.md §8a).
     cardSelector: ".play-detail-popup__card",
     closeSelector: ".play-detail-popup__close",
   });
@@ -276,8 +275,8 @@
   }
 
   async function load(playId) {
-    // Since migration 015 the feed card carries the whole play, and since 031
-    // it carries the scoring template too, so a popup opened from a card the
+    // The feed card carries the whole play (migration 015), scoring template
+    // included (migration 031), so a popup opened from a card the
     // feed drew has its content before it is mounted and never shows a loading
     // state. Play.seeded also falls back to a cached /plays page, which covers
     // the surfaces that draw no feed cards at all — the plays log, the profile
@@ -298,13 +297,9 @@
     // Play.fromFeedCard honest about the shape it is projecting into.
     //
     // Nothing is awaited between the two paints except the play itself. The
-    // buddy list used to be, and it is needed only in edit mode — a whole
-    // round trip that bought the first render nothing and delayed the second
-    // long enough to read as a flicker rather than as part of the open.
-    //
-    // There is no `loading` flag any more: it existed only to drive the
-    // spinner, the spinner is now gated on having nothing to show, and a flag
-    // set in three places and read in none is a trap for the next reader.
+    // buddy list is needed only in edit mode — awaiting it here would be a
+    // whole round trip that buys the first render nothing and delays the
+    // second long enough to read as a flicker rather than as part of the open.
     const seed = window.Play.seeded ? window.Play.seeded(playId) : null;
     Object.assign(state, {
       playId,
@@ -421,8 +416,8 @@
    * Wired to the shell's onEscape, which is a first-refusal hook: returning
    * true swallows the press. Every overlay registers its OWN capture-phase
    * Escape on `document`, and stopPropagation does not stop a sibling listener
-   * on the same node — so an Escape aimed at the sheet ran this card's handler
-   * too, closing it and taking an unsaved edit draft with it. Topmost wins:
+   * on the same node — so an Escape aimed at the sheet would run this card's
+   * handler too, closing it and taking an unsaved edit draft with it. Topmost wins:
    * while anything is stacked over us, Escape is theirs.
    *
    * Not a counter of our own opens: the sheets are shared singletons that can
@@ -450,10 +445,9 @@
   // card element itself survives, and with it the photo <img> (no re-decode, no
   // blink), the entrance animation (it does not replay), the scroll offset of
   // .play-detail-popup__scroll, the :active state under a finger mid-press, and
-  // the focus and caret of whatever field is being typed into. Before this, one
-  // differing byte anywhere cost a full teardown of every node on the card —
-  // which a user watching it read as the card reloading a second after it
-  // opened.
+  // the focus and caret of whatever field is being typed into. A full teardown
+  // of every node on the card for one differing byte would read to a user
+  // watching it as the card reloading a second after it opened.
   function render() {
     const root = _modal.el;
     if (!root) return;
@@ -493,11 +487,11 @@
   }
 
   function renderCard() {
-    // Gated on having nothing to show, NOT on `loading`. Since 015 a popup
-    // opened from a feed card starts with a seeded play and a request still in
-    // flight to revalidate it — the old `state.loading ||` test would have put
-    // the spinner over content that was already on screen, which is the exact
-    // thing the seed exists to prevent.
+    // Gated on having nothing to show, NOT on a request being in flight. A
+    // popup opened from a feed card starts with a seeded play (migration 015)
+    // and a request still in flight to revalidate it — gating on the request
+    // would put the spinner over content that is already on screen, which is
+    // the exact thing the seed exists to prevent.
     if (!state.play && !state.error) {
       return `
         <div class="play-detail-popup__card" role="dialog" aria-modal="true" aria-busy="true">
@@ -640,7 +634,7 @@
   // What a scoreboard row does when tapped — a real player's profile, or the
   // claim sheet for a ghost that might be the viewer. Shared with
   // ui/play-card.js, which draws the same list; the decision lives in
-  // ui/player-row-action.js so the two cannot drift again.
+  // ui/player-row-action.js so the two cannot drift.
   //
   // dismissFirst is this surface's whole difference: the popup is a
   // body-level overlay, so it stands down before the destination appears.
@@ -658,7 +652,7 @@
 
   // ── View mode ─────────────────────────────────────────────────────────────
   /**
-   * One seat. Extracted so the flat list and the team bands below emit the same
+   * One seat. Its own function so the flat list and the team bands below emit the same
    * row from one place — the whole point of banding is that nothing about a
    * player's row changes, only what surrounds it.
    */
@@ -720,8 +714,8 @@
    *
    * BgbTeams.bands returns null unless some seat names a side, so a
    * competitive play, a co-op play, a play logged before the column existed and
-   * a team play nobody tagged all take the flat branch and render byte for byte
-   * as they did before. The untagged remainder of a HALF-tagged roster is the
+   * a team play nobody tagged all take the flat branch and render as the plain
+   * ranked list. The untagged remainder of a HALF-tagged roster is the
    * trailing band, drawn bare for the same reason: leftovers must look like a
    * plain list, not like a side called nothing.
    */
@@ -730,7 +724,7 @@
     // chevron's width on the rows that don't have one, which is what keeps
     // every score in one column — so a band whose seats happen to be all
     // ghosts has to reserve it too, or its numbers would sit 14px right of
-    // the band above and reintroduce the exact misalignment the class exists
+    // the band above and produce the exact misalignment the class exists
     // to prevent.
     const hasLinks = ranked.some((pl) => playerAction(pl, p, me));
     const list = (seats) =>
@@ -858,9 +852,9 @@
    * The only surface that shows the country back to the user. It reads as one
    * more fact about the play — "31 Aug 2026 · Germany" — rather than as its
    * own labelled row, because that is the weight it has: a field the app
-   * filled in for a count nobody is looking at yet. Every play logged before
-   * 060, and every one whose device couldn't resolve a country, simply shows
-   * the date it always did.
+   * filled in for a count nobody is looking at yet. A play with no country —
+   * logged before migration 060, or on a device that couldn't resolve one —
+   * shows the date alone.
    *
    * Not editable here. The country is set where it is captured — the Where
    * card on Settle Up — and this popup's edit mode is a full replacement of

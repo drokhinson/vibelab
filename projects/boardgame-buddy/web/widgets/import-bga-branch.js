@@ -133,8 +133,7 @@
       this._sheetHandle = null;
       // Monotonic, and ADVANCING rather than restarting: a call still in
       // flight from the previous mount must never match again and repaint over
-      // whatever the next one is doing. Restarting at 0 is the bug the photo
-      // branch used to carry.
+      // whatever the next one is doing.
       this._linkSeq = (this._linkSeq || 0) + 1;
       this._fetchSeq = (this._fetchSeq || 0) + 1;
       this._stopPolling();

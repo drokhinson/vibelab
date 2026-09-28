@@ -8,19 +8,19 @@
 
 (function () {
   // Which scoring-grid chapters this viewer has already turned down lives in
-  // domain/chapter.js (Chapter.pendingTemplates / Chapter.dismissTemplates) —
-  // it used to be private to this widget, and moved out when the play cascade
-  // grew an offer of its own reading the same answer. See the note there.
+  // domain/chapter.js (Chapter.pendingTemplates / Chapter.dismissTemplates),
+  // not here, because the play cascade's own offer reads the same answer. See
+  // the note there.
 
   // A scoring grid is a chapter of a different kind, and it is drawn LAST,
   // in its own Scoring section, never in the type-ordered flow above it.
   //
-  // It used to be drawn in that flow, and by migration 021's display_order it
-  // came FIRST — a table pushing the rules somebody actually opened the scroll
-  // for below the fold. It was then dropped from this widget entirely, which
-  // overshot: on the Play screen the grid is indeed two cards up in the
-  // scorepad, but on a game's own page there is no scorepad, and "what do we
-  // score on" is exactly the kind of thing the guide is opened for.
+  // In that flow, migration 021's display_order would put it FIRST — a table
+  // pushing the rules somebody actually opened the scroll for below the fold.
+  // Leaving it out of this widget entirely is wrong too: on the Play screen the
+  // grid is two cards up in the scorepad, but on a game's own page there is no
+  // scorepad, and "what do we score on" is exactly the kind of thing the guide
+  // is opened for.
   //
   // So both ends are handled by where it sits and by one flag: the section is
   // always last (_renderScoringSection, appended after every other section),
@@ -105,10 +105,8 @@
    *
    * A SIBLING of the sheet, never a child. The sheet carries `overflow: hidden`
    * — it is what clips the body during the roll — so a barrel drawn inside it
-   * loses whatever hangs past the edge. That is exactly what the flat
-   * `.scroll-panel::before/::after` bars this replaces were: 14px of barrel with
-   * six of them behind the clip, which is why the scroll read as a rectangle
-   * with a dark stripe rather than as a scroll.
+   * loses whatever hangs past the edge: 14px of barrel with six of them behind
+   * the clip reads as a rectangle with a dark stripe rather than as a scroll.
    *
    * Paints OPEN. The live state is `.scroll-paper--rolled` on the wrapper,
    * written by _applyScrollState — see the note there for why the markup must
@@ -147,7 +145,7 @@
      * @param {boolean} [opts.showRulebook=true] draw the Rulebook section
      *   (migration 052). There is no surface that needs it off today — the
      *   game page and both cascade screens all want it, and it is THE place the
-     *   link lives since 052 took it off the game row. The flag exists so a
+     *   link lives. The flag exists so a
      *   future screen that shows the link itself can turn the section off
      *   rather than showing it twice, which is the rule
      *   .claude/rules/ui-object-design.md §3b states.
@@ -259,8 +257,8 @@
         // endpoint takes optional auth and hands an anonymous caller the
         // APPROVED links and nothing else (migration 052). This matters for a
         // real screen rather than in theory — a guest watching a session from a
-        // join code is signed out, and before 052 the link reached them on the
-        // session payload.
+        // join code is signed out, and this is the only place the link reaches
+        // them.
         this._fetchRulebooks();
         return;
       }
@@ -285,9 +283,9 @@
       }
       this._render();
       // No connectivity pre-check. The request is made and, when it can't
-      // land, the catch below keeps the seeded chapters exactly as they are —
-      // which is the same outcome the old offline branch produced, without
-      // depending on a latch to reach it. Nothing is reported: the guide the
+      // land, the catch below keeps the seeded chapters exactly as they are,
+      // without depending on a connectivity latch to reach it. Nothing is
+      // reported: the guide the
       // user is reading is on screen and is the answer.
       try {
         const fresh = await window.Chapter.myChapters(this._baseGameId, { expansionIds }) || [];
@@ -365,9 +363,9 @@
      * surface that shows "the rulebook" has to pick the same one, so the moment
      * a second surface wants it the answer must already be somewhere shared.
      * There is deliberately no `guide-rulebook-loaded` event to go with the
-     * scoring pool's: nothing outside this widget draws the link any more (the
-     * game page's button and both cascade rows went with migration 052), and an
-     * announcement nobody listens to is dead code that reads as a contract.
+     * scoring pool's: nothing outside this widget draws the link (migration
+     * 052), and an announcement nobody listens to is dead code that reads as a
+     * contract.
      */
     _currentRulebook() {
       return window.Chapter && window.Chapter.resolveRulebook
@@ -496,9 +494,9 @@
      * silently filtered with nothing on screen to clear it — and the query would
      * come back the moment a second chapter did.
      *
-     * A method rather than a local in _html because the answer is now a CLASS on
+     * A method rather than a local in _html because the answer is a CLASS on
      * the paper (`--nosearch`) rather than a render branch, and because
-     * _toggleScroll no longer re-renders: it must be knowable without one. It
+     * _toggleScroll does not re-render: it must be knowable without one. It
      * does not need to be — it turns only on the chapter list, and every path
      * that changes that list lands in a render.
      *
@@ -556,8 +554,8 @@
     /**
      * The one affordance that opens the add/browse screen. Rendered by State B's
      * empty state and again at the foot of State C's body; one renderer rather
-     * than the two copies that were there, because the label is now a function
-     * of two counts and two copies would drift apart.
+     * than two copies, because the label is a function of two counts and two
+     * copies would drift apart.
      *
      * The counts answer the question the button could not: is there anything
      * written for this game already, or would I be authoring the first one —
@@ -577,10 +575,10 @@
      * edited and removed, so the button says Edit guide and carries the pencil
      * the per-chapter Edit affordance already uses. With an empty guide there is
      * nothing to edit yet, whatever the pool holds, so it stays Add with the
-     * plus. Gating the verb on the POOL count instead — which is what it used to
-     * do — got both ends wrong: an empty guide beside a stocked pool offered
-     * "Edit chapters (0 of 12)", and a guide full of chapters whose pool count
-     * never landed offered "Add a chapter".
+     * plus. Gating the verb on the POOL count instead gets both ends wrong: an
+     * empty guide beside a stocked pool would offer "Edit chapters (0 of 12)",
+     * and a guide full of chapters whose pool count never landed would offer
+     * "Add a chapter".
      */
     _renderAddButton() {
       const mine = (this._chapters || []).length;
@@ -808,7 +806,7 @@
     /**
      * The author's own link when something else is on show, or nothing is.
      *
-     * The one place a denial is ever visible, and — since migration 053 — the
+     * The one place a denial is ever visible, and — per migration 053 — the
      * one place an author is reminded that their link is unlisted on purpose.
      * That sentence has to say it is THEIR doing and how to undo it: an
      * unlisted link looks identical to a pending one from the outside, and an
@@ -819,11 +817,10 @@
       const status = mine.moderation_status;
       const denied = status === "denied";
       const unlisted = status === "unlisted";
-      // The fourth case reaches here too, and used to fall through to
-      // "waiting for approval": an author whose own link IS approved but who
-      // has adopted somebody else's is shown this row, and telling them their
-      // published link is still in a queue is the same wrong sentence this
-      // whole change is about.
+      // The fourth case reaches here too: an author whose own link IS approved
+      // but who has adopted somebody else's is shown this row, and it must not
+      // fall through to "waiting for approval" — telling them their published
+      // link is still in a queue is the wrong sentence.
       const approved = status === "approved";
       let text;
       let icon;
@@ -1099,9 +1096,7 @@
      * all carry the same derived title — so the question is put through the
      * same sheet the play cascade opens, which draws each candidate's real
      * table (widgets/scoring-template-sheet.js#offer). Same object, same
-     * question, one answer surface (.claude/rules/ui-object-design.md §3b);
-     * before this, the notice sent the viewer to a browse screen to make a
-     * choice the sheet was already built for.
+     * question, one answer surface (.claude/rules/ui-object-design.md §3b).
      *
      * Grids with no rows are filtered out, exactly as the play cascade filters
      * them: a candidate the sheet can only draw as an empty table is not a
@@ -1260,14 +1255,14 @@
     /**
      * Put the open/rolled state on the LIVE DOM.
      *
-     * This exists because _toggleScroll used to be `flip the flag; _render()`,
-     * and _render replaces the whole panel — so the browser only ever saw the
-     * FINAL state and the transition in styles.css never ran once. It also
-     * destroyed the button under the user's finger (losing :active and focus)
-     * and closed every expanded <details> in the scroll.
+     * This exists because _render replaces the whole panel: a toggle that
+     * re-rendered would show the browser only the FINAL state, so the
+     * transition in styles.css would never run. It would also destroy the
+     * button under the user's finger (losing :active and focus) and close
+     * every expanded <details> in the scroll.
      *
-     * max-height is animated from a MEASURED scrollHeight rather than the old
-     * 4000px ceiling: over ~600px of content, 4000 → 0 spends ~85% of the
+     * max-height is animated from a MEASURED scrollHeight rather than a fixed
+     * ceiling: over ~600px of content, 4000px → 0 spends ~85% of the
      * transition off-screen and then snaps.
      *
      * @param {{animate?: boolean}} [opts]
@@ -1434,7 +1429,7 @@
       // OPEN and _applyScrollState puts `--rolled` on before the browser gets a
       // frame, so the markup and the class cannot disagree — which is what lets
       // _toggleScroll flip the class on the LIVE nodes instead of re-rendering.
-      // Re-rendering is why the roll transition never ran once.
+      // A re-render would stop the roll transition from running at all.
       //
       // `--nosearch` IS written here: it turns only on the chapter list, so it
       // is stable across a toggle and belongs with the paint that knows it.
@@ -1564,10 +1559,9 @@
 
     _renderChapter(c) {
       // Source dot ties expansion chapters to their identity color. The base
-      // game leaves source_color null — but with the redundant per-chapter icon
-      // gone (the section header above already carries the type's glyph, and
-      // every chapter in a section repeated it) there is no icon column
-      // absorbing that, so an undotted row would start 17px left of a dotted one
+      // game leaves source_color null — and there is no per-chapter icon
+      // column absorbing that (the section header above carries the type's
+      // glyph), so an undotted row would start 17px left of a dotted one
       // and every title in a merged list would sit at a different place. The
       // column is therefore RESERVED whenever the scroll is merged, and omitted
       // entirely on a single game, where no row has a dot and the column would
@@ -1655,7 +1649,7 @@
 
     _toggleScroll() {
       this._scrollOpen = !this._scrollOpen;
-      // No _render(). See _applyScrollState — re-rendering is what killed the
+      // No _render(). See _applyScrollState — re-rendering would kill the
       // transition, the focus ring and every open <details>. Nothing else needs
       // recomputing either: `--nosearch` and the loading state both turn on the
       // chapter list, which a toggle cannot change.

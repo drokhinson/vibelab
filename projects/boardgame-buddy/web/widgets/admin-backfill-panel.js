@@ -1,13 +1,13 @@
 // widgets/admin-backfill-panel.js — one "catalog rows missing X" admin panel.
 //
-// Extracted at instance #2 (ui-object-design.md §4): the images panel and the
+// One widget for both panels (ui-object-design.md §4): the images panel and the
 // metadata panel are identical in lifecycle AND appearance, so the config
 // carries the handful of strings that differ rather than each caller keeping
 // its own markup. Reuses the .admin-reports__* class family wholesale — this
 // widget ships no CSS of its own.
 //
-// Two panels now, not four: descriptions, stats and publishers were three
-// views of one BoardGameGeek read and became one queue (migration 045).
+// Two panels, not four: descriptions, stats and publishers are three views of
+// one BoardGameGeek read, so they share one queue (migration 045).
 //
 // The host view owns the repaint: every state change calls opts.render(), and
 // the panel's html() is re-read from the host's own render pass. Inline
@@ -81,22 +81,17 @@
     /**
      * Start the sweep, and go and watch it.
      *
-     * This used to BE the drain — a loop of up to 25 bounded passes, reporting
-     * "40 done, 260 left" inside this button between them, for a run that can
-     * take twenty minutes. Two things were wrong with that. The loop lived on
-     * a widget, so leaving the screen killed it; and a button is not somewhere
-     * you can show which game failed and why, which on a long catalog fill is
-     * the only thing worth knowing. Both live on /admin/run/:tool now, and the
-     * loop with them (domain/admin-run-flow.js).
+     * The drain loop does not live here: a run can take twenty minutes, a loop
+     * on a widget dies when the user leaves the screen, and a button is not
+     * somewhere you can show which game failed and why, which on a long catalog
+     * fill is the only thing worth knowing. The loop and its log live on
+     * /admin/run/:tool (domain/admin-run-flow.js).
      *
-     * NAVIGATE AND START, in that order and in one tap. There was a confirm
-     * here, and the argument for it was that navigation is one tap too late to
-     * ask — which was true while the run page started nothing on arrival. It
-     * starts now, so the button does what it says: the deed and the screen that
-     * narrates it are one press. Nothing here is destructive (a sweep only
-     * fills in fields that are missing), the whole surface is admin-only, and
-     * the run page's log is a better account of what happened than a dialog
-     * asking permission for it ever was.
+     * NAVIGATE AND START, in that order and in one tap, with no confirm: the
+     * deed and the screen that narrates it are one press. Nothing here is
+     * destructive (a sweep only fills in fields that are missing), the whole
+     * surface is admin-only, and the run page's log is a better account of what
+     * happened than a dialog asking permission for it would be.
      *
      * `start()` is safe on a run already going — it watches rather than
      * starting a second drain against the same ledger — so there is no branch
@@ -118,9 +113,8 @@
       const face = live
         ? `<i data-icon="${st.live ? "loader-2" : st.state === "done" ? "check" : "alert-triangle"}"
               class="w-3.5 h-3.5${st.live ? " animate-spin" : ""}"></i> ${escapeHtml(st.label)}`
-        // "Sync now" for every panel, not a per-panel string. They were
-        // "Refresh all" / "Backfill all" / "Sync all" — three words for one
-        // deed, chosen per panel for no reason the reader could see.
+        // "Sync now" for every panel, not a per-panel string: it is one deed,
+        // and three words for it would differ for no reason the reader could see.
         : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> Sync now`;
       return `
         <div class="admin-reports__header">

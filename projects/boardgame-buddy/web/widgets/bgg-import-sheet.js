@@ -1,34 +1,31 @@
 // @ts-check
 // widgets/bgg-import-sheet.js — "Import from BoardGameGeek", as a bottom sheet.
 //
-// Replaces widgets/add-game-modal.js, which was a centred polaroid card
-// hosting a GameFinder. Three things were wrong with that, and this file is
-// the answer to each:
+// Three decisions shape this file:
 //
-//   1. IT WAS A DROPDOWN INSIDE A CARD. The finder's results were a
-//      position:absolute list under an input on a vertically-centred card, so
-//      they were capped at min(38vh, 300px) by a rule written to stop them
-//      running off the screen. Half a phone, most of it card chrome, for the
-//      one screen whose entire content is a list of search results.
-//      .claude/rules/overlays.md: a list that needs a fit pass wants to be a
-//      sheet. The sheet is bottom-anchored and sized off the VISIBLE viewport,
-//      so the keyboard shrinks it correctly and the list is the only growable
-//      child.
+//   1. IT IS A SHEET, NOT A DROPDOWN INSIDE A CARD. A position:absolute
+//      result list under an input on a vertically-centred card has to be
+//      capped (min(38vh, 300px)) to stay on the screen — half a phone, most
+//      of it card chrome, for the one screen whose entire content is a list
+//      of search results. .claude/rules/overlays.md: a list that needs a fit
+//      pass wants to be a sheet. The sheet is bottom-anchored and sized off
+//      the VISIBLE viewport, so the keyboard shrinks it correctly and the
+//      list is the only growable child.
 //
-//   2. SEARCHING LEFT THE KEYBOARD UP. The finder searches as you type, so the
-//      keyboard never goes away on its own and results arrive into the ~40% of
-//      the screen it is not covering. Here the search is an explicit act — a
-//      Search button, or Enter on the field — and committing it blurs the
-//      field. The keyboard collapses, `.bgb-kb-open` drops, and the panel
-//      takes nearly the whole visible viewport (see the --tall class below).
-//      The list grows into the space the keyboard just gave back.
+//   2. SEARCH IS AN EXPLICIT ACT. Search-as-you-type leaves the keyboard up,
+//      so results arrive into the ~40% of the screen it is not covering. Here
+//      the search is committed by hand — a Search button, or Enter on the
+//      field — and committing it blurs the field. The keyboard collapses,
+//      `.bgb-kb-open` drops, and the panel takes nearly the whole visible
+//      viewport (see the --tall class below). The list grows into the space
+//      the keyboard just gave back.
 //
-//   3. IMPORTING SHELVED THE GAME. AddGameModal's onPick ran Collection.add()
-//      the instant an import returned, so looking up whether BgB had a game at
-//      all put it in your collection. Import and shelve are two acts and this
-//      sheet makes them two taps: the row's button imports into the shared
-//      catalog, and only then does a second, differently-labelled button offer
-//      your shelf. domain/bgg-import.js holds that line.
+//   3. IMPORTING DOES NOT SHELVE THE GAME. Shelving on import would put a game
+//      in your collection just for looking up whether BgB had it. Import and
+//      shelve are two acts and this sheet makes them two taps: the row's
+//      button imports into the shared catalog, and only then does a second,
+//      differently-labelled button offer your shelf. domain/bgg-import.js
+//      holds that line.
 //
 // The box takes a title, a BGG id, or a pasted boardgamegeek.com link. The id
 // path is the backend's (services/search_service.py#_bgg_hits): BGG's own

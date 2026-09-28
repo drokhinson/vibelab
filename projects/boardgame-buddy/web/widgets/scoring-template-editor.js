@@ -14,7 +14,7 @@
 //
 // Pure functions of a state snapshot, same split as chapter-wizard-steps.js:
 // the view (views/reference-guide-add-view.js) owns the rows, the handlers and
-// the fetches. Unlike the markdown editor — which had to stay in the view
+// the fetches. Unlike the markdown editor — which stays in the view
 // because its toolbar reads and writes the live textarea's selection — a row
 // list touches nothing but its own inputs, so it belongs out here.
 //
@@ -255,10 +255,9 @@
   /**
    * The collapsed colour control: one disc showing the row's current colour,
    * which expands the ten-swatch picker under the row and collapses again the
-   * moment a colour is chosen. The picker used to be permanently open on every
-   * row, which cost 52px per row — on a full twenty-four-row grid that is more
-   * than a phone screen of swatches for a decision each row is done making
-   * after one tap.
+   * moment a colour is chosen. A permanently open picker costs 52px per row —
+   * on a full twenty-four-row grid that is more than a phone screen of
+   * swatches for a decision each row is done making after one tap.
    */
   function renderColorChip(i, swatch, open) {
     return `
@@ -295,7 +294,7 @@
    * own words. It is a TEMPLATE feature and not a play one: it never renders in
    * the row's own header, only behind the info button the scoring grid puts
    * beside a labelled row that has one (widgets/round-score-grid.js), so a
-   * fourteen-row Everdell grid stays as narrow as it was.
+   * fourteen-row Everdell grid stays narrow.
    *
    * Three states, and the row's own data picks between them: writing (the
    * field), written (one truncated line that reopens it), and absent (the

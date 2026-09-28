@@ -360,7 +360,7 @@
           // Order matters: a deadline abort sets BOTH `timeout` and `offline`
           // (domain/api.js#_fetch — a link on which nothing completes IS
           // offline as far as the write path is concerned). Testing `offline`
-          // first told somebody whose export ran long that they were offline,
+          // first would tell somebody whose export ran long that they were offline,
           // which is both wrong and unactionable — the request reached the
           // server, which is still building. Timeout gets its own branch and
           // its own advice.

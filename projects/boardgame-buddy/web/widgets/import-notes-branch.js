@@ -10,9 +10,6 @@
 // `navLabel`, `onEnter`, `resetFormState`) and holds the handlers its own step
 // bodies call by name.
 //
-// Was views/import-plays-view.js, whose route is now one of the wizard's two
-// branches. The handlers are unchanged; what left is the shell around them.
-//
 // RESOLVING A NAME ONCE is why this branch keeps two steps the photo branch has
 // no equivalent of. A note that says "Jas" in one line and "Jasmine" in another
 // wrote one person twice, and a 106-play tally names maybe eight people — doing
@@ -34,9 +31,8 @@
 
     /**
      * This branch's own steps, between the source picker and the shared
-     * review. `source` keeps its name from when it WAS the first screen; it is
-     * the paste box, and the picker above it is what "source" now means to the
-     * user.
+     * review. `source` is the paste box, whatever the name suggests; to the
+     * user, "source" is the picker above it.
      */
     get steps() { return ["source", "details", "players", "games"]; }
 
@@ -119,8 +115,7 @@
       // the error path, so a slow parse the user has already navigated away
       // from can't paint over whatever they moved on to. It ADVANCES on reset
       // rather than restarting, so a parse still in flight from the previous
-      // mount never matches again — restarting it at 0 is the bug the photo
-      // branch used to carry.
+      // mount never matches again.
       this._parseSeq = (this._parseSeq || 0) + 1;
       /** The parsed name the player sheet is currently asking about. */
       this._sheetName = null;
@@ -336,8 +331,8 @@
 
     _openPlayerSheet(name) {
       // Held so a buddy list that lands while the sheet is open can re-rank
-      // and refill it, rather than leaving the user staring at the ghosts-only
-      // list this whole change exists to fix.
+      // and refill it, rather than leaving the user staring at a ghosts-only
+      // list.
       this._sheetName = name;
       const candidates = window.ImportPeople.candidates(this._partners);
       // Ranked by the same score that pre-filled the row behind the sheet

@@ -25,13 +25,13 @@
 // return per game (.claude/rules/overlays.md §8b), and would flash the screen
 // underneath between questions.
 //
-// This file used to carry a second mode, open(), for picking between the grids
-// a host had ALREADY adopted. That question moved to the pill row in the
-// scoring card's own bar (views/play-flow-view.js#_renderTemplatePills): two or
-// three options that reshape the table directly beneath them want to be visible
-// beside it, not behind a sheet covering the very grid they change. The sheet
-// stays for the offer, where the choice is between things the host has never
-// seen and each option needs a picture.
+// Picking between the grids a host has ALREADY adopted is not this sheet's
+// question: it is the pill row in the scoring card's own bar
+// (views/play-flow-view.js#_renderTemplatePills), because two or three options
+// that reshape the table directly beneath them want to be visible beside it,
+// not behind a sheet covering the very grid they change. The sheet is for the
+// offer, where the choice is between things the host has never seen and each
+// option needs a picture.
 //
 // Whether a template is on the table at all is neither question — that is the
 // switch on the same bar, one control per question per
@@ -49,7 +49,7 @@
 //
 // The thumbs-down is the one answer that does NOT move the queue on by itself:
 // three grids you do not want are three refusals, and being asked again next
-// round about the two you did not reach is the bug this feature exists to fix.
+// round about the two you did not reach is what this answer exists to prevent.
 // See offer().
 //
 // Its class is named in the theme re-point list in styles.css; a body-level
@@ -390,8 +390,8 @@
      * (see _patch).
      *
      * The counter is rendered only for a real queue: on a single-game offer
-     * there is no "1 of 1" to report and the panel reads exactly as it did
-     * before this file grew steps. `aria-live` on it is what announces the move
+     * there is no "1 of 1" to report, so the panel carries no counter.
+     * `aria-live` on it is what announces the move
      * to the next game, since the dialog's own label is read once on open.
      */
     _renderOfferPanel() {
@@ -440,8 +440,7 @@
       const step = this._step();
       const name = (step && step.gameName) || "";
       // "for this game" is the fallback rather than a bare sentence: a grid
-      // whose game the pool never named still belongs to something, and the
-      // wording is what the single-game offer has always said.
+      // whose game the pool never named still belongs to something.
       const who = name ? `for ${escapeHtml(name)}` : "for this game";
       return `
         ${total === 1
