@@ -3,11 +3,11 @@
 // widgets/play-detail-popup.js owns the modal, the fetch and the read-only
 // card. This file owns everything behind the Edit pill: the draft, the form
 // that paints it, every handler that mutates it, and the save and delete that
-// end it. The two were one 1,444-line file — several times the ~300-line
-// guidance in CLAUDE.md, and long past the point where anyone looking for the
-// view markup had to scroll through the round-grid maths to reach it.
+// end it. Together they would be several times the ~300-line guidance in
+// CLAUDE.md, and anyone looking for the view markup would have to scroll
+// through the round-grid maths to reach it.
 //
-// The seam is the DRAFT, not the state. There is still exactly one popup and
+// The seam is the DRAFT, not the state. There is exactly one popup and
 // one `state` bag: this file receives it by reference from the shell's init()
 // and repaints through the shell's render(), because view and edit are two
 // faces of the same card and a draft held in a second place would only have to
@@ -105,7 +105,7 @@
       notes: p.notes || "",
       // Ranked once, here, for the same reason the expansions below are sorted
       // once: view mode lists these players in Play.rankPlayers order, so a
-      // draft built from the raw payload order made tapping Edit visibly
+      // draft built from the raw payload order would make tapping Edit visibly
       // reshuffle the roster. Sorting at RENDER time instead would be worse
       // than either — resyncScores and autoSelectWinners rewrite scores on
       // every keystroke, so rows would jump under the user's finger as they
@@ -293,8 +293,8 @@
    * The Expansions card in edit mode: one removable chip per expansion, plus
    * an Add row.
    *
-   * View mode already lists expansions, so the edit form listing them but
-   * refusing to change them was the one card on this surface that read as
+   * View mode lists expansions, so an edit form listing them but refusing
+   * to change them would be the one card on this surface that read as
    * broken rather than as read-only — "we played that WITH Leaders" is exactly
    * the kind of thing you remember an hour after logging the play.
    *
@@ -509,8 +509,8 @@
   function removeRoundAt(r) {
     if (!state.draft) return;
     // Normalize first so the splice lands on every column. Skipping the ones
-    // whose array didn't reach `r` is what let the columns drift to different
-    // lengths in the first place.
+    // whose array doesn't reach `r` lets the columns drift to different
+    // lengths.
     const n = normalizeRounds(state.draft.players);
     if (!(r >= 0 && r < n)) return;
     // A template's rows render no remove button, but this is a global inline
@@ -640,11 +640,11 @@
   // away), and Escape while it is up belongs to the sheet — see the shell's
   // hasStackedOverlay().
   //
-  // The sheet's contract does the work the old typed input had to do by hand:
-  // it paints a private alias but hands back the REAL display name, so the
+  // The sheet's contract does the name work: it paints a private alias but
+  // hands back the REAL display name, so the
   // string that reaches play_players.player_display_name — a row every
   // participant in the play can read — is never someone's private nickname for
-  // them, and a buddy reached for by their alias can no longer land as a ghost
+  // them, and a buddy reached for by their alias cannot land as a ghost
   // named after it.
 
   /** Case-folded name key — the roster's own identity test, see seatPlayer. */
@@ -655,11 +655,12 @@
    *
    * GET /play-partners never returns the viewer — it answers "who do you play
    * with?" — so every surface that can seat somebody OTHER than by
-   * construction has to prepend this row itself (both importers already do).
-   * This one can: a play whose roster the viewer is missing from, either
-   * because the row was removed here or because the play was logged without
-   * them, had no way to put them back. The sheet was showing every person
-   * they have ever played with except the one they were looking for.
+   * construction has to prepend this row itself (both importers do). This
+   * one can: without it, a play whose roster the viewer is missing from,
+   * either because the row was removed here or because the play was logged
+   * without them, would have no way to put them back, and the sheet would
+   * show every person they have ever played with except the one they were
+   * looking for.
    *
    * Named exactly as _ensureSelfIncluded and the importers spell the seeded
    * seat, so the row and the seat it would duplicate can never disagree.
@@ -836,7 +837,7 @@
    *
    * Deduped by NAME rather than id, because the roster is a mix of accounts
    * and ghosts and a name is the only handle every seat has — and because
-   * play_players carries a unique index on it since migration 023, so a second
+   * play_players carries a unique index on it (migration 023), so a second
    * seat under the same name is a save the backend refuses.
    *
    * @param {{name?: string, user_id?: string|null, avatar?: any}} c
@@ -1014,11 +1015,11 @@
       if (state.draft) clearPendingPhoto(state.draft);
       state.editing = false;
       state.draft = null;
-      // No store.invalidate("feed") here any more. It re-rendered the whole
-      // Feed view — resetting its scroll and flipping every open card back
-      // over — off a page whose cards had not changed, so it cost the tear-down
-      // and showed nothing new. Play.update() now patches the one card that did
-      // change and repaints it in place instead.
+      // No store.invalidate("feed") here: it re-renders the whole Feed view —
+      // resetting its scroll and flipping every open card back over — off a
+      // page whose cards have not changed, so it costs the tear-down and shows
+      // nothing new. Play.update() patches the one card that did change and
+      // repaints it in place instead.
       //
       // The fresh play rides on the event so listeners patch from it rather
       // than refetching a row the server has just handed us.

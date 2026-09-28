@@ -6,9 +6,7 @@
 // story are elsewhere — a scoring template turning a blank scorepad into a
 // specific game's, and a community chapter landing in your guide, both in the
 // scripted module; and the stats board, which assembles itself a card at a
-// time, in widgets/tour-vignette-stats.js. Stats used to live here and left
-// when it outgrew a loop, taking this file back under the ~300-line
-// guideline it had reached.
+// time, in widgets/tour-vignette-stats.js.
 //
 // Loaded lazily by views/tour-view.js via ui/lazy-script.js. See that file's
 // header for why these are <link rel=prefetch> in index.html rather than
@@ -37,9 +35,9 @@
    * THE PROPERTY NAME IS AN ARGUMENT BECAUSE CUSTOM PROPERTIES INHERIT. The
    * feed nests one track inside another — the vertical one scrolls between
    * game nights and each night holds a horizontal rail of polaroids — and
-   * with both reading `--vig-step` the value set on the outer track
-   * inherited into every inner rail. Scrolling to the third night therefore
-   * also shoved that night's cards two card-widths sideways, out of the clip:
+   * with both reading `--vig-step` the value set on the outer track would
+   * inherit into every inner rail, so scrolling to the third night would
+   * also shove that night's cards two card-widths sideways, out of the clip:
    * a section with a header, a Good game pill and no games. Two axes, two
    * property names.
    */
@@ -59,7 +57,7 @@
    * stand-in box art,
    * the game name in the display face below it, and the winner on its own row
    * under a hairline reading "Won by <name> · <score>". No tilt — styles.css
-   * says the nth-child rotations were removed on purpose and cards sit square.
+   * keeps cards square on purpose.
    *
    * THE CROWN IS THE ONE THING THE REAL CARD DOES NOT HAVE, and it is here
    * deliberately: at ~100px wide the caption's winner line is 8px of muted
@@ -147,8 +145,7 @@
    * can produce are the only ones used here: "Be the first to say good game"
    * at zero, "<name> said good game" at one, and "You and N other(s) said
    * good game" once the viewer is in the set — the viewer always leads and
-   * the others are COUNTED, never named. The mock used to say "Priya and
-   * Marcus said good game", which the app cannot render.
+   * the others are COUNTED, never named.
    *
    * ONE DELIBERATE DIVERGENCE: the real pill drops the words for a bare count
    * the moment anyone reacts (`count ? String(count) : "Good game"`). This
@@ -218,7 +215,7 @@
     reset(root) {
       shift(root, "[data-feed]", 0, "--vig-vstep");
       shift(root, "[data-rail]", 0);
-      // The footer is POPULATED from the first frame now: Marcus has already
+      // The footer is POPULATED from the first frame: Marcus has already
       // said good game and you have not. What the beat below does is press
       // the button, which is the thing the chapter is claiming.
       flag(root, "[data-kudos]", "is-mine", false);

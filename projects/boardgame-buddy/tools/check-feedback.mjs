@@ -30,9 +30,9 @@
 //   7. The COMPOSE PANEL HAS ONE SCROLLER. The topic list is a SIBLING of the
 //      field, never nested inside it. This one is structural and invisible from
 //      the markup by eye, which is exactly why it is checked: a scroller
-//      wrapped around the field and the list made the sheet two nested overflow
+//      wrapped around the field and the list makes the sheet two nested overflow
 //      boxes, and the inner one — sized to its content and so with nothing to
-//      scroll — swallowed every drag over the topics via its own
+//      scroll — swallows every drag over the topics via its own
 //      `overscroll-behavior: contain` (.claude/rules/overlays.md §3).
 //
 // (4), (5) and (6) are checked by driving the real _renderList / _renderFab

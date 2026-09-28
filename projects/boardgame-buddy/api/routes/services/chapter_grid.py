@@ -17,7 +17,7 @@ behaviours working without a branch in each:
 The mirror is regenerated on every save and never hand-edited: `grid` is the
 source of truth and `content` is derived from it.
 
-This module exists at all so chapter_routes.py (already 728 lines against a ~300
+This module exists at all so chapter_routes.py (already well past the ~300-line
 guideline) does not grow further.
 """
 
@@ -132,8 +132,8 @@ def grid_title(game_name: str | None) -> str:
     asking the author to distinguish their grid from other people's, and that is
     not the axis anyone picks along: a grid belongs to one game, a player keeps
     at most one per game, and the pool already sorts by popularity and prints
-    the author under every row — which is what a reader actually chooses on. The
-    field only ever collected twenty synonyms for "Everdell score sheet".
+    the author under every row — which is what a reader actually chooses on. A
+    title field would only collect twenty synonyms for "Everdell score sheet".
 
     So the title joins `content` as something generated from the rows' context
     rather than typed beside them. It still has to EXIST — the column is NOT

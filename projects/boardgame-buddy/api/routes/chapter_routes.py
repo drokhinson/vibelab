@@ -62,7 +62,7 @@ _CHAPTER_SELECT = (
     " link_url, moderation_status,"
     " created_by, updated_at, created_at,"
     " boardgamebuddy_chapter_types(label, icon, display_order),"
-    # Since migration 052 this table has TWO FKs into profiles — created_by and
+    # This table has TWO FKs into profiles (migration 052) — created_by and
     # moderated_by — so an unhinted embed is PGRST201 ("more than one
     # relationship was found") and every read path through this select 500s.
     # !created_by names the one the author's display_name comes from; the JSON
@@ -241,7 +241,7 @@ def _browse_chapter_pool_sync(
     # Popularity: count user_chapters rows per chapter in one round trip.
     # Bounded at 1000 adopter rows until the tally moves to an RPC GROUP BY.
     #
-    # `state='kept'` since migration 033: a row can now also mean "this viewer
+    # `state='kept'` (migration 033): a row can also mean "this viewer
     # turned it down", and counting those would let a chapter climb the
     # popularity sort on the strength of the people who refused it.
     popularity: dict[str, int] = {cid: 0 for cid in chapter_ids}
@@ -446,10 +446,10 @@ async def count_chapter_pool(
 
     The same number `GET /games/{game_id}/chapter-pool` would return the length
     of once its disliked rows are dropped, without the chapter bodies. Auth is
-    OPTIONAL and viewer-scoping is the only thing it buys: since migration 033
-    the caller's own dislikes come off the total, because a chapter they have
+    OPTIONAL and viewer-scoping is the only thing it buys: the caller's own
+    dislikes come off the total (migration 033), because a chapter they have
     refused is not one their guide is missing. An anonymous caller gets the
-    unfiltered pool size, as this endpoint always returned. The caller's own
+    unfiltered pool size. The caller's own
     guide is still counted client-side from `my-chapters`.
     """
     sb = get_supabase()
@@ -551,7 +551,7 @@ def _create_chapter_sync(
             # The gate the author chose, not the one their role would give them
             # (migration 053): `request_review` picks pending or unlisted, and
             # both are live for the author's buddies either way. Nobody's link
-            # is born approved any more, an admin's included — so no row leaves
+            # is born approved, an admin's included — so no row leaves
             # here carrying a decision, and `moderated_by`/`moderated_at` stay
             # NULL until somebody actually makes one. NULL on every other
             # layout, which bgb_chapters_link_shape requires.
@@ -613,9 +613,10 @@ async def create_chapter(
 ) -> MyGuideChapterResponse:
     """Create a new chapter attached to a game and immediately add it to the creator's guide.
 
-    A rulebook link written by an admin is live immediately; anyone else's is
-    visible to them and their accepted buddies while it waits in the admin queue
-    (migration 052).
+    A rulebook link starts `pending` when its author asks for review and
+    `unlisted` when they don't (`chapter_rulebook.initial_status`), admins
+    included. Either way it is visible to its author and their accepted buddies;
+    only a pending one sits in the admin queue (migrations 052, 053).
     """
     sb = get_supabase()
     return await asyncio.to_thread(_create_chapter_sync, sb, game_id, body, user)
@@ -662,9 +663,8 @@ def _update_chapter_sync(
     if body.layout is not None:
         updates["layout"] = str(body.layout)
     # A grid's title is derived, so it is rewritten on every edit whatever the
-    # body said — which is also how a grid authored before the title field was
-    # retired, or one whose game has since been renamed, picks up the current
-    # form. Costs one lookup, and only on a grid edit.
+    # body said — which is also how a grid carrying a stale title, hand-typed
+    # or from a game renamed since, picks up the current form. Costs one lookup, and only on a grid edit.
     is_expansion = False
     if str(layout) == str(ChapterLayout.SCORING_GRID):
         game = (
@@ -695,8 +695,8 @@ def _update_chapter_sync(
     # and then point the same approved row anywhere, and every reader following
     # the app's own "approved" badge would go there. So a changed URL drops the
     # badge it had and goes back through the gate — whoever is editing, admins
-    # included, since migration 053 (an admin approves it from the queue, which
-    # is one tap and leaves an audit trail a self-approval never did).
+    # included (migration 053): an admin approves it from the queue, which is
+    # one tap and leaves an audit trail a self-approval would not.
     #
     # Unchanged URL, unchanged status: re-submitting the same link by saving the
     # form again must not send an approved link back to the queue.

@@ -42,7 +42,7 @@
   /**
    * @param {any} err
    * @param {"read"|"add"} [phase]  Which half failed. The token is verified
-   *   twice now — once to show who the code belongs to, once to act on it — and
+   *   twice — once to show who the code belongs to, once to act on it — and
    *   the same status means different things either side of the user's tap.
    * @returns {string}
    */
@@ -55,7 +55,7 @@
       // 410 is the expired-or-forged branch, and it is genuinely common: a new
       // user who followed the QR with their phone camera can easily spend
       // longer than the token's life signing in before they land here. It is
-      // now also reachable AFTER the code resolved — the token can die while
+      // also reachable AFTER the code resolved — the token can die while
       // the user is deciding — which is a different sentence.
       case 410:
         return adding
@@ -296,12 +296,10 @@
     /**
      * Turn a scanned token into a person, and stop there.
      *
-     * This used to be _redeem(): resolving a code WAS the add, so both accounts
-     * became buddies before the scanner had seen a name. A camera pointed at a
-     * code is a clear enough intent to treat as consent, which is what made
-     * that safe — but it is not clear enough to treat as a DECISION, because
-     * scanning is also how you find out what a code is. So the token now
-     * resolves to a name and the user picks what to do with it.
+     * Resolving is not adding. A camera pointed at a code is a clear enough
+     * intent to treat as consent, but it is not clear enough to treat as a
+     * DECISION, because scanning is also how you find out what a code is. So
+     * the token resolves to a name and the user picks what to do with it.
      *
      * @param {string} token
      * @returns {Promise<void>}
@@ -327,8 +325,8 @@
     }
 
     /**
-     * Redeem the token the user just looked at. Unchanged from what a scan used
-     * to do on its own — one call, both accounts buddies, no pending request.
+     * Redeem the token the user just looked at — one call, both accounts
+     * buddies, no pending request.
      * @returns {Promise<void>}
      */
     async _buddyUp() {
@@ -428,10 +426,9 @@
                     //   * Chrome's touch adjustment snaps a tap that lands on a
                     //     non-interactive control to the nearest interactive
                     //     one — so tapping a truly-disabled "Already buddies"
-                    //     fired "Scan a different code" below it and threw away
-                    //     the person who had just been scanned. Measured with a
-                    //     real touch tap; a mouse click does not do this, which
-                    //     is exactly how it would have shipped.
+                    //     fires "Scan a different code" below it and throws away
+                    //     the person who has just been scanned. Only a real
+                    //     touch tap does this; a mouse click does not.
                     // Staying enabled means this button absorbs its own taps.
                     (busy || !rel.can)
                       ? 'data-qr-action="buddy-up" aria-disabled="true"'

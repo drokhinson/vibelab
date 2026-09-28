@@ -1,6 +1,6 @@
-// domain/store.js — Namespaced pub/sub store. Replaces the legacy
-// state.js global-let pattern with a single Store instance whose namespaces
-// (session, feed, closet, activePlay, search) survive view unmount/remount.
+// domain/store.js — Namespaced pub/sub store. A single Store instance whose
+// namespaces (session, feed, closet, activePlay, search) survive view
+// unmount/remount.
 
 (function () {
   class Store {
@@ -13,7 +13,7 @@
         // read as a synchronous first-paint seed by the Plays and Collection
         // spokes. Declared here rather than existing only by virtue of a set()
         // because an undeclared slot is one reset() and one invalidation path
-        // cannot see: it survived logout into the next account, and it went on
+        // cannot see: it would survive logout into the next account, and go on
         // seeding the pre-edit copy of a play after every save.
         profileBundle: null,
         // gameId → status. null = not loaded yet, which readers must NOT paint

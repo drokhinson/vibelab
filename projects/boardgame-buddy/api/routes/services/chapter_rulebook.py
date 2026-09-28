@@ -25,12 +25,11 @@ stranger get different answers for the same row) and PostgREST cannot express
 "or the author is one of my accepted buddies" without a round trip of its own,
 which is `buddy_ids` here.
 
-WHAT 053 CHANGED, and what it deliberately did not. Visibility is untouched:
-the same four readers get the same four answers they always did. What moved is
-how a link ENTERS the queue — asking for review is now the author's own
-decision (`initial_status`), an unreviewed link that nobody was asked about is
-`unlisted` rather than `pending`, and an admin's own link is no longer born
-approved. The two unreviewed states are one case to every reader and two cases
+HOW A LINK ENTERS THE QUEUE (migration 053), which is separate from who may
+read it. Asking for review is the author's own decision (`initial_status`), an
+unreviewed link that nobody was asked about is `unlisted` rather than
+`pending`, and an admin's own link is not born approved. The two unreviewed
+states are one case to every reader and two cases
 to exactly one caller: the admin queue, which lists `pending` and nothing else.
 """
 
@@ -158,11 +157,11 @@ def initial_status(review_requested: bool) -> RulebookStatus:
     the moment they save; they differ in whether an admin has been asked to
     publish the link to everyone else.
 
-    `is_admin` is deliberately NOT a parameter any more. Until 053 an admin's
-    own link was born approved, which made the same act mean two different
-    things depending on who did it and left the one person most likely to paste
-    a link in a hurry as the one person nobody reviewed. An admin approves
-    their own link from the queue now, in one tap, like anybody else's.
+    `is_admin` is deliberately NOT a parameter. An admin's own link born
+    approved would make the same act mean two different things depending on
+    who did it, and leave the one person most likely to paste a link in a
+    hurry as the one person nobody reviewed. An admin approves their own link
+    from the queue, in one tap, like anybody else's.
     """
     return RulebookStatus.PENDING if review_requested else RulebookStatus.UNLISTED
 

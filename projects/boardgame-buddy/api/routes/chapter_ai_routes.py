@@ -12,8 +12,8 @@ themselves. That is what makes a small model the right call here — a draft the
 author is about to edit is cheap to be wrong about, and the alternative is a
 blank form and a rulebook.
 
-Split out of chapter_routes.py, which was already three times the ~300-line
-guideline in CLAUDE.md before a second drafter went into it. The seam is the
+Kept apart from chapter_routes.py, which is already several times the
+~300-line guideline in CLAUDE.md. The seam is the
 one the services already use: chapter_ai.py / chapter_grid_ai.py hold the
 prompts and the coercion, this file holds the two lookups they need and the
 GeminiError → 502 mapping.
@@ -61,7 +61,7 @@ def _game_row_sync(sb: Client, game_id: str) -> dict[str, Any]:
     second helper.
 
     The BGG `description` is deliberately not selected; see the note in
-    chapter_ai._build_prompt for why it left the prompt.
+    chapter_ai._build_prompt for why it is not in the prompt.
     """
     game = (
         sb.table("boardgamebuddy_games")

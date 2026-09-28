@@ -6,8 +6,8 @@
 // ordinary block at the top of a screen, which is what makes it shareable —
 // the onboarding deck (widgets/onboarding-deck.js) draws the same shape under
 // its own .ob-deck__* family and deliberately stays there: it lives inside a
-// body-level overlay that owns its own layout, so the two would have had to
-// grow a shared host to travel together.
+// body-level overlay that owns its own layout, so the two would need a shared
+// host to travel together.
 //
 // Markup only — no state, no lifecycle. The caller owns the step index and
 // re-renders; this returns a string.

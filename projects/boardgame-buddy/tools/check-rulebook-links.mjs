@@ -14,7 +14,7 @@
 //      then an approved one, then whatever is left, and never a denied one.
 //   2. "No rulebook link available" is PRINTED, and only once the answer has
 //      landed. An absent section reads exactly like a section that failed to
-//      draw — which was the state this feature set out to fix — and printing it
+//      draw, and printing it
 //      a beat before a link appears is the one way to be worse than silent.
 //   3. The client never filters on moderation_status. The API decides who may
 //      see a row (services/chapter_rulebook.py); the status is on the wire so

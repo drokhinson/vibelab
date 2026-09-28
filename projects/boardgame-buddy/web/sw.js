@@ -231,8 +231,8 @@ async function openFromPush(data) {
  *
  * Re-subscribing here keeps the OS-level registration alive, but the new
  * endpoint CANNOT be reported from a worker: the API needs a bearer token and
- * the Supabase session lives in the page's localStorage, which is unreachable
- * from here. So this is half the fix, and domain/push.js's boot-time re-sync is
+ * the ID token is minted by the Firebase SDK in the page, which this worker does
+ * not load. So this is half of handling rotation, and domain/push.js's boot-time re-sync is
  * the other half — the authoritative one. Between the two, a rotation costs at
  * most the notifications sent before the app is next opened.
  *
@@ -257,7 +257,7 @@ self.addEventListener("pushsubscriptionchange", (event) => {
 /** The FastAPI backend and Supabase, wherever they're deployed. */
 function isBackend(url) {
   if (url.pathname.startsWith("/api/")) return true;
-  // Supabase Auth + Realtime + Storage all live under *.supabase.co. Matched
+  // Supabase Realtime + Storage live under *.supabase.co. Matched
   // by hostname because the SW has no access to window.APP_CONFIG.
   if (url.hostname.endsWith(".supabase.co")) return true;
   return false;
@@ -298,24 +298,22 @@ async function navigationResponse(req) {
  * that is free, and keeping it is not: the bundle and the stylesheet are the
  * two largest files on the site.
  *
- * EVERYTHING ELSE IS A STABLE URL AND CAN GO STALE UNDER US. This used to be
- * `false` for all of same-origin, on the argument that CACHE carries the
- * build id so a hit is by construction this build's file. That argument has a
- * hole, and the tour fell in it: the cache belongs to whichever worker is
- * ACTIVE, and a new worker only replaces it once it installs and activates.
- * An iOS standalone PWA can keep an old one indefinitely. Meanwhile
- * navigations are network-first, so the shell and the hashed bundle stay
- * current — and the result is an app that looks updated while every
- * stable-url file it lazily loads is frozen at some older build, with no
- * symptom but a screen that looks like an older version of itself. A scene
- * module sat three releases stale that way.
+ * EVERYTHING ELSE IS A STABLE URL AND CAN GO STALE UNDER US. CACHE carrying
+ * the build id does not make a same-origin hit this build's file: the cache
+ * belongs to whichever worker is ACTIVE, and a new worker only replaces it
+ * once it installs and activates. An iOS standalone PWA can keep an old one
+ * indefinitely. Meanwhile navigations are network-first, so the shell and the
+ * hashed bundle stay current — and the result would be an app that looks
+ * updated while every stable-url file it lazily loads is frozen at some older
+ * build, with no symptom but a screen that looks like an older version of
+ * itself.
  *
- * So the default is now stale-while-revalidate: the cached copy is returned
+ * So the default is stale-while-revalidate: the cached copy is returned
  * immediately, nothing blocks, and the entry heals on the next open. The
  * deploy's `?v=` stamp is what fixes a frozen device on the FIRST open, since
  * it makes the url one no cache has ever held; this is the net under it.
  *
- * The CDN entries were always the other case — cached opportunistically on a
+ * The CDN entries are the other case too — cached opportunistically on a
  * first online load, possibly from an error response, and not versioned by
  * anything we control.
  */
@@ -343,9 +341,9 @@ async function cacheFirst(req, revalidate) {
 }
 
 /**
- * True when a subresource request came back as an HTML page. Caching that is
- * what took the whole stylesheet out on a device: a pinned /bgb-*.css hit is
- * never revalidated, so the page stayed unstyled until the next deploy.
+ * True when a subresource request came back as an HTML page. Caching that
+ * would take the whole stylesheet out: a pinned /bgb-*.css hit is never
+ * revalidated, so the page would stay unstyled until the next deploy.
  */
 function servedHtmlFor(req, res) {
   if (!res || !req.destination || req.destination === "document") return false;
@@ -456,7 +454,7 @@ async function precacheOne(cache, url) {
   // because a stale copy would seed this build's cache with the PREVIOUS
   // build's script list — one file whose staleness cascades into every other.
   // Nothing else here has that property, and forcing a full network fetch for
-  // all of them re-downloaded the whole shell after every deploy.
+  // all of them would re-download the whole shell after every deploy.
   //
   // A plain fetch is still correct, but only because _headers makes it so,
   // and that is worth saying precisely. The bundle and the stylesheet are
@@ -469,14 +467,13 @@ async function precacheOne(cache, url) {
   //
   // "The browser's own freshness rules" is only safe where the origin states
   // them, which is why /ui/* and /widgets/* carry no-cache — the lazily-loaded
-  // modules are prefetch links that matched no other rule and so went out with
-  // no Cache-Control at all.
+  // modules are prefetch links that match no other rule and would otherwise go
+  // out with no Cache-Control at all.
   //
-  // That is worth having and was NOT what froze the tour's scene. This fetch
-  // runs inside the worker and reaches the network; the one that was being
-  // answered stale never left the device, because the fetch handler served it
-  // from an older worker's cache. The url stamp and the revalidate default are
-  // the fixes for that. A new file fetched by url rather than bundled wants
+  // That rule does not cover a stale worker. This fetch runs inside the worker
+  // and reaches the network; a request the fetch handler answers from an older
+  // worker's cache never leaves the device. The url stamp and the revalidate
+  // default cover that. A new file fetched by url rather than bundled wants
   // the no-cache rule too, but do not mistake it for protection against a
   // worker that is not updating.
   const res = await fetchWithDeadline(url, PRECACHE_TIMEOUT_MS);

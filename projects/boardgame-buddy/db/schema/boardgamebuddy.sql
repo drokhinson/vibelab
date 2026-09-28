@@ -98,9 +98,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   -- BGG quality stats (migration 038). All nullable: NULL = never synced, and
   -- every reader treats it as neutral. Filled by
   -- POST /games/admin/backfill-metadata from /thing?stats=1.
-  -- bgg_stats_synced_at was the backfill's queue marker until 045 moved that
-  -- to bgg_meta_synced_at; it is still written, and still means "when the
-  -- ratings landed".
+  -- bgg_stats_synced_at is not the backfill's queue marker (bgg_meta_synced_at
+  -- is, 045); it is written with the ratings and means "when the ratings
+  -- landed".
   bgg_rating NUMERIC(4,2),
   bgg_rank INTEGER,
   bgg_weight NUMERIC(4,2),
@@ -108,8 +108,8 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   bgg_stats_synced_at TIMESTAMPTZ,
   -- BGG boardgamepublisher links in BGG's order, capped at 4 by the import
   -- (migration 040). Nullable with no default, unlike categories/mechanics.
-  -- '{}' = synced, BGG credits nobody; NULL no longer means "never synced"
-  -- (045), and readers coerce both to [].
+  -- '{}' = synced, BGG credits nobody; NULL does not mean "never synced"
+  -- (bgg_meta_synced_at says that, 045), and readers coerce both to [].
   publishers TEXT[],
   -- When POST /games/admin/backfill-metadata last read BGG's /thing?stats=1
   -- record for this game (migration 046). NULL with a non-null bgg_id IS that
@@ -176,7 +176,7 @@ ALTER TABLE public.boardgamebuddy_bgg_thumb_cache ENABLE ROW LEVEL SECURITY;
 
 
 -- ── Profiles ──────────────────────────────────────────────────────────────────
--- One row per account, keyed to auth.users so a deleted auth user cascades.
+-- One row per account, keyed by the account id.
 -- The two bgg_last_*_started_at stamps are what the sync and push status RPCs
 -- count progress from; needs_setup drives the first-run onboarding deck.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
@@ -200,8 +200,8 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   bgg_last_check_started_at TIMESTAMPTZ,
   -- Read watermark for the WHOLE notification bell — plays you were seated in,
   -- buddy requests received, and requests of yours that were accepted — not
-  -- just link notifications, despite the name (migration 009 widened what it
-  -- covers and kept the name; see the COMMENT ON COLUMN there).
+  -- just link notifications, despite the name (see the COMMENT ON COLUMN in
+  -- migration 009).
   link_notifications_seen_at TIMESTAMPTZ,
   -- How much of that bell this account wants PUSHED to its devices
   -- (migration 017). Cumulative: 'all' implies 'actionable'. Per account, so it
@@ -211,11 +211,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   push_tier TEXT DEFAULT 'none'::text NOT NULL,
   -- Watermark for the what's-new popup (migration 042): a release notice
   -- published at or before this is never shown again. NOT NULL DEFAULT now() is
-  -- load-bearing three ways — a new account starts watermarked at signup so it
-  -- never sees the backlog, existing rows were watermarked by the ADD COLUMN
-  -- itself, and there is no NULL so no COALESCE direction to get backwards
-  -- (link_notifications_seen_at above is the older, nullable form of the same
-  -- idea). Advanced only by bgb_mark_release_notices_seen.
+  -- load-bearing two ways — a new account starts watermarked at signup so it
+  -- never sees the backlog, and there is no NULL so no COALESCE direction to
+  -- get backwards (link_notifications_seen_at above is a nullable watermark of
+  -- the same kind). Advanced only by bgb_mark_release_notices_seen.
   release_notices_seen_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   -- Board Game Arena account link (migration 043). One JSONB cookie blob
   -- rather than BGG's three named cookie columns: BGA has no documented cookie
@@ -228,11 +227,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   bga_last_login_at TIMESTAMPTZ,
   bga_last_import_at TIMESTAMPTZ,
   CONSTRAINT boardgamebuddy_profiles_pkey PRIMARY KEY (id),
-  -- NO FK TO auth.users. 035_drop_profiles_auth_users_fk.sql dropped it at the
-  -- Identity Platform cutover: accounts live in GCP now and auth.users is not
-  -- written any more, so the constraint refused every new profile. This
-  -- snapshot carried the dead line until 051 replayed it into a scratch
-  -- database and every INSERT failed on it.
+  -- NO FK TO auth.users (035_drop_profiles_auth_users_fk.sql): accounts live in
+  -- GCP Identity Platform and auth.users is not written, so the constraint
+  -- would refuse every new profile.
   CONSTRAINT bgb_profiles_username_format CHECK ((username ~ '^[a-z0-9_]{3,30}$'::text)),
   CONSTRAINT boardgamebuddy_profiles_push_tier_check CHECK ((push_tier = ANY (ARRAY['none'::text, 'actionable'::text, 'all'::text])))
 );
@@ -310,9 +307,8 @@ GRANT SELECT ON public.boardgamebuddy_countries TO boardgamebuddy_role;
 
 
 -- ── Guide chapters ────────────────────────────────────────────────────────────
--- User-authored rules chapters. Called 'chunks' until archive/018 renamed
--- the three chapter tables; that migration also deleted every seeded chapter,
--- so this table starts empty on a fresh database.
+-- User-authored rules chapters. Nothing seeds them, so this table starts
+-- empty on a fresh database.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
   id UUID DEFAULT gen_random_uuid() NOT NULL,
   game_id UUID NOT NULL,
@@ -322,7 +318,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
   layout TEXT DEFAULT 'text'::text NOT NULL,
   content TEXT NOT NULL,
   -- Row definitions for a layout='scoring_grid' chapter (migration 018). NULL
-  -- for 'text'. `content` still carries a generated plain-text mirror of these
+  -- for 'text'. `content` carries a generated plain-text mirror of these
   -- rows so pool search and the moderation preview keep working. `mode`
   -- (migration 032) says how an EXPANSION's grid meets the base game's —
   -- add_on|replace — and is NULL/absent on a base game's own grid.
@@ -423,14 +419,14 @@ GRANT SELECT ON public.boardgamebuddy_chapter_reports TO boardgamebuddy_role;
 
 -- ── Per-user chapter selections ───────────────────────────────────────────────
 -- One row per (user, chapter): this viewer's opinion of that chapter, in both
--- directions. `state='kept'` is the chapter in their guide — what a row meant
--- outright before migration 033 — and `state='disliked'` is the inverse: turned
+-- directions. `state='kept'` is the chapter in their guide, and `state='disliked'` is the
+-- inverse: turned
 -- down, so it is filtered out of their chapter pool, their pool count and the
 -- scoring-template offer, and shows only in the guide builder's Turned-down
 -- section. Per-viewer and one-directional; the author is never told.
 --
 -- The UNIQUE below is what makes "kept and disliked" unrepresentable, which is
--- why 033 put the state on this row rather than in a table of its own.
+-- why the state lives on this row rather than in a table of its own (033).
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_chapters (
   id UUID DEFAULT gen_random_uuid() NOT NULL,
   user_id UUID NOT NULL,
@@ -454,8 +450,8 @@ GRANT SELECT ON public.boardgamebuddy_user_chapters TO boardgamebuddy_role;
 
 -- ── Collections ───────────────────────────────────────────────────────────────
 -- The shelf: one row per user per game, with the shelf status. 'played' is a
--- legacy status the app no longer writes — the Played shelf is derived from
--- boardgamebuddy_plays. The CHECK still admits it so old rows stay valid.
+-- status the app does not write — the Played shelf is derived from
+-- boardgamebuddy_plays. The CHECK admits it so rows that hold it stay valid.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
   id UUID DEFAULT gen_random_uuid() NOT NULL,
   user_id UUID NOT NULL,
@@ -570,8 +566,8 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddy_edges (
   -- WHO said yes, which is not derivable as "whichever party is not
   -- requested_by". A QR scan writes an edge that is born accepted with
   -- requested_by = the scanner and nobody having sent a request, so the derived
-  -- answer names the wrong person on that path. Added by migration 009; NULL on
-  -- rows accepted before it, which simply produce no notification.
+  -- answer names the wrong person on that path. (migration 009). NULL = not
+  -- recorded, which simply produces no notification.
   accepted_by UUID,
   -- Private per-viewer nicknames (migration 012). TWO columns because the row
   -- is canonical: "the alias I set" is a property of which SIDE of the pair you
@@ -735,8 +731,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_players_play ON public.boardgamebuddy_pl
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user_play ON public.boardgamebuddy_play_players USING btree (player_user_id, play_id) WHERE (player_user_id IS NOT NULL);
 -- One account, one seat, per play (migration 023). Ghost seats carry a NULL
 -- here and sit outside the predicate on purpose: two same-named ghosts at one
--- table is a legitimate roster, where one ACCOUNT twice never is. The three
--- importers each used to write it — see the migration header.
+-- table is a legitimate roster, where one ACCOUNT twice never is.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_bgb_play_players_play_user ON public.boardgamebuddy_play_players USING btree (play_id, player_user_id) WHERE (player_user_id IS NOT NULL);
 -- The driving index for the notifications feed: the viewer's own seats, newest
 -- first. Partial on the same predicate as idx_bgb_play_players_user_play, which
@@ -1148,7 +1143,7 @@ GRANT SELECT ON public.boardgamebuddy_bga_player_links TO boardgamebuddy_role;
 
 
 -- ── Column documentation ─────────────────────────────────────────────────────
--- Carried over from the archive. These live in the database itself, so they
+-- These live in the database itself, so they
 -- reach anyone reading the schema through psql \d+ or a GUI client, not just
 -- readers of this file.
 

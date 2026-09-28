@@ -23,7 +23,7 @@ const ScrapEditor = {
 
   _render() {
     // Drop any stale modal DOM but keep _scrap — close() nulls _scrap, which
-    // would leave `s` null here (the bug this replaced).
+    // would leave `s` null here.
     document.getElementById('scrap-editor-modal')?.remove();
     const s = this._scrap;
     if (!s) return;

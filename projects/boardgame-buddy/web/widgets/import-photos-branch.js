@@ -11,8 +11,8 @@
 // `navLabel`, `onEnter`, `resetFormState`) and holds the handlers its own step
 // bodies call by name.
 //
-// Was views/photo-import-view.js. The pager is unchanged — it is the fast path
-// through a bulk assign, and the shared review after it is the considered one.
+// The pager is the fast path through a bulk assign, and the shared review
+// after it is the considered one.
 
 (function () {
   class ImportPhotosBranch {
@@ -53,10 +53,9 @@
       this._readProgress = null;
       this._partners = null;
       this._loadingPartners = false;
-      // Monotonic, and ADVANCING rather than restarting. It used to be set
-      // back to 0 here while the notes importer's equivalent advanced, so a
-      // read still in flight from a previous mount matched the new mount's
-      // first seq and painted its photos over it.
+      // Monotonic, and ADVANCING rather than restarting, so a read still in
+      // flight from a previous mount can never match the new mount's first seq
+      // and paint its photos over it.
       this._readSeq = (this._readSeq || 0) + 1;
     }
 
@@ -357,16 +356,15 @@
       // Seated identity, not seated SPELLING. An account picked off the buddy
       // list carries its display name and the same account found through
       // "search all of BoardgameBuddy" can carry another, so a name-only set
-      // let one person be seated twice in one play — which migration 023's
-      // unique index now refuses outright, and which nobody should be able to
+      // would let one person be seated twice in one play — which migration 023's
+      // unique index refuses outright, and which nobody should be able to
       // ask for in the first place.
       const alreadySeated = new Set(shot.players.map((p) => p.name));
       const seatedAccounts = new Set(shot.players.map((p) => p.userId).filter(Boolean));
       // `candidates` is "everyone addable, already filtered of people in the
-      // roster by the caller" — the sheet's own contract, which this used to
-      // leave to the confirm handler, so a seated row was offered and then
-      // silently dropped. Now that the importer is seated by default, that row
-      // is YOU, on every single open.
+      // roster by the caller" — the sheet's own contract. Left to the confirm
+      // handler, a seated row would be offered and then silently dropped, and
+      // with the importer seated by default that row is YOU, on every open.
       const seatedNames = new Set(Array.from(alreadySeated).map((n) => String(n).toLowerCase()));
       const runGhosts = window.ImportPeople.ghostsIn(
         this.draft.shots.map((sh) => sh.players || []));

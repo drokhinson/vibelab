@@ -19,8 +19,7 @@
 //     review away and re-read BoardGameGeek.
 //   • The sequence guard ADVANCES on reset rather than restarting at 0. A read
 //     still in flight from a previous mount must never match again and paint
-//     over whatever the next one is doing. Restarting it at zero is the bug the
-//     photo branch used to carry.
+//     over whatever the next one is doing.
 
 (function () {
   class ImportBggBranch {

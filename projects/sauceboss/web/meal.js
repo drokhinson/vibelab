@@ -169,8 +169,7 @@ function mealPickSubtype(subtypeId) {
 }
 
 function _proceedToSauceSelector(dish, subtype) {
-  // Set the legacy state shape so the existing sauce-selector + recipe
-  // renderers work without changes:
+  // Set the legacy state shape the sauce-selector + recipe renderers read:
   //   selectedItem  = the dish (always — it's the "main" item in the recipe)
   //   selectedPrep  = the subtype (optional; renderers already treat it as
   //                   an override for cookTime / instructions)
@@ -191,7 +190,7 @@ function _proceedToSauceSelector(dish, subtype) {
   state.saucesForCurrentItem = matches;
   // Also seed allIngredients (used by the ingredient filter). Saucebook
   // envelopes are slim — read the pre-built `ingredientNames` Set rather
-  // than the (no-longer-present) `ingredients[]` array.
+  // than the (absent) `ingredients[]` array.
   const seen = new Set();
   for (const s of matches) {
     if (s.ingredientNames instanceof Set) {

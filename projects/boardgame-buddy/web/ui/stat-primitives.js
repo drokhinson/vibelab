@@ -1,9 +1,9 @@
 // ui/stat-primitives.js — the labelled horizontal bar, shared by both stats screens.
 //
-// Extracted at instance #2 (`.claude/rules/ui-object-design.md` §4), not the
-// fourth: the Profile hub's Stats spoke has drawn these for table sizes and
-// per-game plays since it shipped, and the admin Usage spoke needs the same
-// mark for its screen leaderboard and its per-table Postgres sizes.
+// Extracted at instance #2 (`.claude/rules/ui-object-design.md` §4): the
+// Profile hub's Stats spoke draws these for table sizes and per-game plays,
+// and the admin Usage spoke needs the same mark for its screen leaderboard
+// and its per-table Postgres sizes.
 //
 // It owns APPEARANCE ONLY — one function, one string, no state and no DOM
 // work, so it composes inside any view's template literal. The `.stat-bar`
@@ -50,8 +50,8 @@
       // The label's markup is built on ONE line on purpose. `.stat-bar__k` is
       // nowrap with an ellipsis, and HTML collapses the indentation of a
       // pretty-printed template into a real leading space — which shifts every
-      // label a few pixels right and can tip one that previously just fitted
-      // into being truncated. Do not re-indent this.
+      // label a few pixels right and can tip one that just fits into being
+      // truncated. Do not re-indent this.
       const k = `${escapeHtml(label)}${o.sub ? `<em>${escapeHtml(o.sub)}</em>` : ""}`;
       return `
         <div class="stat-bar${cls ? " " + cls : ""}">

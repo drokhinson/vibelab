@@ -16,9 +16,9 @@
 // iOS 26 changed what "on the keyboard" means. Its form-assistant bar
 // (⌃ ⌄ ✓) became a floating glass pill that is NOT part of the keyboard: the
 // visual viewport ends at the keyboard's top edge and the pill floats over the
-// bottom of it — exactly where this bar docks, so the pill covered it. Earlier
-// iOS attached that bar to the keyboard, outside the viewport, so docking at
-// --bgb-kb-inset was right there and still is. The bar lifts on iOS 26+ only;
+// bottom of it — exactly where this bar docks, so the pill would cover it.
+// Earlier iOS attaches that bar to the keyboard, outside the viewport, so
+// docking at --bgb-kb-inset is right there. The bar lifts on iOS 26+ only;
 // see liftsOverAssistant() for how that is told apart.
 //
 // The buttons must not take focus from the cell, or the keyboard drops and

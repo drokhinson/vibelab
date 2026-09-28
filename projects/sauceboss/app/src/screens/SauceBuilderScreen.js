@@ -52,7 +52,7 @@ function emptyStep() {
     inputFromSteps: [],
     estimatedTime: '',
     // Empty ingredients list — the bottom-sheet editor is the only entry
-    // point. Matches the web's behavior post-ab37b01.
+    // point. Matches the web's behavior.
     ingredients: [],
   };
 }
@@ -874,9 +874,9 @@ export default function SauceBuilderScreen({ navigation, route }) {
             isStandalone={isStandalone}
             onConfirm={handleSave}
             // Discard exits the wizard entirely and drops the user on the
-            // Saucebook tab — replaces the previous "← Back to Dish Pairing"
-            // link which was a confusing destination when review is the
-            // entry screen for the edit flow.
+            // Saucebook tab — a "← Back to Dish Pairing" link would be a
+            // confusing destination when review is the entry screen for the
+            // edit flow.
             onDiscard={exitToSaucebook}
           />
         ) : null}

@@ -178,12 +178,12 @@
   /**
    * Which groups start expanded: none of them.
    *
-   * They used to open whenever they held anything, which on a real shelf meant
-   * the tab opened as one undifferentiated wall of rows — and in "show all"
-   * mode, where every group lists the entire catalog for its base game, there
-   * was no way to see what you own without scrolling past everything you
-   * don't. Closed by default makes the tab an index you drill into, and the
-   * expand-all control next to the show-all switch reaches the old view in one
+   * Opening every group that holds anything would make the tab, on a real
+   * shelf, one undifferentiated wall of rows — and in "show all" mode, where
+   * every group lists the entire catalog for its base game, there would be no
+   * way to see what you own without scrolling past everything you don't.
+   * Closed by default makes the tab an index you drill into, and the
+   * expand-all control next to the show-all switch opens everything in one
    * tap.
    *
    * Every group is named explicitly rather than returning {}: the caller

@@ -19,10 +19,10 @@
 // person appears in play_players", so the id sent is the VIEWER's, not the
 // target's — see _buddyId().
 //
-// REACHING THE END LOADS THE NEXT PAGE BY GESTURE. The list used to end in a
-// "Load more" button, which is three steps (stop the flick, find the target,
-// travel to it) to carry on doing the one thing the thumb was already doing.
-// Carrying the same flick past the last row instead is none of them —
+// REACHING THE END LOADS THE NEXT PAGE BY GESTURE. A "Load more" button is
+// three steps (stop the flick, find the target, travel to it) to carry on
+// doing the one thing the thumb was already doing. Carrying the same flick
+// past the last row is none of them —
 // ui/pull-to-load-more.js owns the gesture, _renderFooter() below owns the
 // strip that says it is there, and that strip stays a real button so a
 // pointer, a keyboard and a screen reader keep the path they had.
@@ -257,8 +257,8 @@
       // yet" empty state on top of each other while the list is still
       // fetching. `_loaded` alone isn't enough to detect this: the
       // profile-bundle seed can hydrate an *empty* list (and a refresh
-      // clears _plays mid-flight), which used to claim there are no plays
-      // while the fetch that would prove otherwise was still running.
+      // clears _plays mid-flight), which would claim there are no plays
+      // while the fetch that would prove otherwise is still running.
       if (this._plays.length === 0 && !this._query && (!this._loaded || this._loading)) {
         this.container.innerHTML = `
           ${this._renderHead()}
@@ -338,8 +338,8 @@
 
     _renderBody() {
       // Only when there is nothing else to show. A page that failed PART WAY
-      // down the list — much more reachable now that getting to the end loads
-      // by gesture — has rows on screen worth keeping, and taking the whole
+      // down the list — easy to reach, since getting to the end loads by
+      // gesture — has rows on screen worth keeping, and taking the whole
       // list away to report it costs the user their place as well as the rows.
       // _renderFooter() reports that one, where the load was asked for.
       if (this._error && this._plays.length === 0) {
@@ -496,8 +496,8 @@
 
     async _load({ reset = false } = {}) {
       const seq = ++this._loadSeq;
-      // The page only advances once its rows are in — a failed "Load more"
-      // otherwise skipped that page for good on the next tap.
+      // The page only advances once its rows are in — a failed load would
+      // otherwise skip that page for good on the next attempt.
       const page = reset ? 1 : this._page + 1;
       this._loading = true;
       this._error = null;
@@ -543,7 +543,7 @@
       this._query = value;
       clearTimeout(this._searchTimer);
       // Still a server query (search is not local for plays), but repeats —
-      // backspacing through a term — now come back from cache.
+      // backspacing through a term — come back from cache.
       this._searchTimer = setTimeout(() => this._load({ reset: true }), 300);
     }
   }

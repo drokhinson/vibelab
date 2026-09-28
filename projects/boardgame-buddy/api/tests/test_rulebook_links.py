@@ -1,10 +1,9 @@
 """A rulebook link is a chapter that is gated, and the gate is per reader.
 
-Migration 052 makes a game's rulebook a `layout='rulebook_link'` chapter instead
-of one admin-curated column on the games row. That buys open authoring, and open
-authoring on an OUTBOUND LINK is only safe with a gate, so the two shipped
-together: `moderation_status` on the row, and one function deciding who may see
-a row in which state.
+A game's rulebook is a `layout='rulebook_link'` chapter (migration 052), not an
+admin-curated column on the games row. That buys open authoring, and open
+authoring on an OUTBOUND LINK is only safe with a gate: `moderation_status` on
+the row, and one function deciding who may see a row in which state.
 
 What this file pins is that function and the two write paths that set it,
 because every other read path in the API just calls
@@ -21,7 +20,7 @@ because every other read path in the API just calls
   * ASKING FOR REVIEW IS THE AUTHOR'S DECISION (migration 053), and it is the
     only thing that separates `unlisted` from `pending` — the two reach exactly
     the same readers, and only one of them is queue work. NOBODY'S LINK IS BORN
-    APPROVED any more, an admin's included.
+    APPROVED, an admin's included.
   * EDITING THE URL RE-OPENS THE GATE. An approval is a decision about a
     destination, not about a row — without this, an author could get an
     innocuous PDF approved and then point the approved row anywhere.
@@ -354,9 +353,9 @@ def test_the_layout_and_the_type_must_agree_in_both_directions():
 
 def test_the_gate_a_new_link_opens_at_is_the_authors_answer():
     """Two states, and the author picks between them with the save form's
-    review switch. Neither is approved: as of migration 053 an admin approves
-    their own link from the queue like anybody else's, which is one tap and
-    leaves an audit trail a self-approval never did."""
+    review switch. Neither is approved: an admin approves their own link from
+    the queue like anybody else's (migration 053), which is one tap and leaves
+    an audit trail a self-approval would not."""
     assert R.initial_status(True) is RulebookStatus.PENDING
     assert R.initial_status(False) is RulebookStatus.UNLISTED
 
@@ -451,8 +450,8 @@ def test_a_client_that_sends_no_answer_submits():
 
 
 def test_an_admins_own_link_goes_through_the_same_gate():
-    """Until 053 it was born approved, which made one act mean two different
-    things depending on who did it and left the person most likely to paste a
+    """Born approved, an admin's link would make one act mean two different
+    things depending on who did it and leave the person most likely to paste a
     link in a hurry as the one person nobody reviewed."""
     sb = _create_sb()
     C._create_chapter_sync(sb, "game-1", _body(), _user(is_admin=True))
@@ -565,7 +564,7 @@ def test_saving_the_same_url_again_leaves_an_approval_alone():
 
 
 def test_an_admin_editing_a_link_re_opens_the_gate_like_anybody_else():
-    """053: an admin's edit is no longer its own approval. Same reasoning as
+    """An admin's edit is not its own approval (migration 053). Same reasoning as
     the create path — the queue is one tap away and a self-approval leaves an
     audit trail that cannot be told apart from a real decision."""
     sb = _update_sb("https://example.com/old.pdf")

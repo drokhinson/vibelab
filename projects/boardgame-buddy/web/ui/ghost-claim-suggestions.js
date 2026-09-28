@@ -89,8 +89,7 @@
     // closes the HTML attribute the JS is written inside. jsStr alone does not
     // escape a double quote, and these names are FREE TEXT TYPED BY SOMEONE
     // ELSE — a ghost called `Bob "the ghost"` would end the onclick attribute
-    // early and inject markup. That could not happen before this feature,
-    // because the only ghost names on screen were the viewer's own.
+    // early and inject markup.
     const args = `'${jsStr(s.owner_user_id)}','${jsStr(s.ghost_name_key)}','${jsStr(s.ghost_display_name)}'`;
     const claim = escapeAttr(`event.stopPropagation();window.buddiesView._claimGhost(${args})`);
     const dismiss = escapeAttr(`event.stopPropagation();window.buddiesView._dismissGhost(${args})`);

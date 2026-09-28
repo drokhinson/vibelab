@@ -4,13 +4,7 @@
 // from the firebase block in window.APP_CONFIG and reports false if it cannot,
 // which the app renders as "Auth is not configured".
 //
-// THE SUPABASE AUTH BRANCH IS GONE. It existed so the frontend and backend
-// swaps did not have to be simultaneous and so rollback was flipping four repo
-// variables rather than reverting a commit. That stopped being a rollback once
-// accounts existed only in Identity Platform — going back would orphan them —
-// and `api/jwt_auth.py` dropped the matching verifier in the same commit.
-//
-// ONE CONSEQUENCE WORTH KNOWING: local dev can no longer sign in without the
+// ONE CONSEQUENCE WORTH KNOWING: local dev cannot sign in without the
 // four BGB_FIREBASE_* values in its config.js. They are repo *variables*, not
 // secrets — the API key identifies the project and authorizes nothing, since
 // access is decided by Authorized Domains — so copying them into a local
@@ -24,14 +18,14 @@
 // Callers across the app read exactly two things off `window.session`:
 // `access_token` (domain/api.js#_authHeader, domain/outbox.js:233) and
 // `user.id` (domain/outbox.js#_currentUid). The shape is Supabase's, because
-// ~14 call sites were written against it and a Firebase user object would have
-// made every one of them learn a second one. So it is SYNTHESISED:
+// ~14 call sites read it and a Firebase user object would make every one of
+// them learn a second one. So it is SYNTHESISED:
 //
 //     { access_token: "<jwt>", user: { id, email } }
 //
 // `user.id` is the Firebase uid, which for every imported account IS the
 // original Supabase UUID (see tools/import-users-to-firebase.mjs). That is
-// what lets boardgamebuddy_profiles.id keep matching after the swap.
+// what lets boardgamebuddy_profiles.id match it.
 // -----------------------------------------------------------------------------
 
 (function () {
@@ -46,7 +40,7 @@
    * It exists because the redirect leaves the document: the fact that we
    * started one cannot be held in memory across it, and consumeRedirectResult
    * below must not ask the SDK about a redirect that never happened. Asking
-   * anyway would be a real regression — getRedirectResult() touches the auth
+   * anyway would do real harm — getRedirectResult() touches the auth
    * domain's storage, which is exactly what Safari's ITP and Firefox's total
    * cookie protection block on a cross-origin authDomain (the reason the popup
    * is preferred at all, see signInWithGoogle). A storage rejection surfaced
@@ -69,13 +63,13 @@
    * still standing in front of.
    *
    * A counter rather than a boolean so it cannot be left latched by two
-   * overlapping attempts — though the screen no longer permits a second one.
+   * overlapping attempts — though the screen does not permit a second one.
    */
   let _signInPending = 0;
 
   // Storage throws outright in Safari private mode, and nothing here is worth
   // taking sign-in down for. A tab that cannot mark a redirect simply never
-  // consumes its result, which is the behaviour before any of this existed.
+  // consumes its result.
   function _safeStorage(fn, fallback) {
     try { return fn(); } catch (_) { return fallback; }
   }
@@ -167,9 +161,8 @@
     /**
      * Stand up whichever backend is configured.
      *
-     * `window.supabaseClient` is still created here, and that is not
-     * leftovers. Identity Platform replaced Supabase *Auth*; it did not
-     * replace Supabase. domain/live-scores.js and domain/session-phase.js
+     * `window.supabaseClient` is created here too: Identity Platform does
+     * auth, but the data still lives in Supabase. domain/live-scores.js and domain/session-phase.js
      * subscribe to realtime channels and read and write the live-session
      * tables through that client directly, and each of them is written as
      * `if (!window.supabaseClient) return;` — so dropping it would not error,
@@ -180,13 +173,13 @@
      * its own. That is what Supabase's third-party
      * auth integration reads, so PostgREST and realtime both receive the
      * Identity Platform JWT and the `auth.uid()` predicates on the live
-     * session tables keep resolving to the same UUID they always did. Without
+     * session tables resolve to the account's UUID. Without
      * it the client would fall back to the anon key and every one of those
      * policies would fail closed — the failure MIGRATION_PLAN.md 3-ALT.2 warns
      * about, arrived at from the other direction.
      *
      * @returns {boolean} false when nothing could be initialised — the caller
-     *   routes to /auth and shows "Auth is not configured", same as before.
+     *   routes to /auth and shows "Auth is not configured".
      */
     init() {
       const cfg = _cfg();
@@ -194,8 +187,8 @@
       // serves a spectator opening a public session link.
       if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) return false;
       if (!window.supabase || !window.supabase.createClient) return false;
-      // No Firebase config, or a gstatic script that did not load, is now
-      // simply "auth is not configured" — there is nothing to fall back to.
+      // No Firebase config, or a gstatic script that did not load, is simply
+      // "auth is not configured" — there is nothing to fall back to.
       // The realistic cause of the second is a cold offline start; sw.js
       // caches the SDK on the first online load, so it stays rare.
       if (!_firebaseConfigured()) return false;
@@ -272,8 +265,8 @@
      *   auth-view.js reads one answer rather than a provider's error code.
      *
      *   `session: false` is unreachable on this provider and kept in the shape
-     *   because auth-view.js branches on it: Supabase could create an account
-     *   pending email confirmation, and that branch is the difference between
+     *   because auth-view.js branches on it: for an account created pending
+     *   email confirmation, that branch is the difference between
      *   "check your email" and landing the user on the feed. It is cheap
      *   insurance against email verification being turned on later.
      */
@@ -304,13 +297,12 @@
      * Redirect stays as the fallback because a popup blocker, or an embedded
      * webview with no window.open, leaves no other route.
      *
-     * WHAT IT RETURNS, AND WHY IT HAS TO RETURN ANYTHING. This used to resolve
-     * with nothing on all three of its outcomes, which made a credential in
-     * hand indistinguishable from a popup the user shut. The caller could
-     * therefore do nothing but re-render the form it was already showing — so
-     * the popup closed, the sign-in screen came back, and the person who had
-     * just signed in successfully was looking at the login button again while
-     * /bootstrap ran. Several of them pressed it.
+     * WHAT IT RETURNS, AND WHY IT HAS TO RETURN ANYTHING. Resolving with
+     * nothing would make a credential in hand indistinguishable from a popup
+     * the user shut, and the caller could do nothing but re-render the form it
+     * was already showing — so the person who had just signed in successfully
+     * would be looking at the login button again while /bootstrap ran, and
+     * pressing it.
      *
      *   "signed-in"    the credential is in hand. The auth state listener in
      *                  init.js is already running; the caller's job is to get
@@ -350,9 +342,9 @@
      * Surface an error left behind by the redirect fallback.
      *
      * A successful redirect sign-in already arrives through onChange, so this
-     * is only about not swallowing the failure case — which, before this was
-     * wired up, meant a popup-blocked browser sent the user to Google and
-     * brought them back to a login screen that said nothing at all.
+     * is only about not swallowing the failure case — without it, a
+     * popup-blocked browser sends the user to Google and brings them back to
+     * a login screen that says nothing at all.
      *
      * Safe to call always, and cheap: with no redirect marked (see
      * REDIRECT_PENDING_KEY) it answers without touching the SDK. Returns the

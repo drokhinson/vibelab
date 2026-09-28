@@ -5,22 +5,21 @@
 // Every import source resolves names into seats, and every one of them has to
 // answer the same two questions the same way, because migration 023's
 // uq_bgb_play_players_play_user REFUSES a play that seats one account twice.
-// The notes importer learned that the hard way: a note saying "Jas" on one
-// line and "Jasmine" on the next imported a two-player game with Jasmine in it
-// twice, once winning and once not.
+// Without the collapse, a note saying "Jas" on one line and "Jasmine" on the
+// next imports a two-player game with Jasmine in it twice, once winning and
+// once not.
 //
-// WHY THIS EXISTS NOW. `.claude/rules/ui-object-design.md` §4 says extract at
-// instance #2. The BGA source is instance #3, and copying the collapse a third
-// time is how the three copies start disagreeing about a merge — which is not
-// a cosmetic drift, it is a play the server rejects.
+// WHY THIS IS SHARED. `.claude/rules/ui-object-design.md` §4 says extract at
+// instance #2. There are three sources, and copying the collapse into each is
+// how the copies start disagreeing about a merge — which is not a cosmetic
+// drift, it is a play the server rejects.
 //
 // WHAT IT DOES NOT DO YET. domain/play-import.js and domain/photo-import.js
-// still carry their own copies; only domain/bga-import.js reads this. That is
-// deliberate sequencing, not an oversight: migrating two shipping importers in
-// the same change that adds a third source risks all three at once. What makes
-// the migration safe later is that tools/check-import-wizard.mjs asserts all
-// three models' whoOf() agree on the key shape — so the day they are pointed
-// here, the gate already covers it. Point them here; do not copy this again.
+// still carry their own copies; only domain/bga-import.js reads this. What
+// makes pointing them here safe is that tools/check-import-wizard.mjs asserts
+// all three models' whoOf() agree on the key shape — so the day they are
+// pointed here, the gate already covers it. Point them here; do not copy this
+// again.
 
 (function () {
   const key = (s) => String(s || "").trim().toLowerCase();

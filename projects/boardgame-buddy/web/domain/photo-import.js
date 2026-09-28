@@ -50,9 +50,8 @@
   const MAX_SHOTS = 30;
   const IMPORT_TIMEOUT_MS = 60000;
 
-  // `review` is new: the pager used to run straight into the summary, and the
-  // shared review now sits between them, so a photo import gets the same
-  // considered last pass over its plays that a note always had.
+  // `review` sits between the pager and the summary, so a photo import gets
+  // the same considered last pass over its plays that a note does.
   const STEPS = ["photos", "assign", "review", "import"];
 
   /**
@@ -325,8 +324,8 @@
      * adds by DISPLAY NAME, which is the one thing two rows of one account can
      * differ in: the buddy list spells someone by their display name and the
      * search-everyone results by whatever the search matched, so re-opening
-     * the sheet and picking the same person from the other list seated them
-     * twice. Migration 023's unique index refuses that outright now; this is
+     * the sheet and picking the same person from the other list would seat
+     * them twice. Migration 023's unique index refuses that outright; this is
      * what stops the user ever meeting the refusal. Ghost rows collapse on the
      * name, case-insensitively, for the same reason and by the same rule the
      * notes importer uses.
@@ -379,10 +378,9 @@
     /**
      * A shot is importable once it names a game AND seats somebody.
      *
-     * The roster half is migration 023's invariant. It used to say "everything
-     * else is optional", and a play with nobody at it imported: an empty
-     * scoreboard on the card, a play counting towards nobody's record, and no
-     * ghost for anyone to claim later. The photo is right there and the seats
+     * The roster half is migration 023's invariant: a play with nobody at it
+     * would be an empty scoreboard on the card, a play counting towards
+     * nobody's record, and no ghost for anyone to claim later. The photo is right there and the seats
      * are two taps, so this is a thing to go and fix rather than a thing to
      * write down.
      *
@@ -733,7 +731,7 @@
         countrySource: s.countrySource || null,
         game: s.game || null,
         // Normalised seat by seat rather than assigned wholesale, so a draft
-        // saved before scores existed restores with the field explicitly
+        // saved without scores restores with the field explicitly
         // absent instead of undefined. That is what lets `score` stay an
         // ADDITIVE change and keeps DRAFT_VERSION where it is — bumping it
         // would throw away every in-flight import on deploy day. Changing the

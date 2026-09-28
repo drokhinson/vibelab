@@ -13,10 +13,10 @@
 
   // ── Lobby prefetch channel ─────────────────────────────────────────────────
   //
-  // POST /sessions used to fire from PlayFlowView.onMount, i.e. only after the
-  // router had swapped views and the Gather screen had painted — so the invite
-  // card sat on its "— — — — —" placeholder for a whole round trip. The mint
-  // is now kicked off in the tap handler instead and parked here; the record
+  // The POST /sessions mint is kicked off in the tap handler and parked here.
+  // Firing it from PlayFlowView.onMount would wait until the router had
+  // swapped views and the Gather screen had painted, leaving the invite card
+  // on its "— — — — —" placeholder for a whole round trip. The record
   // outlives the view swap because producer (chooser) and consumer (play flow)
   // are different views.
   //
@@ -35,8 +35,8 @@
   // players, the lobby still says five. PlayFlowView's Gather poll reads the
   // lobby and seats anyone it doesn't recognise, so any bundle fetched inside
   // that window puts the removed seat straight back, at the END of the roster
-  // (the rightmost, off-screen column of the scoring grid). That is how a
-  // four-person table saved FIVE seats and unlocked Full Table: nobody saw the
+  // (the rightmost, off-screen column of the scoring grid). A four-person
+  // table would then save FIVE seats and unlock Full Table: nobody sees the
   // fifth column, and bgb_log_play writes exactly the roster it is handed.
   //
   // So a removal is recorded, not just applied. The tombstone outlives the
@@ -58,9 +58,9 @@
   // The name rule is ghost-to-ghost ONLY, and that restriction is the whole
   // reason this is a function rather than a string key. "Take the ghost Dave
   // off, put Dave's real account on" is the commonest thing a host does next,
-  // and it is exactly the sequence that produced the report; a tombstone that
-  // matched the account by name would block the seat the host meant to keep,
-  // which is the same bug with the sign flipped.
+  // and it is exactly the sequence a tombstone must survive; one that matched
+  // the account by name would block the seat the host meant to keep — the
+  // same failure with the sign flipped.
   function _sameSeat(a, b) {
     if (a.participant_id && b.participant_id && a.participant_id === b.participant_id) return true;
     if (a.user_id && b.user_id) return a.user_id === b.user_id;
@@ -95,7 +95,7 @@
       // absence of a template. The two are different states and only one of
       // them may be answered by auto-apply: `scoringTemplate === null` alone
       // cannot tell "nothing has been chosen yet" from "the host took it off",
-      // and reading it as the first is how a guide reload used to put the grid
+      // and reading it as the first would let a guide reload put the grid
       // back on a host who had just removed it. Local to the draft: the server
       // stores the template a play WAS scored on, and a play scored on plain
       // rounds is a null template there, with nothing more to say.
@@ -125,8 +125,8 @@
       // opened the picker and chose "don't record a country" persists a draft
       // whose countryCode is null; a `||` here would re-detect on the next
       // load and quietly put the country back, which is the one outcome that
-      // choice has to be safe from. Only a snapshot predating this field, or a
-      // genuinely new draft, has no key at all.
+      // choice has to be safe from. Only a snapshot saved without the field,
+      // or a genuinely new draft, has no key at all.
       this.countryCode  = Object.prototype.hasOwnProperty.call(initial, "countryCode")
         ? (initial.countryCode || null)
         : (window.Geo ? window.Geo.countryForPlay() : null);
@@ -169,8 +169,8 @@
       // this object's life — the view keeps holding it, and ~30 persist() call
       // sites can still fire against it — so without this, one late write
       // re-creates the key and the Play tab offers to resume a finished game.
-      // That is exactly how a saved play used to come back: a poll tick 404s on
-      // the finalized session, _healLobby persists to drop the dead code, then
+      // A saved play would come back exactly that way: a poll tick 404s on the
+      // finalized session, _healLobby persists to drop the dead code, then
       // _ensureLobbyOpen mints a fresh lobby and persists the new one.
       if (this._done) return;
       const snapshot = {
@@ -222,11 +222,11 @@
       this.code = null;
       this.sessionId = null;
       this.hostUserId = null;
-      // Terminal, not "gather". Two guards read this and both were dead before:
-      // LogPlayView._resumableSession()'s `phase !== "finalized"` test (nothing
-      // in the client ever wrote that value), and PlayFlowView's Gather-only
-      // poll gate — which resetting to "gather" actively re-OPENED, turning the
-      // clear into the trigger for the resurrection it was meant to prevent.
+      // Terminal, not "gather". Two guards read this:
+      // LogPlayView._resumableSession()'s `phase !== "finalized"` test, and
+      // PlayFlowView's Gather-only poll gate — which resetting to "gather" would
+      // re-OPEN, turning the clear into the trigger for the resurrection it is
+      // meant to prevent.
       this.phase = "finalized";
       this._done = true;
       this.photoBlob = null;
@@ -334,8 +334,6 @@
      *
      * The play row has no is_expansion, so callers that can cheaply resolve the
      * game (e.g. a warmed "game.bundle" cache entry) pass it as `gameExtras`.
-     * (It carried rulebook_url too until migration 052 made the rulebook a
-     * guide chapter, which the Play screen's own scroll fetches.)
      */
     static seedFromPlayRow(row, gameExtras = {}) {
       if (!row || !row.game_id) return null;
@@ -362,9 +360,9 @@
           avatar: p.avatar || null,
           is_winner: false,
           score: null,
-          // Carried off the saved row now that it persists, so "another round"
-          // from a finished play keeps the sides — which is what the in-memory
-          // path (PlayFlowView._nextRoundSeed) has always done.
+          // Carried off the saved row, so "another round" from a finished play
+          // keeps the sides — as the in-memory path
+          // (PlayFlowView._nextRoundSeed) does.
           team: p.team || "",
           initials: null,
         })),
@@ -379,14 +377,14 @@
      * have to agree on `is_winner` afterwards. They agree by UNION: if either
      * the seat or the side it joins is flagged a winner, all of them are.
      *
-     * The direction is the bug this exists to close. This used to overwrite the
-     * seat with whatever its teammates said, which on the ordinary order of
-     * operations — crown the winners, THEN name the teams — read a side that
-     * was still empty and silently cleared the win just recorded. The play
-     * saved with nobody flagged and the feed card told the people who won it
-     * "We lost". A recorded win is never dropped by typing a team name; an
-     * accidental tag can over-crown a side, and the trophy toggle takes that
-     * back, where the wipe left nothing to notice.
+     * The direction is the point. Overwriting the seat with whatever its
+     * teammates say would, on the ordinary order of operations — crown the
+     * winners, THEN name the teams — read a side that is still empty and
+     * silently clear the win just recorded: the play would save with nobody
+     * flagged and the feed card would tell the people who won it "We lost".
+     * A recorded win is never dropped by typing a team name; an accidental
+     * tag can over-crown a side, and the trophy toggle takes that back, where
+     * a wipe would leave nothing to notice.
      *
      * A tag no other seat carries yet says nothing about this one, so a lone
      * seat keeps its own flag untouched. Clearing the tag does the same.
@@ -421,7 +419,7 @@
      * Give a seat the numbers its new side is already holding.
      *
      * The companion to applyTeamTag, and the same shape of problem. A side
-     * scores as ONE column now (widgets/round-score-grid.js#roundGridColumns):
+     * scores as ONE column (widgets/round-score-grid.js#roundGridColumns):
      * the host types once and the write fans out — through
      * window.roundGridSeatsFor, which is what an editable host asks — so every
      * seat on the side carries the number and each one SAVES it as their own
@@ -435,9 +433,8 @@
      * own. A seat that was scored before it joined the side is a real
      * disagreement: the grid splits the side back into seats and shows both
      * numbers, which is the honest answer and the one a host can act on. The
-     * alternative — overwriting — is the same mistake applyTeamTag's own
-     * docstring is a monument to, where naming a team threw away something
-     * already recorded.
+     * alternative — overwriting — is the mistake applyTeamTag's docstring
+     * describes: naming a team throwing away something already recorded.
      *
      * Mutates `players` in place and reports whether anything moved, so the
      * caller can skip a repaint and a live-scores republish.
@@ -557,8 +554,8 @@
      * list, or the viewer screen they were bounced to while the network was
      * misbehaving — needs the draft rebuilt from the server's row before
      * play-flow opens, or the cascade mints a second lobby over the top of the
-     * one they are already hosting. Every caller did this by hand; one copy
-     * means the host path cannot drift between them.
+     * one they are already hosting. One copy means the host path cannot drift
+     * between callers.
      *
      * The caller is responsible for having established that `session` really is
      * ours (`session.host_user_id === me.id`). This function does not check,
@@ -613,11 +610,11 @@
     // scored, and the whole {participant_id: tag} map exactly as the host's
     // draft holds it.
     //
-    // The team tags are typed on the Gather roster and used to live ONLY in
-    // that draft until the play was saved, so the host read a grid banded into
-    // sides while every spectator read the same grid with identical columns,
-    // and the pairings surfaced only once the game was over. This is what
-    // carries them across while it still matters (migration 050).
+    // The team tags are typed on the Gather roster and live in that draft;
+    // without this the host would read a grid banded into sides while every
+    // spectator read the same grid with identical columns, and the pairings
+    // would surface only once the game was over. This is what carries them
+    // across while it still matters (migration 050).
     //
     // `playMode` rides along rather than taking a call of its own because the
     // two are one fact: a side's seats share ONE cell in the scoring grid, and
@@ -687,10 +684,9 @@
           score: rollupScore(p),
           user_id: p.user_id || null,
           round_scores: persistableRounds(p, !!this.scoringTemplate),
-          // The side this seat played on (migration 048). Until now the tag
-          // settled the side's win flags and was then dropped on the floor, so
-          // a team night saved as N seats and no sides — and the play detail
-          // had nothing to group by. `null` rather than "" for an untagged
+          // The side this seat played on (migration 048). Without it a team
+          // night saves as N seats and no sides, and the play detail has
+          // nothing to group by. `null` rather than "" for an untagged
           // seat, or every seat in the app would share one anonymous side.
           team: (p.team || "").trim() || null,
         })),
@@ -726,7 +722,7 @@
   function rollupScore(p) {
     const rs = p && p.roundScores;
     // An all-blank grid is "nothing was typed", not "the table scored zero".
-    // Rolling it up to 0 is what made a play nobody scored read as a recorded
+    // Rolling it up to 0 would make a play nobody scored read as a recorded
     // loss — on the feed card and in every win-rate denominator. Such a grid
     // falls through to `score`, which is normally null but carries a
     // deliberate 0 for a co-op loss (play-flow-view's _stampCoopLoss).
@@ -748,7 +744,7 @@
   // back looking as if it had never had a grid at all.
   //
   // The invariant to keep, in both directions: a non-null scoring_template
-  // implies non-null round_scores. The popup's gate is widened to match.
+  // implies non-null round_scores. The popup's gate matches it.
   function persistableRounds(p, hasTemplate) {
     const rs = p && p.roundScores;
     if (!Array.isArray(rs) || rs.length === 0) return null;

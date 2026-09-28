@@ -184,9 +184,7 @@
         // recents gone. peek() serves the full 7d stale window, which is
         // exactly what bootstrap's hostSeed TTL pair was sized for — and
         // _ensureRecentGamesLoad() below refreshes it a frame later anyway,
-        // so the wider window costs nothing when there IS a connection. This
-        // used to happen only when BgbNet said offline, which meant the seed
-        // was narrower precisely when it was cheapest to widen.
+        // so the wider window costs nothing when there IS a connection.
         const seeded = window.bgbCache.peek("game.recent", "self");
         if (Array.isArray(seeded)) this._recentGames = seeded;
       }
@@ -828,7 +826,7 @@
         dd.innerHTML = `<li class="game-finder-dropdown__hint">No BoardGameGeek matches.</li>`;
         return;
       }
-      // Capped for the dropdown only. /search now returns BGG's whole ranked
+      // Capped for the dropdown only. /search returns BGG's whole ranked
       // match set — hundreds of rows for a franchise name — which the import
       // sheet windows and scrolls. This is an escalation inside a picker: a
       // host is reaching for one specific game, and the answer is at the top

@@ -8,7 +8,7 @@
 const AddToTrips = {
   async open(scrap, { onSaved } = {}) {
     this.close();
-    // Lazy trips load: the Wander List no longer fetches trips on mount, so
+    // Lazy trips load: the Wander List doesn't fetch trips on mount, so
     // pull them from store/cache and only hit the network when both are cold.
     let trips = window.store.get('trips') || window.tsCache?.get('trips', '');
     if (!trips) {

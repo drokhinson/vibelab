@@ -95,8 +95,8 @@
   // The global header's two toggle buttons and the screen each one opens and
   // closes. go() below keeps their aria-pressed in step with the current view;
   // init.js#toggleScreen is the other half. One list so the pair can never
-  // drift into "the bell knows and the gear doesn't", which is exactly how the
-  // gear's box ended up never lighting on the screen it opens.
+  // drift into "the bell knows and the gear doesn't" — a gear that never
+  // lights on the screen it opens.
   // Selected by data-toggle rather than by class: each toggle exists twice,
   // once in the header (phone, tablet) and once in the wide tier's nav rail,
   // and both copies wear the screen's state.
@@ -170,9 +170,9 @@
         { name: "session-viewer",
           consume: ["code"],
           build: (p) => p.code ? `/play/${encodeURIComponent(p.code)}` : "/play" },
-        // /join is the retired standalone Join screen — its code entry and
-        // active-session list are the bottom half of the Play tab now. Kept as
-        // an alias so shared links and bookmarks still land somewhere sane.
+        // /join is an alias: the code entry and active-session list are the
+        // bottom half of the Play tab, and shared links and bookmarks to /join
+        // still have to land somewhere sane.
         { name: "log-play",            pattern: /^\/(play|join)\/?$/,             build: () => "/play" },
         { name: "discovery",           pattern: /^\/discover\/?$/,               build: () => "/discover" },
         { name: "add-games",           pattern: /^\/games\/add\/?$/,              build: () => "/games/add" },
@@ -183,10 +183,10 @@
           build: (p) => `/game/${encodeURIComponent(p.gameId || "")}` },
         { name: "collection",          pattern: /^\/profile\/collection\/?$/,     build: () => "/profile/collection" },
         { name: "rank-queue",          pattern: /^\/profile\/collection\/rank\/?$/, build: () => "/profile/collection/rank" },
-        // Match-only alias. The wishlist is a shelf of the collection spoke now
-        // (?shelf=wishlist), but the standalone path was bookmarkable for long
-        // enough that dropping it would strand real links and home-screen
-        // shortcuts. No `build`: nothing navigates TO this name any more, and
+        // Match-only alias. The wishlist is a shelf of the collection spoke
+        // (?shelf=wishlist), but the standalone path lives in bookmarks and
+        // home-screen shortcuts, and dropping it would strand them. No
+        // `build`: nothing navigates TO this name, and
         // pathFor("collection", {shelf}) is what writes the canonical URL.
         { name: "wishlist",            pattern: /^\/profile\/wishlist\/?$/,
           alias: "collection",         aliasParams: { shelf: "wishlist" } },
@@ -201,11 +201,10 @@
           build: (p) => `/u/${encodeURIComponent(p.userId || "")}` },
         { name: "import-wizard",       pattern: /^\/settings\/import\/?$/,
           build: () => "/settings/import" },
-        // The two importers were separate screens at separate paths for
-        // months, so both live in bookmarks and home-screen shortcuts. Aliased
-        // rather than dropped — same trick /admin uses above — so an old link
-        // lands on the wizard with its branch already picked. No `build`:
-        // nothing navigates TO these names any more, and the view replaces the
+        // Both per-importer paths live in bookmarks and home-screen shortcuts.
+        // Aliased rather than dropped — same trick /admin uses above — so such
+        // a link lands on the wizard with its branch already picked. No
+        // `build`: nothing navigates TO these names, and the view replaces the
         // url with the canonical one on the way in.
         { name: "import-plays",        pattern: /^\/settings\/import-plays\/?$/,
           alias: "import-wizard", aliasParams: { source: "notes" } },
@@ -241,13 +240,11 @@
         { name: "admin-reports",       pattern: /^\/admin\/reports\/?$/,          build: () => "/admin/reports" },
         { name: "admin-rulebooks",     pattern: /^\/admin\/rulebook-links\/?$/,   build: () => "/admin/rulebook-links" },
         { name: "admin-bgg-data",      pattern: /^\/admin\/bgg-data\/?$/,         build: () => "/admin/bgg-data" },
-        // The four backfills were four spokes, then four panels on one, and are
-        // two panels now — descriptions, stats and publishers became one queue.
-        // Match-only aliases so an admin's bookmark still lands on the screen
-        // that holds its queue, whichever panel that is today.
-        // /admin/publishers never had a pattern of its own — it is listed here
-        // for the same reason as the other three, not because anything could
-        // have linked to it.
+        // Match-only aliases so an admin's bookmark to any backfill path lands
+        // on the screen that holds its queue — descriptions, stats and
+        // publishers are one queue on one panel. /admin/publishers is listed
+        // for the same reason as the other three, not because anything links
+        // to it.
         { name: "admin-images",        pattern: /^\/admin\/images\/?$/,           build: () => "/admin/images",
           alias: "admin-bgg-data" },
         { name: "admin-descriptions",  pattern: /^\/admin\/descriptions\/?$/,     build: () => "/admin/descriptions",
@@ -260,7 +257,7 @@
           build: () => "/admin/release-notices" },
         { name: "admin-affiliates",    pattern: /^\/admin\/affiliates\/?$/,       build: () => "/admin/affiliates" },
         // /admin/USAGE, not /admin/stats: that name and that path are already
-        // taken above, as the legacy alias for the BGG-stats backfill panel.
+        // taken above, as the alias for the BGG-stats backfill panel.
         // Two different screens called "admin stats" is how a bookmark ends up
         // on the wrong one.
         { name: "admin-usage",         pattern: /^\/admin\/usage\/?$/,           build: () => "/admin/usage" },
@@ -272,9 +269,8 @@
           consume: ["tool"],
           extract: (m) => ({ tool: decodeURIComponent(m[1]) }),
           build: (p) => `/admin/run/${encodeURIComponent(p.tool || "")}` },
-        // The admin tools used to be one stacked screen at /admin. Aliased
-        // rather than dropped so an old bookmark lands on the Settings card
-        // that now indexes the three spokes, instead of a 404-ish blank.
+        // /admin is aliased so a bookmark to it lands on the Settings card that
+        // indexes the admin spokes, instead of a 404-ish blank.
         { name: "admin",               pattern: /^\/admin\/?$/,                   build: () => "/admin",
           alias: "settings" },
         // The two legal documents. Real routes rather than static .html files
@@ -295,14 +291,14 @@
     // Resolve a URL pathname to {name, params} or null. Querystring values are
     // merged into params so /game/x?gameName=Catan hydrates both.
     //
-    // The merge lives here rather than at the call site because there are three
-    // call sites and only one of them used to do it: the boot path in init.js
-    // did, so a cold deep link worked, but the popstate fallback below (browser
-    // -supplied entries, which carry no state object) did not — walking back to
-    // /profile/collection?shelf=wishlist landed on the default shelf.
+    // The merge lives here rather than at the call sites because there are
+    // three of them, and any one that skipped it would drop the querystring —
+    // the popstate fallback below (browser-supplied entries, which carry no
+    // state object) would walk back to /profile/collection?shelf=wishlist and
+    // land on the default shelf.
     //
     // A route may also declare `alias` + `aliasParams`, which resolve it to a
-    // DIFFERENT view: that is how a retired path stays live without a second
+    // DIFFERENT view: that is how an old path stays live without a second
     // view registered under its name. Extracted and querystring params win over
     // aliasParams, so an explicit ?shelf= in the URL is still honoured.
     /**
@@ -375,8 +371,8 @@
       return this._routes
         // `alias` entries are match-only: they have a `build`, but no view is
         // registered under their name, so go() would console.error on one. The
-        // release-notice editor picks its destination out of this list, so a
-        // retired path in it is a published notice whose button does nothing.
+        // release-notice editor picks its destination out of this list, so an
+        // alias in it would be a published notice whose button does nothing.
         .filter((r) => r.build && !r.alias && !(r.consume && r.consume.length))
         .map((r) => r.name);
     }
@@ -440,9 +436,9 @@
         const url = this.pathFor(name, params);
         if (url) {
           // A SUCCESSFUL SIGN-IN SPENDS THE LOGIN SCREEN'S HISTORY ENTRY
-          // rather than stacking the app on top of it. Pushing left /auth
+          // rather than stacking the app on top of it. Pushing would leave /auth
           // sitting directly under the first screen the user landed on, so
-          // one back gesture on Android put a signed-in account back on the
+          // one back gesture on Android would put a signed-in account back on the
           // login form — with the app's own header and nav around it, since
           // the entry is replayed through this same function.
           //
@@ -492,7 +488,7 @@
       // toggling .hidden on siblings of one scrolling document, so the scroll
       // offset is a property of the PAGE, not of the view — walk from a
       // scrolled Profile hub into Buddies and the browser has no reason to move
-      // it, so Buddies opens halfway down. Nothing reset it before this.
+      // it, so Buddies would open halfway down.
       //
       // Here, beside the visibility flip and before any await, so it lands in
       // the tap's own frame (.claude/rules/web-frontend.md, "Navigation feels
@@ -507,8 +503,8 @@
         catch (_) { window.scrollTo(0, 0); }   // older Safari rejects the options form
       }
 
-      // Who is signed in is not a navigation event — see _applyAuthChrome for
-      // the bug that fact caused. Subscribed on the first navigation rather
+      // Who is signed in is not a navigation event — see _applyAuthChrome.
+      // Subscribed on the first navigation rather
       // than in the constructor, so this module keeps no load-order
       // dependency on store.js and the subscriber can never run before the
       // shell below has been queried.
@@ -566,17 +562,15 @@
     /**
      * Show or hide the app chrome — the global header and the bottom nav.
      *
-     * WHO IS SIGNED IN IS NOT A NAVIGATION EVENT, and treating it as one is
-     * what shipped a feed with no bottom nav. This used to run only inside
-     * go(), off whatever `user` happened to be at that instant — but the
-     * profile lands on its own schedule, and several paths route BEFORE it
-     * does: init.js routes a valid session forward even when /bootstrap has
-     * not answered yet (a signed-in user must never be stranded on the
-     * splash) and recovers the profile in the background, and the boot
-     * watchdog does the same with nothing but a session in hand. Both left
-     * the chrome hidden with nothing to turn it back on until the NEXT
-     * navigation — which is exactly why the reported bug healed the moment
-     * the user pressed back.
+     * WHO IS SIGNED IN IS NOT A NAVIGATION EVENT. Run only inside go(), off
+     * whatever `user` happens to be at that instant, this would miss the
+     * profile, which lands on its own schedule — and several paths route
+     * BEFORE it does: init.js routes a valid session forward even when
+     * /bootstrap has not answered yet (a signed-in user must never be
+     * stranded on the splash) and recovers the profile in the background, and
+     * the boot watchdog does the same with nothing but a session in hand. Both
+     * would leave the chrome hidden — a feed with no bottom nav — with nothing
+     * to turn it back on until the NEXT navigation.
      *
      * So this is a `user` subscriber too (taken on the first navigation, see
      * go()), and it is idempotent: whichever of the two runs last is right.
@@ -668,8 +662,8 @@
     // spending the current history entry instead of stacking a new one on top
     // of it. go() would deepen history, and the sibling's own close (a back())
     // would then land on the screen it replaced rather than on the screen the
-    // pair was opened from — which is how the header's bell and gear ended up
-    // handing the user to each other instead of closing.
+    // pair was opened from — the header's bell and gear would hand the user to
+    // each other instead of closing.
     //
     // Nothing is pushed onto _stack either: the entry we replace was never on
     // it (the screen under the pair is), so back and peekBack keep pointing at

@@ -2,11 +2,9 @@
 //
 // Both importers ask the same question — "who was at this table?" — of the
 // same three sources: the viewer, their buddies and play-partners, and the
-// ghosts nobody has written to the database yet. Both had their own copy of
-// the answer, and the copies had already drifted: `_searchEveryone` was
-// byte-identical in both, `_playerCandidates` agreed on the viewer row and
-// then diverged, and only one of them knew about the ghosts a run invents as
-// it goes.
+// ghosts nobody has written to the database yet. Separate copies of the
+// answer drift — on the viewer row, on the search, on the ghosts a run
+// invents as it goes.
 //
 // This module is the answer, once. It is stateless: the caller owns the
 // partner bundle (domain/buddy.js SWRs it for a day) and passes it in, because
@@ -21,7 +19,7 @@
   // Close matches offered above the full list. Enough to hold the real answer
   // when a note's spelling is ambiguous ("Chris" against a Christina and a
   // Christopher), short enough that the whole buddy list is still visible
-  // underneath without a scroll. Both importers picked 5 independently.
+  // underneath without a scroll.
   const SUGGEST_MAX = 5;
 
   /**
@@ -30,9 +28,9 @@
    * YOU come first, and this is the one expression that spells you.
    * GET /play-partners never returns the viewer, because every other caller
    * has already seated them — in Gather you are at the table by construction.
-   * In an importer nobody has, so a note recording your own name had no way to
-   * become you and every imported play landed with the importer absent from
-   * their own history. That also cost them the wins.
+   * In an importer nobody has, so without this row a note recording your own
+   * name would have no way to become you, and every imported play would land
+   * with the importer absent from their own history — wins included.
    */
   function viewerRow() {
     const me = window.store.get("user");
@@ -73,8 +71,8 @@
     /**
      * The viewer as a SEAT, for a flow that starts every play with them at the
      * table (the photo importer: every photo in a camera roll is a game the
-     * person holding the phone played, and since migration 023 a play with
-     * nobody at it cannot be written at all).
+     * person holding the phone played, and a play with nobody at it cannot
+     * be written at all — migration 023).
      *
      * Deliberately built from viewerRow() so the seeded seat and the picker
      * row that would duplicate it can never disagree about how the viewer is
@@ -134,8 +132,8 @@
      *
      * A name typed into the picker on photo 1 goes into that shot's roster and
      * nowhere else: it is not in the buddy bundle, and nothing reaches the
-     * database until the final "Import N plays" tap. So photo 2 offered no way
-     * to reach it but typing it again — and a second spelling is a second
+     * database until the final "Import N plays" tap. Without this, photo 2
+     * offers no way to reach it but typing it again — and a second spelling is a second
      * ghost holding half the plays, which is the mess /ghost-players/merge
      * exists to clean up afterwards.
      *
@@ -231,8 +229,7 @@
      * every field after the first, so a display-name hit outranks a username
      * one. That is right for a note, which writes people the way you say them
      * out loud, and wrong for a Board Game Arena handle, which IS a username —
-     * so the BGA source passes `(c) => [c.username, c.name]`. Additive and
-     * optional: every existing caller keeps the default.
+     * so the BGA source passes `(c) => [c.username, c.name]`.
      * @param {string} name
      * @param {any[]} candidates
      * @param {number} [max]

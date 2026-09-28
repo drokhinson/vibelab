@@ -201,7 +201,7 @@
   // and alert()/confirm() both dismiss() first — so an unrelated alert fired
   // while the avatar customizer is open removes its node, and without this its
   // promise would never settle. That is a permanent hang for the caller, and
-  // first-run setup now parks a continuation behind exactly that promise
+  // first-run setup parks a continuation behind exactly that promise
   // (see the QR gate in init.js).
   let _orphanHook = null;
 
@@ -214,7 +214,7 @@
    * Did this tap land outside the card? Everything that is not the card reads
    * as blurred background and dismisses — including the headline floating
    * ABOVE it, which is a sibling of the card rather than part of the backdrop
-   * element, so an `event.target === root` test used to leave a dead strip of
+   * element, so an `event.target === root` test would leave a dead strip of
    * "background" right where the wrap-up and achievement cards put their
    * biggest words.
    * @param {any} target
@@ -259,7 +259,7 @@
   }
 
   /**
-   * The X in the card's corner — the wrap-up card's primary exit now that
+   * The X in the card's corner — the wrap-up card's primary exit, since
    * the bottom button is "Another round?". It takes the same feed redirect
    * as a backdrop tap. `onClose` overrides it; absent that it falls back to
    * `onDismiss`, so a caller that redirects dismissal keeps one destination for

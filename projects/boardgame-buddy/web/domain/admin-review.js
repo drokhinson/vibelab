@@ -2,14 +2,14 @@
 //
 // Publishes four store slots (see domain/store.js) from ONE
 // /admin/review-counts call: open chapter reports, games missing images, games
-// short of anything one BoardGameGeek read would give them, and — since
-// migration 052 — rulebook links waiting on a decision.
+// short of anything one BoardGameGeek read would give them, and rulebook
+// links waiting on a decision (migration 052).
 // domain/notifications.js turns them into the gear's dot and the per-row
 // badges in the Settings admin card.
 //
-// It was five. Descriptions, BGG stats and publishers were three counts of
-// three overlapping queues, so a game short of two of them was counted twice
-// and the dot reported more work than existed (migration 045).
+// Descriptions, BGG stats and publishers are one BGG-shortfall count, not
+// three: they are overlapping queues, and separate counts would count a game
+// short of two of them twice and report more work than exists (migration 045).
 //
 // One call rather than five, and counts rather than lists: the dot is on the
 // global header, so this runs on every boot for every admin. Deriving the

@@ -257,8 +257,8 @@ def test_wrong_key_and_no_auth_are_refused(route_client):
 
 # ── The run log ──────────────────────────────────────────────────────────────
 # The trending refresh takes 15–35 seconds behind a spinner, and the games it
-# fails to import used to be returned as bare ids and dropped by the client.
-# These pin what the operator actually reads.
+# fails to import must reach the operator by name, not as bare ids a client
+# drops. These pin what the operator actually reads.
 
 @pytest.fixture(autouse=True)
 def _clean_run_log():
@@ -301,8 +301,8 @@ def test_the_run_walks_its_phases_in_order_and_names_each_import(monkeypatch):
 
 
 def test_a_failed_import_is_an_error_line_naming_the_game(monkeypatch):
-    """This is the case the old UI dropped entirely: `failed[]` came back as
-    bare ids and the toast never mentioned them."""
+    """The case a bare-ids `failed[]` loses entirely: a toast that never
+    mentions them."""
     sb = _SB({"boardgamebuddy_games": []})
 
     async def hot(**_k):

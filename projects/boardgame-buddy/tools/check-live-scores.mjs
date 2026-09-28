@@ -12,9 +12,9 @@
 //      never on a backfill or a poll-driven refresh. session-viewer-view
 //      stands its poll down on this value, so a self-stamp means the poll
 //      vouching for the channel it exists to cover for.
-//   2. `isRealtimeDead()` follows the subscribe status. Nothing read that
-//      status before, so a channel that never connected looked exactly like
-//      one that was connected and quiet.
+//   2. `isRealtimeDead()` follows the subscribe status. Without it, a channel
+//      that never connected looks exactly like one that is connected and
+//      quiet.
 //   3. `onWriteDenied` fires once per session for a PERMANENT refusal (an RLS
 //      42501, a rejected JWT) and never for a transient one (a timeout).
 //   4. `canWrite` gates the SEND, not just the report: in a phase the scores
@@ -27,10 +27,10 @@
 //      rounds the host no longer has — a removeRoundAt whose DELETE never went
 //      out otherwise leaves spectators a phantom trailing round.
 //
-// Written after a live session where the host's writes were refused with
+// The failure this pins: the host's writes refused with
 // `42501 new row violates row-level security policy` on every keystroke and
-// NOTHING said so: the host's own grid painted from the local intent map, and
-// every spectator watched a grid that never filled in. The 42501 case below
+// NOTHING saying so — the host's own grid paints from the local intent map,
+// and every spectator watches a grid that never fills in. The 42501 case below
 // is that exact error.
 import fs from "node:fs";
 import vm from "node:vm";

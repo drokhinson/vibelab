@@ -54,15 +54,13 @@
   // it past this line. Every other cached namespace happily paints something
   // old while it refreshes; this one must not. Its rows carry Accept, Decline
   // and Remove-me — offering an action for a request answered on another device
-  // is worse than a spinner, which is the reasoning this module used to give for
-  // not caching at all.
+  // is worse than a spinner.
   //
-  // What changed is not the tolerance, it is WHEN the fetch happens. The page
-  // is now prefetched — /bootstrap carries it, a focus re-warm renews it, and
+  // What makes the window worth having is WHEN the fetch happens. The page is
+  // prefetched — /bootstrap carries it, a focus re-warm renews it, and
   // touching the bell starts one — so in the ordinary "open the app, see the
   // dot, tap it" path the request has already landed and the screen paints in
-  // one frame. Past this window the view goes back to waiting on the network,
-  // which is exactly what it did before.
+  // one frame. Past this window the view waits on the network.
   //
   // 20s is short on purpose. Raising it buys instant paints further from a
   // fetch and pays for them in freshness; this is the one number to change.
@@ -304,8 +302,7 @@
      * backend gathers both beside the bundle rather than inside it. Missing
      * keys mean an older backend: the count no-ops to leave the dot dark rather
      * than claiming zero (exactly as GhostClaim's equivalent does), and the
-     * page no-ops to leave the screen fetching for itself, which is what it did
-     * before this existed.
+     * page no-ops to leave the screen fetching for itself.
      *
      * The count is read from its own key rather than from the page's `unread`
      * so an older backend that sends one and not the other still lights the dot

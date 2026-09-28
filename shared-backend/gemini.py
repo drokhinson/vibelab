@@ -6,7 +6,7 @@ plumbing. Currently used by BoardgameBuddy chapter generation
 (travel-scrapbook's `services/llm.py`).
 
 Travel Trove's place extraction (`routes/travel_scrapbook/services/llm.py`)
-predates this module and keeps its own copy of the call — it carries a lot of
+keeps its own copy of the call — it carries a lot of
 extraction-specific coercion. If it is ever touched substantially, migrate it
 onto `generate_json` here.
 
@@ -47,18 +47,18 @@ import httpx
 
 from api_logger import log_external_call
 
-# The Google-maintained "-latest" alias rather than a pinned model ID: the
-# previously pinned gemini-2.5-flash was pulled from the API on 2026-07-09
-# (ahead of its announced shutdown), 404-ing every request. The alias hot-swaps
-# to the current Flash-Lite release with a 2-week email notice before any
-# behavior change, so a silent early deprecation can't take an app down again.
+# The Google-maintained "-latest" alias rather than a pinned model ID: a pinned
+# model can be pulled from the API ahead of its announced shutdown, 404-ing
+# every request. The alias hot-swaps to the current Flash-Lite release with a
+# 2-week email notice before any behavior change, so a silent early deprecation
+# can't take an app down.
 # Swap to gemini-flash-latest for a stronger (still free-tier) model if output
 # quality needs it.
 GEMINI_MODEL = "gemini-flash-lite-latest"
 
 # The step up, for work Flash-Lite is measurably worse at. Same free tier, same
 # "-latest" alias contract. Reading a photograph of somebody's handwritten
-# tally sheet is the case that motivated exposing it: Flash-Lite is fine at
+# tally sheet is the case it exists for: Flash-Lite is fine at
 # restructuring text that is already text, and unreliable at deciding whether a
 # smudged row of tally marks is fourteen or fifteen. Callers opt in per call
 # rather than the module choosing — most tasks here should stay on Lite.

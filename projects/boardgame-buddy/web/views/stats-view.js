@@ -41,7 +41,7 @@
   const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const PLAYER_LABEL = { 1: "Solo", 2: "2 players", 3: "3 players", 4: "4 players", 5: "5+" };
   // 2πr for the shelf dial below, so the dasharray never drifts from the r in
-  // the markup. The By-game dial's own radius moved out with it, into
+  // the markup. The By-game dial's own radius lives with it, in
   // ui/game-stats-panel.js.
   const SHELF_R = 24;
   // Stable host for the By-game card, so picking a game can swap just that
@@ -549,8 +549,8 @@
     }
 
     // Delegates to ui/stat-primitives.js, which the admin Usage spoke draws
-    // from too. Kept as a one-line method rather than replacing the call sites
-    // so the two readers below still say `this._bar(...)`.
+    // from too. A one-line method rather than inlined at the call sites, so
+    // the two readers below say `this._bar(...)`.
     _bar(label, value, peak) {
       return window.BgbStat.bar(label, value, peak);
     }
@@ -559,7 +559,7 @@
 
     // The sheet lives on document.body, so it outlives any repaint in here and
     // the page behind it never moves — which is the whole reason the picker
-    // stopped being an inline disclosure.
+    // is a sheet rather than an inline disclosure.
     _openPicker(event) {
       const games = this._games();
       if (!games.length) return;

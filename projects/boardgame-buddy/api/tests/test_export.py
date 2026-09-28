@@ -9,11 +9,11 @@ Two things are worth pinning here and nothing else really is:
      PostgREST caps an unbounded select at 1000 rows and a truncated read does
      not fail. An export that stops at row 1000 looks complete.
 
-There used to be a third: that the profile CSV never carried the encrypted BGG
-password or the session cookies sitting beside `bgg_username` on that row. The
-Profile tick is gone and no builder reads boardgamebuddy_profiles for its own
-sake any more, which is the stronger form of that guarantee — a test asserting
-a string is absent from a file that is not written would only be theatre.
+Not pinned: that no export carries the encrypted BGG password or the session
+cookies sitting beside `bgg_username` on the profile row. No builder reads
+boardgamebuddy_profiles for its own sake, which is the stronger form of that
+guarantee — a test asserting a string is absent from a file that is not
+written would only be theatre.
 
 The fake below is just enough PostgREST to serve those reads. Embedded rows are
 pre-baked onto the stored dicts — the joins themselves are PostgREST's job, not
@@ -220,7 +220,7 @@ def _store(**overrides):
                                              "group_id": "guides"}},
         ],
         "boardgamebuddy_user_chapters": [
-            # `state` since migration 033: the table now holds both halves of
+            # `state` (migration 033): the table holds both halves of
             # the viewer's opinion, and the export reads only the kept one.
             {"user_id": ME, "chapter_id": "c1", "state": "kept",
              "created_at": "2026-02-02T00:00:00Z",
@@ -260,7 +260,7 @@ def _rows(zf, name):
 
 def _shelf_rows(zf):
     """The shelf block of collection.csv, without the owned expansions that
-    now share the file. The paging tests below are about the collections read
+    share the file. The paging tests below are about the collections read
     specifically, so they must not move when the fixture grows an expansion."""
     return [r for r in _rows(zf, "collection.csv") if r["row_type"] == "shelf"]
 
@@ -284,7 +284,7 @@ def test_only_ticked_datasets_are_written():
 
 
 def test_owned_expansions_ride_in_the_collection_file():
-    """Expansions were their own tick and their own CSV. Nobody thinks of the
+    """Nobody thinks of the
     shelf and the expansions on it as two things to ask for separately, so the
     one tick writes both — under a `row_type` column, because they are still
     two shapes and a reader has to be able to tell them apart."""
@@ -474,7 +474,7 @@ def test_paging_stops_on_a_short_page():
 
 # What the sheet's number counts, per dataset: the records a tick COVERS, not
 # every row it writes. That is the default, summing the dataset's own files —
-# and it is what keeps Collection honest now that shelf rows and owned
+# and it is what keeps Collection honest when shelf rows and owned
 # expansions share one CSV. Plays - detailed is the one exception: its rows are
 # seats and expansions, and "1,847 seats" is not a quantity anybody has an
 # intuition for, so it reports the number of plays it details.
@@ -601,10 +601,10 @@ def test_a_repeated_dataset_is_not_exported_twice(client):
 @pytest.mark.parametrize("params", [
     [],
     [("dataset", "not-a-dataset")],
-    # The four retired ticks. An old tab, or a bookmarked export URL, still
-    # sends these — and they must bounce off the enum in validation rather than
-    # reach the route body and KeyError on a registry that no longer has them.
-    # Re-adding one as a no-op member to "be nice" is what this pins shut.
+    # Dataset names with no builder, which an old tab or a bookmarked export
+    # URL can still send — they must bounce off the enum in validation rather
+    # than reach the route body and KeyError on the registry. Adding one as a
+    # no-op member to "be nice" is what this pins shut.
     [("dataset", "profile")],
     [("dataset", "expansions")],
     [("dataset", "buddies")],

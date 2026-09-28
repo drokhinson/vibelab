@@ -1,4 +1,4 @@
-// domain/api.js — Singleton API client. Wraps fetch, attaches Supabase JWT,
+// domain/api.js — Singleton API client. Wraps fetch, attaches the Identity Platform ID token,
 // surfaces the FastAPI error envelope as `Error("detail or statusText")`.
 
 (function () {
@@ -9,13 +9,9 @@
   //
   // A network error rejects fetch() promptly and the app recovers; a STALLED
   // request never settles at all, and no browser imposes a timeout worth
-  // waiting for. That is not theoretical here: reported from the field, an
-  // iPhone's first launch of the freshly-installed PWA "sat on a loading
-  // screen forever, until I clicked one of the menu buttons below". Every
-  // first-paint call is awaited — the boot's /bootstrap, the feed's first
-  // page — so one stalled request is the whole app, with no error, no retry
-  // and (on the splash) not even a nav bar to escape with. The tap that
-  // "fixed" it just started a different request on a different connection.
+  // waiting for. Every first-paint call is awaited — the boot's /bootstrap,
+  // the feed's first page — so one stalled request is the whole app, with no
+  // error, no retry and (on the splash) not even a nav bar to escape with.
   //
   // 15s is well past a healthy p99 (including a cold Railway dyno) and well
   // short of "forever". Uploads get their own budget — a play photo over
@@ -116,16 +112,15 @@
      * fetch() + connectivity bookkeeping.
      *
      * A dead network makes fetch REJECT with a bare `TypeError: Failed to
-     * fetch` — it never reaches the `!res.ok` branch below, so it used to
+     * fetch` — it never reaches the `!res.ok` branch below, so it would
      * arrive at callers with no `.status` and no way to tell it apart from
      * anything else that threw. Offline mode needs that distinction on every
      * call site, so it's normalized here: `err.offline = true`, `err.status = 0`.
      *
-     * Caveat: "Failed to fetch" is overloaded in this codebase. An unhandled
-     * Supabase APIError used to produce a 500 that bypassed CORSMiddleware,
-     * which the browser also reports this way — see the long comment on
-     * @app.exception_handler(APIError) in shared-backend/main.py. That handler
-     * now returns a CORS-bearing 500, so the overlap is rare, but `err.offline`
+     * Caveat: "Failed to fetch" is overloaded in this codebase. A 500 that
+     * bypasses CORSMiddleware is reported by the browser this way too — see
+     * @app.exception_handler(APIError) in shared-backend/main.py, which
+     * returns a CORS-bearing 500 so the overlap is rare, but `err.offline`
      * is a heuristic and BgbNet treats it as one (two strikes, not one).
      *
      * A deadline abort (see _send) lands in the same branch and is normalized
@@ -161,7 +156,7 @@
       // THE OFFLINE SHORT-CIRCUIT — reactive, not pre-emptive.
       //
       // Nothing in this app asks "are we offline?" before OFFERING an action
-      // any more (see STRUCTURE.md §3). Every action is attempted, and the
+      // (see STRUCTURE.md §3). Every action is attempted, and the
       // ones that need the network fail. This does not decide anything the
       // request would not have decided by itself; it only makes that failure
       // INSTANT rather than making the user watch a 15s deadline run down on
@@ -172,10 +167,9 @@
       // evidence about the link, and counting it would let the latch feed
       // itself. What it reports instead is that somebody just TRIED, which is
       // what restarts the recovery ladder at its quick first rung and kicks a
-      // probe. That matters because the offline banner's "Try again" button
-      // went away with the banner: the user's own second tap is the active
-      // probe now, and without this a stale latch could only be left by
-      // waiting out the ladder.
+      // probe. That matters because there is no "Try again" button: the
+      // user's own second tap is the active probe, and without this a stale
+      // latch could only be left by waiting out the ladder.
       //
       // `allowWhileOffline` is the probe's way past it. BgbNet.probe() goes
       // through this client, and a probe judged by the very latch it exists
@@ -353,9 +347,8 @@
     put(path, body)          { return this._request("PUT",    path, { body }); }
     patch(path, body)        { return this._request("PATCH",  path, { body }); }
     // An optional body, like put/patch: DELETE /plays/reactions takes the
-    // list of plays a session footer covers. Every existing caller passes a
-    // path alone and is unaffected — _request only attaches a body when one
-    // is actually given.
+    // list of plays a session footer covers. _request only attaches a body
+    // when one is actually given, so a path alone sends none.
     del(path, body)          { return this._request("DELETE", path, { body }); }
 
     /**
@@ -446,11 +439,10 @@
     // connection the app needs for real work.
     /**
      * @param {string} event
-     * @param {Object} [metadata] Arbitrary JSON, stored on the row. The
-     *   backend's TrackBody has always accepted this; nothing sent it, so
-     *   every event was reduced to its name. init.js#reportBootTiming is the
-     *   first caller — it is how a "the app took a minute to open" report
-     *   becomes a number somebody can read off the admin dashboard.
+     * @param {Object} [metadata] Arbitrary JSON, stored on the row.
+     *   init.js#reportBootTiming uses it — it is how a "the app took a
+     *   minute to open" report becomes a number somebody can read off the
+     *   admin dashboard.
      */
     trackEvent(event, metadata) {
       const ctl = new AbortController();

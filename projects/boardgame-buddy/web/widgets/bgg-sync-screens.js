@@ -12,8 +12,7 @@
 // Nothing here re-implements either.
 
 (function () {
-  // Per-direction copy. Moved verbatim from the retired
-  // widgets/bgg-sync-sheet.js — the sheet is gone, the words were right.
+  // Per-direction copy.
   const COPY = {
     push: {
       title: "Push to BoardGameGeek",
@@ -83,8 +82,8 @@
 
   /**
    * The two direction buttons. The marks carry the direction and the caption
-   * carries the verb — main's treatment, kept: two SVGs and an arrow tell a
-   * screen reader nothing, which is why each still needs a real aria-label.
+   * carries the verb. Two SVGs and an arrow tell a screen reader nothing,
+   * which is why each still needs a real aria-label.
    */
   function directions(snap) {
     const diff = snap.diff || {};
@@ -204,7 +203,7 @@
    * A pull's `held` rows are listed but excluded: they are games kept at
    * Prev. owned that the importer refuses to resurrect, so they are a promise
    * about what will NOT happen, and counting them in "Import 14 changes" would
-   * make the button overstate itself. Carried across from the retired sheet.
+   * make the button overstate itself.
    */
   function commitLabel(snap) {
     const dir = snap.direction === "pull" ? "pull" : "push";

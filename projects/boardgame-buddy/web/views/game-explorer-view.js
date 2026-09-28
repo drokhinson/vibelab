@@ -6,9 +6,7 @@
 // PlaySession and jumps straight into the Gather screen of the host flow —
 // the game arrives prefilled.
 //
-// Reached from the Play tab's "Game Explorer" host card. Lived as the bottom
-// half of the Play tab until Join moved down there; the markup and the filter
-// semantics are unchanged by that move.
+// Reached from the Play tab's "Game Explorer" host card.
 
 (function () {
   // Three rows of the polaroid grid: 3-up on a phone, 4 on a tablet, 6 on a
@@ -106,7 +104,7 @@
       // document; the shared collection cache also pushes into the store.
       // Both of these fire for a single "+" tap (the status picker sets the
       // store slot AND dispatches the DOM event), so each one patches rather
-      // than re-rendering — two full rebuilds for one tap was the old cost.
+      // than re-rendering — otherwise one tap costs two full rebuilds.
       // A tier change changes the page size (rows × columns), so page 1 of
       // the new size is the only page whose contents mean anything.
       this.listen("layout", () => { this._page = 1; this._loadGames(); });
@@ -168,18 +166,18 @@
 
     /**
      * Every mount, scope toggle, filter chip and page turn — including Prev —
-     * used to be its own uncached round trip. The "mine" scope is just the
+     * would otherwise be its own uncached round trip. The "mine" scope is just the
      * owned shelf, which bootstrap already warms, so it pages locally through
      * ShelfFilter; the catalog scope is cached per query instead.
      */
     async _loadGames() {
       const seq = ++this._loadSeq;
 
-      // Warm path first, and SYNCHRONOUSLY. _loadGames used to set
-      // _loading = true and render before it knew whether the data was local,
-      // so a chip tap on an already-cached shelf paid two full paints for a
-      // loading state nobody ever saw. Now a cache hit derives and patches in
-      // the tap's own frame, and only a genuine miss shows a loader.
+      // Warm path first, and SYNCHRONOUSLY. Setting _loading = true and
+      // rendering before knowing whether the data is local would make a chip
+      // tap on an already-cached shelf pay two full paints for a loading state
+      // nobody ever sees. A cache hit derives and patches in the tap's own
+      // frame, and only a genuine miss shows a loader.
       if (this._filters.scope === "mine" && this._paintMineFromCache()) {
         // Let SWR revalidate behind the paint; re-derive only if it returns a
         // different shelf object.
@@ -235,9 +233,9 @@
      * A shelf past the endpoint's row cap only needs the server when the user
      * is actually NARROWING it — searching an incomplete copy would miss games,
      * but an unfiltered browse of the prefix is fine. Mirrors
-     * ShelfController.serverFallback; this view previously diverted on
-     * `truncated` alone, so a >1000-game collection hit the network on every
-     * tap even with no filters set.
+     * ShelfController.serverFallback; diverting on `truncated` alone would
+     * send a >1000-game collection to the network on every tap even with no
+     * filters set.
      */
     _serverFallback(shelf) {
       return !!(shelf && shelf.truncated && this._activeFilterCount() > 0);
@@ -246,8 +244,8 @@
     /**
      * Sort ONCE per shelf, not once per tap. Filtering only removes rows, so
      * the added_at order is filter-independent — re-sorting on every chip tap
-     * was pure waste, and over a 1000-row shelf with localeCompare (ICU
-     * collation, one of the slowest comparators in JS) it was measurable.
+     * is pure waste, and over a 1000-row shelf with localeCompare (ICU
+     * collation, one of the slowest comparators in JS) it is measurable.
      * These are ISO-8601 strings, so a plain relational compare is
      * byte-identical and far cheaper. game_id breaks ties so paging is stable.
      */
@@ -397,9 +395,9 @@
     /**
      * Chip state, in place. The chip set is fixed, so this only ever toggles a
      * class — no node is replaced. That matters more than the microseconds
-     * saved: re-emitting the row destroyed the button under the user's finger
-     * mid-gesture, so `:active` never painted and the tap read as ignored, and
-     * it reset the horizontally-scrolling .lp-chip-row back to scrollLeft 0.
+     * saved: re-emitting the row destroys the button under the user's finger
+     * mid-gesture, so `:active` never paints and the tap reads as ignored, and
+     * it resets the horizontally-scrolling .lp-chip-row back to scrollLeft 0.
      */
     _paintChips() {
       const f = this._filters;
@@ -480,7 +478,7 @@
     }
 
     /** Repaint one card's status chip only when it actually changed. The diff
-     *  guard and the repaint both live in ui/game-card.js now — same writer as
+     *  guard and the repaint both live in ui/game-card.js — same writer as
      *  the initial paint and as the feed's. */
     _syncCardStatus(el, g) {
       window.syncGamePolaroidStatus(el, this._collectionMap[g.id] || null);
@@ -625,7 +623,7 @@
       this._loadGames();
     }
 
-    // Toggles: tapping the active chip clears it. The chip markup no longer
+    // Toggles: tapping the active chip clears it. The chip markup does not
     // encodes which of those two a tap means, so the decision lives here.
     _setFilter(key, value) {
       this._filters[key] = this._filters[key] === value ? null : value;
@@ -653,10 +651,10 @@
 
     _goPage(n) {
       this._page = n;
-      // Scroll AFTER the paint. Previously this queried the DOM the render
-      // had just replaced and then animated a smooth scroll concurrently with
-      // a full container rebuild — scroll animation plus re-layout is the
-      // classic jank pairing.
+      // Scroll AFTER the paint. Querying the DOM before it would find nodes
+      // the render is about to replace, and a smooth scroll animated
+      // concurrently with a container rebuild — scroll animation plus
+      // re-layout — is the classic jank pairing.
       Promise.resolve(this._loadGames()).then(() => {
         const el = this.container.querySelector(".lp-find-section");
         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });

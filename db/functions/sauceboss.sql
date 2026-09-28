@@ -12,8 +12,6 @@
 
 
 -- ── Trigger functions and helpers ───────────────────────────────────────────
--- The 001 baseline's sauceboss_sauce_items_check() was dropped by 009 and the
--- 013 rename split its job across the three checks below.
 
 -- sauceboss_dish_level_check()
 --   Signature : () → TRIGGER
@@ -46,7 +44,7 @@
 --   Signature : (p_category TEXT) → JSON
 --   Language  : SQL STABLE
 --   Defined in: sauceboss/001_baseline.sql
---   Called by : (legacy — superseded by initial_load / item_load)
+--   Called by : (legacy — no callers; initial_load / item_load cover this read)
 --   Purpose   : Per-category dish-row listing.
 
 -- get_sauceboss_initial_load()
@@ -173,7 +171,7 @@
 --   Defined in: sauceboss/026_fast_saucebook_rpc.sql
 --   Called by : shared-backend/routes/sauceboss/saucebook_routes.py
 --   Purpose   : User's saved sauces with addedAt, variantCount, attachments, compatibleItems.
---               ingredientNames is NO LONGER returned — the web client derives it from
+--               Does not return ingredientNames — the web client derives it from
 --               get_sauceboss_all_sauces_full() locally (much faster than computing per-sauce
 --               ingredient aggregation in this RPC).
 

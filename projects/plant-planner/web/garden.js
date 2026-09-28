@@ -1,6 +1,5 @@
 // garden.js — 2D top-down planter builder. Sidebar is always the user's
-// shortlist of cache-backed plants; the legacy seed-table catalog has been
-// retired in the Phase-2 cutover.
+// shortlist of cache-backed plants.
 
 function renderBuilder() {
   if (!currentGarden) { showView("gardens"); return; }
@@ -206,7 +205,7 @@ function openZoneEditor() {
   });
 }
 
-// Kept as openZonePicker so any older call sites still work.
+// Alias for call sites that use the openZonePicker name.
 var openZonePicker = openZoneEditor;
 
 async function setGardenLocation(zone, label) {
@@ -229,7 +228,7 @@ async function setGardenLocation(zone, label) {
   }
 }
 
-// Backwards-compat — older modules call setGardenZone(zone).
+// Zone-only entry point for modules that call setGardenZone(zone).
 async function setGardenZone(zone) {
   return setGardenLocation(zone, 'Zone ' + zone);
 }

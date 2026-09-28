@@ -16,9 +16,6 @@
 // links to both permanently, and its brand review loads them directly, so a
 // visitor with no account and no session has to be able to read them. That is
 // why they are routes above the auth gate rather than pages inside Settings.
-//
-// A pre-launch COMING_SOON gate used to carve out an exception for exactly
-// these two; the gate is gone, but the requirement it was serving is not.
 
 (function () {
   class LegalView extends window.View {

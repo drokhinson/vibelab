@@ -12,7 +12,7 @@ import {
   Alert,
   Linking,
 } from 'react-native';
-// expo-file-system top-level export in SDK 54 dropped EncodingType — use
+// expo-file-system's top-level export (SDK 54) has no EncodingType — use
 // the /legacy subpath (same as SauceBuilderScreen) to keep writeAsStringAsync.
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';

@@ -75,8 +75,8 @@ def _name_rank(q: str, name: str) -> int:
 
     BGG returns its matches in no useful order and does not rank them, so
     without this the list is whatever order BGG felt like. Searching "munchkin"
-    put Epische Munchkin, a warehouse bookmark and four Good/Bad/Munchkin
-    editions on screen and never showed plain Munchkin at all.
+    would put Epische Munchkin, a warehouse bookmark and four Good/Bad/Munchkin
+    editions on screen and never show plain Munchkin at all.
 
     Both arguments are already lowercased by the caller.
     """
@@ -165,8 +165,8 @@ def _collection_hits(
 ) -> list[UnifiedSearchHit]:
     """Name-match the viewer's collection, filtered in SQL.
 
-    This runs per keystroke; the old version fetched the viewer's ENTIRE
-    collection every call and substring-filtered in Python. The !inner hint
+    This runs per keystroke, so it must not fetch the viewer's ENTIRE
+    collection every call and substring-filter in Python. The !inner hint
     makes the embedded-game ilike apply to the parent collection rows, and
     the trigram index from migration 039 serves the ILIKE.
     """
@@ -320,13 +320,12 @@ async def _bgg_hits(
         logger.warning("BGG XML parse failed for %r: %s", query, exc)
         return await asyncio.to_thread(_as_results, sb, raw)
 
-    # EVERY item, then filter, then rank, then cap — in that order, and the
-    # order is the fix. This used to slice `findall("item")[:limit]` FIRST and
-    # drop expansions afterwards, which had two compounding failures on a
-    # franchise search: expansions inside the first 20 were discarded with
-    # nothing backfilling them, so a 20-row request returned a handful; and
-    # BGG's own order is not relevance, so the rows that survived were an
-    # arbitrary 20 of hundreds. Searching "munchkin" never showed Munchkin.
+    # EVERY item, then filter, then rank, then cap — in that order. Slicing
+    # `findall("item")[:limit]` FIRST and dropping expansions afterwards would
+    # fail twice over on a franchise search: expansions inside the first 20
+    # would be discarded with nothing backfilling them, so a 20-row request
+    # returns a handful; and BGG's own order is not relevance, so the rows that
+    # survive would be an arbitrary 20 of hundreds.
     matches: list[dict[str, Any]] = []
     for item in root.findall("item"):
         is_expansion = item.get("type") == "boardgameexpansion"
@@ -383,7 +382,7 @@ def _as_results(sb: Client, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
     have: set[int] = set()
     thumbs: dict[int, str | None] = {}
     # Chunked: PostgREST carries the id set in the query string, and the whole
-    # list can now be hundreds long. The thumbnail rides the same read, so a
+    # list can be hundreds long. The thumbnail rides the same read, so a
     # game already in the library arrives with its art for free.
     for chunk in chunked(ids, _EXISTS_CHUNK):
         existing = (

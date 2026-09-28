@@ -279,9 +279,8 @@
     // Combined preload for the gather-player picker. Accounts (accepted buddy
     // edges), ghosts (free-text players the user has logged before), and
     // recent played-with (real accounts ordered by shared-play count) in one
-    // call — GET /play-partners is a single bgb_play_partners RPC. This used
-    // to be three parallel requests, each paying its own auth lookup and its
-    // own query fan-out. SWR-cached at FRESH_TTL_MS / STALE_TTL_MS above
+    // call — GET /play-partners is a single bgb_play_partners RPC, so one
+    // auth lookup and one query fan-out. SWR-cached at FRESH_TTL_MS / STALE_TTL_MS above
     // (24h / 7d), so the picker dropdown opens with zero round-trips after the
     // first hit.
     static allBuddies() {
@@ -350,7 +349,7 @@
       const bundle = window.bgbCache ? window.bgbCache.peek(CACHE_NS, ALL_KEY) : null;
       return {
         accounts: (bundle && bundle.accounts) || [],
-        // Absent from a bundle cached before migration 049 shipped, which is
+        // Absent from a bundle cached by a build without migration 049, which is
         // why every read of it is `|| []` rather than a destructure: that copy
         // stays fresh for a day and is corrected by the next refresh, and one
         // missing section beats a picker that throws.
@@ -369,9 +368,8 @@
      * own id. Reading them as if they were profiles is not a shape mismatch
      * that shows up as a wrong name: it produces a nameless row that the
      * picker's own `name` filter then drops, so the whole buddy list silently
-     * vanishes and only ghosts remain. That is exactly what the play importer
-     * shipped, which is why this mapping now lives here rather than at each
-     * call site.
+     * vanishes and only ghosts remain. That is why this mapping lives here
+     * rather than at each call site.
      *
      * The viewer is NOT included — the RPC never returns them, and the one
      * caller that wants them at the table (the importer) prepends its own row

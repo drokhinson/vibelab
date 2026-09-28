@@ -1,10 +1,9 @@
 """Reading a BoardGameGeek play history: the page walk, the parser, the filter.
 
-Split out of bgg_link_routes.py once the plays read acquired a second consumer,
-for the same reason bgg_collection_read.py was — and the split landed at the
-same moment the two consumers stopped wanting the same thing from it:
+Its own module because the plays read has two consumers, as the collection
+read does — and the two want different things from it:
 
-  * `POST /bgg/sync` now reads plays only to COUNT the ones BgB does not have.
+  * `POST /bgg/sync` reads plays only to COUNT the ones BgB does not have.
     It writes none. It parks what it read (services/bgg_plays_cache.py) for the
     importer the user is about to be handed to.
   * `POST /bgg/plays/pending` reads them to SHOW them, so it needs three fields
@@ -22,8 +21,8 @@ entries, so this is routine rather than exceptional.
 QUANTITY IS CARRIED, NEVER EXPANDED. BGG lets one `<play>` stand for N sittings
 via `quantity`. Expanding it would mint N rows sharing one `bgg_play_id`, and
 the partial UNIQUE on (user_id, bgg_play_id) would reject all but the first —
-so the import would silently land one play and report N. The retired sync wrote
-one row per element; the importer keeps that parity and says so in the review.
+so the import would silently land one play and report N. The importer writes
+one row per element and says so in the review.
 """
 
 import logging
@@ -167,7 +166,7 @@ def existing_bgg_play_ids(sb: Client, user_id: str, bgg_play_ids) -> set[int]:
     (user_id, bgg_play_id) (001_baseline.sql), rather than a probe per play.
 
     This is the single definition of "already here", and it answers for every
-    writer at once: the retired sync path, the pending-imports worker still
+    writer at once: legacy sync-written plays, the pending-imports worker
     draining kind='play' rows, and the importer. That matters because the three
     do not share an idempotency key — only this column.
     """

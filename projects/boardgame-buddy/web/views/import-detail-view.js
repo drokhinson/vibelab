@@ -1,8 +1,7 @@
 // views/import-detail-view.js — one import, and what it wrote.
 //
 // The drill-down of the imports spoke (views/imports-view.js). It answers the
-// question the old Settings row could not: before you undo a 214-play paste,
-// what is actually in it?
+// question: before you undo a 214-play paste, what is actually in it?
 //
 // THERE IS NO IMPORT OBJECT TO EDIT. A batch is a GROUP BY over
 // boardgamebuddy_plays.import_batch_id — no table, no name, no note of its own
@@ -43,9 +42,7 @@
 
     async onMount() {
       this._reset();
-      // The run sheet's delete. It has had no listener anywhere in the app
-      // until now, which is why deleting a run from the feed left every other
-      // surface showing it until the next fetch.
+      // The run sheet's delete.
       this.listenDom("plays-changed", (e) => this._onRunDeleted(e.detail || {}));
       // The popup's edit and delete, for the one-off rows.
       this.listenDom("play-changed", (e) => this._onPlayChanged(e.detail || {}));

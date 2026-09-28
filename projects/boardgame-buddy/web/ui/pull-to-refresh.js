@@ -1,7 +1,7 @@
 // ui/pull-to-refresh.js — drag the top of a list down to refresh it.
 //
-// The gesture already existed on these screens; it belonged to the browser and
-// it reloaded the whole app. On a PWA that is the worst possible response to
+// Left alone, the gesture belongs to the browser and it reloads the whole
+// app. On a PWA that is the worst possible response to
 // "show me what's new": a full restart, a splash, a re-boot, and the scroll
 // position gone. This takes the gesture over on the two screens that have a
 // list worth refreshing and spends it on that list instead.
@@ -11,7 +11,7 @@
 // refresh from arming; preventDefault() on the first downward touchmove at the
 // top is what stops the page rubber-banding while we draw. The class is put on
 // <html> by attach() and taken off by detach(), so every screen that has NOT
-// opted in keeps the native gesture it has today.
+// opted in keeps the native gesture.
 //
 // APPENDING, NOT REPLACING. Both callers merge the refreshed first page over
 // the first page they are holding and keep the cursor pages below it, so a
@@ -36,7 +36,7 @@
   const RESISTANCE = 0.55;
   // Below this, a touchmove is noise — a tap's own jitter, or the start of a
   // horizontal swipe. Nothing is drawn and nothing is prevented until a move
-  // clears it, so taps and sideways scrolls behave exactly as they did.
+  // clears it, so taps and sideways scrolls behave as normal.
   const SLOP_PX = 8;
   // How long the indicator stays up after the refresh resolves. Without it a
   // fast response flashes the spinner for one frame, which reads as a glitch
@@ -216,8 +216,8 @@
     }
   }
 
-  // Touch-only, and that is not a gap to fill later. The gesture this replaces
-  // is itself touch-only, every screen it attaches to is phone-first, and the
+  // Touch-only, and that is not a gap to fill later. The browser gesture this
+  // takes over is itself touch-only, every screen it attaches to is phone-first, and the
   // pointer equivalent on a desktop — dragging a page that is already at its
   // top — is not a gesture any browser offers. Views keep their own explicit
   // refresh paths (Retry on an error state, a re-mount) for everyone else.

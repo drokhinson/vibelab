@@ -75,8 +75,8 @@ export default function ReviewStep({
   );
 
   // Mirrors web's source-label map (builder.js:647). Falls back to the
-  // sourceUrl-derived heuristic for builders that pre-date the recipeSource
-  // field (e.g. an edit of a sauce saved before this change).
+  // sourceUrl-derived heuristic for builders with no recipeSource (e.g. an
+  // edit of a sauce saved without one).
   const SOURCE_LABELS = {
     url: '🌐 Imported from website',
     reel: '📱 Imported from reel',

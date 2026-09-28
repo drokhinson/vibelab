@@ -1,9 +1,8 @@
 // widgets/onboarding-deck.js — first-run setup as one slide deck.
 //
-// Replaces a queue of three modals (PolaroidPopup.avatarCustomizer →
-// AddBuddiesModal → OnboardingBggModal, each awaited before the next opened)
-// with a single mounted surface. Three things follow from that, and they are
-// the whole point of the file:
+// A single mounted surface rather than a queue of modals, each awaited before
+// the next opened. Three things follow from that, and they are the whole
+// point of the file:
 //
 //   • THE STEPS ARE SLIDES. One track, one transform. Nothing opens, closes
 //     and hands off, so the user never sees the empty feed flash between
@@ -16,13 +15,12 @@
 //     travelling, not a request. Results land on the finale slide's ledger.
 //
 // EVERY PANEL IS COUNTED, the finale included: it reads "Step 5 of 5" with the
-// bar full. The finale used to be uncounted on the grounds that it asks for
-// nothing — but it does ask now (the walkthrough or Skip), and a deck that
-// announces four steps and then shows a fifth screen has under-counted itself
-// at exactly the moment the person is deciding whether they are done. So STEPS
-// is the panel count, not the panel count minus one.
+// bar full. The finale asks a question of its own (the walkthrough or Skip),
+// and a deck that announces four steps and then shows a fifth screen has
+// under-counted itself at exactly the moment the person is deciding whether
+// they are done. So STEPS is the panel count, not the panel count minus one.
 //
-// The finale is still the only slide that can hand off somewhere else —
+// The finale is the only slide that can hand off somewhere else —
 // "Show me around" finishes the deck and routes to /tour, which is why
 // finish() takes an options object.
 //
@@ -37,7 +35,7 @@
   const CLOSE_MS = 200;
   // Every panel is a counted step, so this one number drives the segment bar,
   // the counter, the clamp and the back-hidden rule — and it must equal
-  // PANELS.length below. The PANEL geometry still does not follow from it: the
+  // PANELS.length below. The PANEL geometry does not follow from it: the
   // track width and the transform read PANELS.length directly, so a slide
   // added without touching this constant lands on a track of the right width
   // with a counter that is one short, which is visible rather than silent.
@@ -188,11 +186,10 @@
         slides.finale,
       ];
       PANELS.forEach(function (s) { track.appendChild(s.el); });
-      // 5 panels, all five counted (STEPS above). The panel count used to live
-      // in FOUR places — this width, the transform below, and .ob-slide's
-      // width AND flex-basis in styles.css — so adding a slide meant changing
-      // all four or watching the track land on two half-slides. It is now one
-      // number, published to CSS as a custom property.
+      // 5 panels, all five counted (STEPS above). The panel count is one
+      // number, published to CSS as a custom property, so this width, the
+      // transform below, and .ob-slide's width AND flex-basis in styles.css
+      // cannot disagree and land the track on two half-slides.
       track.style.width = `${PANELS.length * 100}%`;
       track.style.setProperty("--ob-panels", String(PANELS.length));
 
@@ -205,7 +202,7 @@
         segs.forEach(function (seg, n) { seg.classList.toggle("is-done", n <= step); });
         // Back is hidden on the first slide (nowhere to go) and on the finale
         // (every write behind it has already fired — walking back into a step
-        // whose job is queued would offer to do it twice). The finale is now a
+        // whose job is queued would offer to do it twice). The finale is a
         // counted step, so it is the LAST panel rather than the one past the
         // count.
         backBtn.hidden = step === 0 || step === PANELS.length - 1;
@@ -222,8 +219,7 @@
         setTimeout(function () {
           root.remove();
           // Only this deck's lock to release — nothing else is open during
-          // first run, and the three modals it replaced are the reason that
-          // is now true.
+          // first run.
           document.body.style.overflow = "";
           _open = false;
           // AFTER the teardown, never before: the tour is a routed screen and

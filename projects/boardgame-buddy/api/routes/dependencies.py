@@ -17,7 +17,7 @@ from auth import ADMIN_API_KEY
 APP_NAME = "boardgame-buddy"
 
 # Profile lookup cache for get_current_user. The JWT is verified locally
-# against cached JWKS, so that one SELECT was the entire per-request DB cost of
+# against cached JWKS, so that one SELECT is the entire per-request DB cost of
 # authentication — paid by every call, including the host's 2s lobby poll and
 # each Gather-time write. In-process and per-worker (see cache.py): a rename on
 # one worker is invisible to another until the TTL lapses, which is why the
@@ -109,7 +109,7 @@ def _load_or_create_profile(su_user: SupabaseUser) -> tuple[CurrentUser, bool]:
         ), True
 
     # Auto-create profile on first auth. display_name starts at the
-    # email local-part (matches old behaviour); username is the
+    # email local-part; username is the
     # stable handle, picked once and never reassigned.
     display_name = su_user.email.split("@")[0] if su_user.email else "user"
     username = _derive_username(sb, su_user.email, su_user.sub)
@@ -145,7 +145,7 @@ async def get_current_user(
         return cached
 
     # The Supabase client is synchronous, so this goes to a worker thread. On
-    # the loop it blocked every other in-flight request in the service — all ten
+    # the loop it would block every other in-flight request in the service — all ten
     # apps — for a full round trip, and it runs on the first request of every
     # minute per user (the cache above is a 60s TTL) and on every cold worker.
     #

@@ -1,14 +1,12 @@
 // domain/bgg-play-import.js — the import wizard's BOARDGAMEGEEK draft.
 //
-// The third model behind `@typedef ImportSource` (domain/import-draft.js), and
-// the one that finally makes the wizard the only way a play reaches this
-// database. BGG plays used to be written by POST /bgg/sync, straight into
-// boardgamebuddy_plays — around bgb_log_play, around this review, and with
-// migration 023's roster rules re-implemented server-side in _player_rows.
+// The third model behind `@typedef ImportSource` (domain/import-draft.js). With
+// it, the wizard is the only way a play reaches this database: BGG plays go
+// through bgb_log_play and this review like every other source.
 //
 // ─── Why this is a third model rather than a mode on PlayImport ──────────────
 //
-// The same argument the notes and photos models already settled: one is a
+// The same argument as for the notes and photos models: one is a
 // parse → name-map → run-collapse machine, the other an EXIF → per-file-upload
 // machine, and merging them is a thousand lines of `if (source === …)`. This
 // one is a fetch → name-map → game-map machine. What makes one review render
@@ -25,15 +23,13 @@
 // 2. EVERY PLAY CARRIES ITS bgg_play_id INTO THE PAYLOAD. That is the second
 //    idempotency key (migration 044), beside the client_key every source sends.
 //    The client_key makes re-running THIS draft free; the BGG id makes
-//    re-running from a different draft, another device, or after the retired
-//    sync already landed the play free as well. Nothing else can see those
-//    rows — they carry no client_key at all.
+//    re-running from a different draft or another device free as well, and it
+//    is the only key that sees plays already on file with no client_key.
 //
 // 3. A PLAY WITH NO ROSTER IS SEATED WITH THE VIEWER. Most BGG plays do not
 //    record a `<players>` element, and migration 023 refuses a play with nobody
-//    at the table. The retired sync did this server-side; dropping it here
-//    would mean the wizard silently imports fewer plays than the thing it
-//    replaced. It is not an invention either: the play is on the user's own BGG
+//    at the table, so without this the wizard would silently import far
+//    fewer plays than BGG holds. It is not an invention either: the play is on the user's own BGG
 //    account, and boardgamebuddy_plays.user_id already says whose play it is.
 //
 // Rows collapse the way the notes model's do — indistinguishable plays become
@@ -169,7 +165,7 @@
             bggUsername: pl.username || null,
             isWinner: !!pl.is_winner,
             // BGG's /plays carries no score. The review is where one gets
-            // typed in, which is more than the retired sync ever offered.
+            // typed in.
             score: null,
           })),
           seatsOverride: null,
@@ -190,7 +186,7 @@
      *
      * Most BGG plays carry no `<players>` at all, and migration 023 refuses a
      * play with nobody at the table — so without this the wizard would import
-     * dramatically fewer plays than the sync it replaces, and say nothing about
+     * dramatically fewer plays than BGG holds, and say nothing about
      * it beyond a "nobody at the table" notice the user cannot act on. It is
      * not an invention: the play is on the user's own BGG account, and
      * boardgamebuddy_plays.user_id already records whose play it is. It moves
@@ -776,14 +772,13 @@
         // was lost returns duplicates rather than a second set of plays.
         client_key: play.id,
         // Migration 044. The OTHER idempotency key, and the one that spans
-        // drafts, devices and the retired POST /bgg/sync write path — those
-        // rows carry this and no client_key, so nothing else can see them.
+        // drafts and devices — plays already on file with this and no
+        // client_key are visible to nothing else.
         bgg_play_id: play.bggPlayId,
         import_group_id: (groups && groups.get(play.id)) || null,
         // Migration 007. Every play in THIS import shares one, so a BGG import
         // shows up in the imports spoke (/settings/imports) and can be read
-        // back and undone there — neither of which it could when the sync
-        // wrote these rows itself.
+        // back and undone there.
         import_batch_id: batchId || null,
       };
     }

@@ -1,13 +1,10 @@
 // @ts-check
 // domain/shelf-controller.js — the data half of a collection spoke.
 //
-// Collection and Wishlist were two screens with the same shelf machinery, and
-// they carried byte-identical copies of the load / filter / page logic. That
-// state moved here; the views owned only their markup. The two screens then
-// became one — the Collection spoke, with a shelf dropdown — so this class now
-// serves one view holding three modes rather than two views holding one each.
-// It is written for N modes either way, which is what made that merge a
-// one-word change at the construction site.
+// The Collection spoke's load / filter / page state lives here; the view owns
+// only its markup. The spoke holds three shelf modes behind a dropdown, and
+// this class is written for N modes, so adding one is a one-word change at the
+// construction site.
 //
 // The model: pull a whole shelf once via Collection.shelf() (cached, SWR),
 // then derive the visible window, filter and search from it locally. The
@@ -286,7 +283,7 @@
 
     /**
      * Server-paginated fallback, only for shelves past the row cap. This is
-     * the pre-existing /collection/grid path; everything else is local.
+     * the /collection/grid path; everything else is local.
      *
      * `append` is what makes it scroll: the batch is added to the rows already
      * on screen rather than replacing them, and it reports through

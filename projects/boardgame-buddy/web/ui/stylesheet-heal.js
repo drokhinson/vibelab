@@ -5,7 +5,7 @@
 // 200. A device that asks for the new sheet a moment before its edge has it
 // gets the HTML page instead; `nosniff` makes the browser refuse it, _headers
 // has already told it to keep that answer for a year, and the app boots
-// working but completely unstyled. sw.js no longer caches such an answer, but
+// working but completely unstyled. sw.js refuses to cache such an answer, but
 // the browser's own HTTP cache may still hold it.
 //
 // So: once the page has loaded, check that styles.css actually applied (its

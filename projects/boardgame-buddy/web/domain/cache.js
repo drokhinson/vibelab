@@ -20,14 +20,10 @@
 // bindUser, mismatched entries in localStorage are dropped.
 
 (function () {
-  // 2: game payloads carry image_url on collection shelves, profile pages and
-  //    expansion lists (migration 055). Entries cached at v1 hold thumbnail-only
-  //    games, so returning users would keep painting the low-res art from
-  //    localStorage until natural expiry.
-  // 3: game bundles carry `description` (BGG descriptions are now captured on
-  //    import and backfilled for the existing catalog). Entries cached at v2
-  //    hold description-less games, so returning users would keep painting a
-  //    blank blurb from localStorage until natural expiry.
+  // Current shape: game payloads carry image_url on collection shelves,
+  // profile pages and expansion lists (migration 055), and game bundles carry
+  // `description`. An entry cached under an older version lacks them, and
+  // would keep painting low-res art and a blank blurb until natural expiry.
   const SCHEMA_VERSION = 3;
   const STORAGE_PREFIX = "bgb_cache:";
   const META_SUFFIX = "__meta";
@@ -275,9 +271,8 @@
      * to staleTtl. It does NOT kick a refresh: the caller paints from it and
      * then fires its own SWR read, which is what repaints with fresher data.
      *
-     * Views that peeked through get() were silently blank past freshTtl (60s
-     * for the profile bundle) — the Play tab's "Another Round" card being the
-     * one that showed.
+     * A view that peeked through get() would go silently blank past freshTtl
+     * (60s for the profile bundle).
      */
     peek(ns, key) {
       const b = _store.get(ns);
@@ -333,8 +328,8 @@
     },
 
     /**
-     * Back-compat single-TTL setter. Stores with freshTtl == staleTtl so
-     * old callers see the same expiry behavior they always did.
+     * Single-TTL setter. Stores with freshTtl == staleTtl, so the entry has
+     * one expiry and no stale window.
      */
     set(ns, key, value, ttlMs = DEFAULT_TTL_MS) {
       if (ttlMs <= 0) return;

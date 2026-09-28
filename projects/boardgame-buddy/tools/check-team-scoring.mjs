@@ -3,7 +3,7 @@
 //
 //     node projects/boardgame-buddy/tools/check-team-scoring.mjs
 //
-// A team play's seats share ONE cell per round now
+// A team play's seats share ONE cell per round
 // (widgets/round-score-grid.js#roundGridColumns): the host types into it once,
 // the write fans out, and every seat saves the side's number as its own score.
 // Three things have to hold for that to be true rather than merely to look it,
@@ -17,8 +17,7 @@
 //     seats. Summing the seats reads N times too big on a side of N, and hands
 //     a 3v2 game to whichever side has three people on it.
 //   * THE SPLIT. A merged cell shows one number, so it may only exist where
-//     the seats hold one. Plays scored seat by seat (team mode has existed
-//     since migration 007) must keep their columns, or the detail popup prints
+//     the seats hold one. Plays scored seat by seat must keep their columns, or the detail popup prints
 //     one member's score over everybody's.
 //
 // There is no test runner for web/ (the authoring model is ~121 script tags,
@@ -101,7 +100,7 @@ console.log("\nan untagged seat is its own column, bare:");
 
 console.log("\nthe split: a side that holds two numbers keeps two columns:");
 {
-  // A play scored seat by seat — every team play saved before merged cells.
+  // A team play scored seat by seat, with a different number per seat.
   const roster = [seat("Ana", "Red", [10]), seat("Bo", "Red", [7])];
   eq("two different numbers, two columns",
      shape(columns(roster, "team", 1)), ["Ana:0", "Bo:1"]);
@@ -220,7 +219,7 @@ console.log("\nthe header of a merged column: badges by default, tag AND roster 
      && teamHtml.indexOf('<span class="scoring-head__team">Blue</span>') === -1);
   // A custom name carries what the tint cannot, so it is drawn as two lines —
   // the tag over the roster, the tag underlined by CSS — because a ~4.3rem
-  // column broke the one-line form wherever the box ran out.
+  // column breaks the one-line form wherever the box runs out.
   const customHtml = render([seat("Ana", "Owls", [10]), seat("Bo", "Owls", [10]),
                              seat("Cy", "Cats", [7]), seat("Di", "Cats", [7])], "team", true);
   ok("a custom side's text state draws the tag over the roster",

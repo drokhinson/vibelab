@@ -11,11 +11,10 @@
 // Escape, the device back gesture (ui/back-guard.js), focus return, the close
 // animation. Each sheet still writes its own panel markup and its own CSS
 // family; nothing about how a sheet LOOKS lives here.
-// Extracted when the status sheet stopped being the only one
-// (.claude/rules/ui-object-design.md §4: fix the root cause rather than ship a
-// second copy).
+// Shared rather than copied per sheet (.claude/rules/ui-object-design.md §4:
+// fix the root cause rather than ship a second copy).
 //
-// Grep `BgbBottomSheet` for the consumers — a list here drifted twice.
+// Grep `BgbBottomSheet` for the consumers — a list here would drift.
 //
 // A new sheet also needs its class added by name to the theme re-point list in
 // styles.css — a body-level sheet lands outside the screen that opened it and
@@ -53,7 +52,7 @@
    */
 
   /**
-   * The lifecycle every searchable sheet had grown its own copy of: bind the
+   * The lifecycle every searchable sheet shares: bind the
    * field, pin the list at its opening height, and give Escape first refusal
    * to clearing the query. The list patch itself stays with the sheet —
    * what a keystroke repaints (rows, tabs, a footer count) is the sheet's.
@@ -138,7 +137,7 @@
         // markup is one panel, so today the two tests agree — but chrome parked
         // BESIDE the panel would be a sibling of it, and an `=== root` test
         // leaves any such strip of apparent background inert
-        // (.claude/rules/overlays.md §8a, where exactly that shipped).
+        // (.claude/rules/overlays.md §8a).
         //
         // Asked of the dispatch path first, not only of `panel.contains(t)`: a
         // sheet that repaints its own body from a click handler deeper down

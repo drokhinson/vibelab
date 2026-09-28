@@ -12,7 +12,7 @@
   var trips = [];
   var dynamicActive = false;
 
-  // Fallback card art — the arrow mark the section shipped with. Used whenever a
+  // Fallback card art — the section's default arrow mark. Used whenever a
   // trip has no icon_url set.
   var ARROW_SVG =
     '<svg viewBox="0 0 64 64" width="52" height="52" fill="none" stroke="currentColor" ' +
@@ -47,12 +47,12 @@
     for (var i = 0; i < THEMES.length; i++) {
       if (THEMES[i].value === t.theme) return t.theme;
     }
-    // A trip from a backend that predates the column keeps the original look.
+    // A trip from a backend without the column gets the default look.
     return DEFAULT_THEME;
   }
 
   function statusOf(t) {
-    // A trip served by a backend that predates the column has no status; treat
+    // A trip served by a backend without the column has no status; treat
     // it as the plain card rather than greying it out.
     for (var i = 0; i < STATUSES.length; i++) {
       if (STATUSES[i].value === t.status) return t.status;
@@ -169,8 +169,8 @@
   function renderAdminBar() {
     if (!isAdmin()) { adminBar.hidden = true; adminBar.innerHTML = ""; return; }
     adminBar.hidden = false;
-    // Add trip now lives on the inline header pencil; the bar keeps Sign out so
-    // it stays reachable once login moved to the footer pill.
+    // Add trip lives on the inline header pencil; the bar keeps Sign out so
+    // it stays reachable while login sits on the footer pill.
     adminBar.innerHTML =
       '<span class="pa-tag">Admin</span>' +
       '<button class="pa-btn pa-btn--ghost" id="pa-signout">Sign out</button>';
@@ -202,7 +202,7 @@
   // formModal sends null for a blanked input and the API skips null fields, so a
   // field normally can't be unset once written. Send "" for icon_url instead —
   // it's not null, so the API writes it, and "" is falsy on render (back to the
-  // arrow). Scoped to this field on purpose; the general behaviour is unchanged.
+  // arrow). Scoped to this field on purpose; every other field keeps skip-null.
   function clearableIcon(vals) {
     if (vals.icon_url == null) vals.icon_url = "";
     return vals;

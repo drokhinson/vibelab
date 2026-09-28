@@ -6,10 +6,9 @@
 //   buddy_request   somebody asked to be your buddy
 //   buddy_accepted  somebody accepted the request you sent
 //
-// All three are things done TO the user rather than by them, and all three used
-// to land somewhere else — a play link here, a buddy request as a dot three
-// taps into Profile, an acceptance nowhere at all. The bell is the one place
-// that answers "what happened while I was away", so it carries all three.
+// All three are things done TO the user rather than by them. The bell is the
+// one place that answers "what happened while I was away", so it carries all
+// three.
 //
 // A play_link row is an ENTRY, not a play — one act of linking. The server
 // groups a whole imported batch, a run of identical plays, or a single
@@ -19,13 +18,13 @@
 // the difference between this screen being usable and being the same chore in
 // a new place.
 //
-// SELECTION IS THE ROW'S OWN CIRCLE, and it is the only way out of a play. The
-// screen used to carry two paths to one destructive action — a per-row ghost
-// button that unlinked on the spot, and a header Select toggle that revealed
-// tick boxes for the same thing. Two affordances for one destination is the
-// anti-pattern in .claude/rules/ui-object-design.md §3b, and the more dangerous
-// of the two was the one-tap. Now every play row wears an empty circle, ticking
-// any of them raises the action bar, and the bar is where removal happens.
+// SELECTION IS THE ROW'S OWN CIRCLE, and it is the only way out of a play. A
+// second path to the same destructive action — a per-row button that unlinks
+// on the spot, or a header Select toggle — would be two affordances for one
+// destination, the anti-pattern in .claude/rules/ui-object-design.md §3b, and
+// a one-tap unlink is the more dangerous kind. Every play row wears an empty
+// circle, ticking any of them raises the action bar, and the bar is where
+// removal happens.
 //
 // Unlinking hands your seat back as a ghost carrying your name, owned by
 // whoever logged the play: they keep their game night, you leave your own
@@ -87,8 +86,8 @@
       //
       // peekConfirmed() answers only while that fetch is recent enough to still
       // be the truth (see CONFIRMED_MS in domain/notification-feed.js) — past
-      // that it returns null and this falls through to the network exactly as
-      // it always did. A list of Accept and Remove-me buttons is not a place to
+      // that it returns null and this falls through to the network. A list of
+      // Accept and Remove-me buttons is not a place to
       // paint something old.
       const warm = window.NotificationFeed.peekConfirmed();
       if (warm) this._takePage(warm);
@@ -333,9 +332,9 @@
     /**
      * The list, under day headers.
      *
-     * The date moved out of the rows and became the thing they sit under. It
-     * was the same date twenty times over down the right of the list, which
-     * reads as data about each row rather than as where the row falls in time —
+     * The date is the thing the rows sit under, not a column on each: the
+     * same date twenty times over down the right of the list reads as data
+     * about each row rather than as where the row falls in time —
      * and the date a notification list is actually read on is when the thing
      * HAPPENED, not when the game was played. The play date stays on its row as
      * a detail; the header carries the position.
@@ -618,7 +617,7 @@
      * The action bar, which exists only while something is ticked.
      *
      * Two buttons and no third: get out of what you picked, or put it back.
-     * There is no Select all — the old bar carried one, and "select all" on a
+     * There is no Select all: "select all" on a
      * list whose only action is destructive is a button whose entire job is to
      * arm the worst possible version of it.
      */

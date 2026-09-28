@@ -13,7 +13,7 @@
 //     the model loses count of. expand() turns each run into individual draft
 //     plays the moment the parse lands, so every screen after that — the
 //     review list, the counts, the write — deals in plays, not in runs. The
-//     run survives only as `runId`, which by the review step is no longer what
+//     run survives only as `runId`, which by the review step is not what
 //     collapses the list (see rows()) — only what lets the row's detail panel
 //     say where its repeats came from.
 //
@@ -27,8 +27,8 @@
 //     draws, and what the row and group keys are built from all come from
 //     seats(), which maps each name through the Players step and COLLAPSES two
 //     names that turned out to be one person. The Players step promises that in
-//     as many words; the write used not to keep the promise, which is how a
-//     note saying "Jas" and "Jasmine" imported a game with Jasmine in it twice.
+//     as many words, and this is what keeps the promise — without it a note
+//     saying "Jas" and "Jasmine" would import a game with Jasmine in it twice.
 //
 //   • GROUPING HAPPENS AFTER THE ASSIGNMENTS, NEVER BEFORE. What collapses the
 //     review list is `rowKeyFor`: the CATALOG game, the day, the note, and the
@@ -37,9 +37,9 @@
 //     review step the user has said so, and a list keyed on how the note wrote
 //     them would be showing the user their own note back rather than the plays
 //     they are about to import. `import_group_id` is that same identity at
-//     write time (groupKeyFor), minus the plays with something of their own to
-//     say: a score or a note disqualifies a play from the feed's group however
-//     the model counted it, because the group's card cannot say it.
+//     write time (groupKeyFor), so the review list and the feed stack the same
+//     plays. A play with a note or a score nobody else shares is alone at its
+//     key and gets its own card; only a play with no catalog game is ungrouped.
 //
 //   • THE DRAFT IS SAVED, NOT THE PARSE. localStorage holds the whole draft
 //     under a versioned key. A refresh three steps in resumes where it was; a
@@ -71,8 +71,8 @@
   const IMPORT_TIMEOUT_MS = 60000;
 
   // The wizard's step list for this source, the source picker aside. The
-  // review step used to be called "plays" — it is `review` now because it is
-  // the same screen the photo branch ends on (widgets/import-review-step.js),
+  // review step is `review` because it is the same screen the photo branch
+  // ends on (widgets/import-review-step.js),
   // and two names for one screen is how two screens start.
   const STEPS = ["source", "details", "players", "games", "review", "import"];
 
@@ -344,8 +344,8 @@
     /**
      * The viewer's partners as picker candidates. One mapping, in
      * domain/buddy.js, shared with the sheet the Players step opens — the two
-     * disagreeing is what produced a "Jas → ghost" row sitting above a picker
-     * that had Jasmine in it all along.
+     * disagreeing would produce a "Jas → ghost" row sitting above a picker
+     * that has Jasmine in it all along.
      * @param {{accounts?: any[], ghosts?: any[], recent?: any[]}|null} partners
      */
     static candidates(partners) {
@@ -502,12 +502,12 @@
      * The collapse is the whole reason this exists. The Players step's own
      * help text promises it ("point them at the same buddy, or give them the
      * same ghost name, and they'll land as one player"), and the review list
-     * has always honoured it, because rowKeyFor keys a seat on the ACCOUNT
-     * rather than on the spelling. The WRITE did not: it emitted one seat per
-     * name, so a note that said "Jas" on one line and "Jasmine" on the next
-     * imported a two-player game with Jasmine in it twice — once winning, once
-     * not. Migration 023's unique index now refuses that outright; this is what
-     * stops the user ever meeting the refusal.
+     * honours it, because rowKeyFor keys a seat on the ACCOUNT rather than on
+     * the spelling. The WRITE has to honour it too: one seat per name would
+     * import a note that said "Jas" on one line and "Jasmine" on the next as a
+     * two-player game with Jasmine in it twice — once winning, once not.
+     * Migration 023's unique index refuses that outright; this is what stops
+     * the user ever meeting the refusal.
      *
      * Merging a seat into one already taken keeps the fuller answer: winning on
      * either spelling is winning, and the first score anybody wrote down is the
@@ -636,8 +636,8 @@
      * The roster clause is migration 023's invariant, checked here so the user
      * meets it as a row the Import step counts out rather than as a play the
      * server refuses. A note the model read a game and a date off but no names
-     * at all — a bare tally, a line it couldn't parse — used to import as a
-     * play with an empty scoreboard, counting towards nobody's record and
+     * at all — a bare tally, a line it couldn't parse — would otherwise import
+     * as a play with an empty scoreboard, counting towards nobody's record and
      * leaving no ghost anyone could ever claim.
      */
     importable() {
@@ -974,21 +974,20 @@
      * The identity of a play for FEED grouping, or null when it cannot be
      * grouped at all.
      *
-     * THE ROW IDENTITY, WHOLE. It used to disqualify any play carrying a note
-     * or a score, on the reasoning that those are the plays a reader wants to
-     * see individually — the biggest win, the closest game, the one with a
-     * comment. That reasoning is about a play that DIFFERS from its
+     * THE ROW IDENTITY, WHOLE. A note or a score does not disqualify a play.
+     * The plays a reader wants to see individually — the biggest win, the
+     * closest game, the one with a comment — are plays that DIFFER from their
      * neighbours, and the identity key is already the test for that: a play
      * with a note or a score nobody else in the import shares is alone at its
      * key, and assignGroups only mints an id for a key covering more than one
      * play, so it gets its own card either way.
      *
-     * What the disqualifiers actually caught was the opposite case — plays
-     * that are identical INCLUDING their note or their score, which is exactly
-     * what a stack is for. A nineteen-play run whose entry carried "league
-     * night" imported as nineteen separate cards, while the review list, which
-     * keys on rowKeyFor, had shown it as one row of nineteen. The two surfaces
-     * disagreeing is the bug; sharing one key is the fix.
+     * Disqualifying them would catch the opposite case — plays that are
+     * identical INCLUDING their note or their score, which is exactly what a
+     * stack is for. A nineteen-play run whose entry carried "league night"
+     * would import as nineteen separate cards while the review list, which
+     * keys on rowKeyFor, shows it as one row of nineteen. The two surfaces
+     * must not disagree, so they share one key.
      *
      * Deliberately NOT play.runId. The run id says "the model wrote these as
      * one line"; this says "these are indistinguishable". The second is the
@@ -1160,8 +1159,8 @@
       // recognises that shape and says so rather than showing a blank box.
       this.clearPhotos();
       this.hint = String(data.hint || "");
-      // Normalised rather than assigned, so a draft saved before seat editing
-      // existed restores with the field explicitly absent instead of
+      // Normalised rather than assigned, so a draft saved without seat
+      // overrides restores with the field explicitly absent instead of
       // undefined. That is what lets this stay an ADDITIVE change and keeps
       // DRAFT_VERSION where it is: an optional field with a null default and
       // an explicit normalisation here does not need a version bump, and

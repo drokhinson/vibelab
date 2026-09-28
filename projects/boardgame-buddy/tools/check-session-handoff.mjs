@@ -5,8 +5,7 @@
 //
 // There is no test runner for web/ (the authoring model is ~121 script tags,
 // see .claude/rules/web-frontend.md), so this loads the real modules into a VM
-// context and checks the two halves of signing in and out. Every bug it covers
-// was reported from the live app.
+// context and checks the two halves of signing in and out.
 //
 // ONE FACT EXPLAINS ALL OF THEM: every view and ui/ module is constructed once
 // per tab (init.js), and signing in or out is a route change, not a reload. So
@@ -16,52 +15,48 @@
 // SIGNING OUT MUST LEAVE NOTHING BEHIND (sections 1–3):
 //
 //   1. The push card's `_readState` runs from a `user` subscriber, and
-//      store.reset() fires every subscriber — so signing out kicked off a read
-//      of /push/config with no token left to send it, and a guaranteed 401 in
-//      the console. The gate that would have stopped it (_shouldShow's
-//      _authed()) runs after the fetch resolves.
+//      store.reset() fires every subscriber — so signing out must not kick
+//      off a read of /push/config with no token left to send it, a guaranteed
+//      401 in the console. _shouldShow's _authed() cannot stop it: it runs
+//      after the fetch resolves.
 //   2. Settings' `_deleting` latch, set between the confirm and the sign-out
-//      that follows a successful delete and never cleared on that path —
-//      there was nothing left to clear it FOR, the reasoning went, since the
-//      account is gone. But the view object is not gone: a new account signing
-//      in on the same tab opened Settings to a disabled "Deleting…" button and
-//      a Log out it could not click.
-//   3. The rest of that screen's account-scoped reads, which painted the
+//      that follows a successful delete. The account is gone but the view
+//      object is not: left set, a new account signing in on the same tab
+//      opens Settings to a disabled "Deleting…" button and a Log out it cannot
+//      click.
+//   3. The rest of that screen's account-scoped reads, which would paint the
 //      PREVIOUS account's BGG handle and import history for a frame.
 //
 // SIGNING IN MUST HAND OVER TO THE LOADER (sections 4–5):
 //
 //   4. signInWithPopup resolves when the credential arrives; the auth listener
 //      then waits on /bootstrap for any account this device has not cached —
-//      which is every new signup. Nothing filled that gap, so the popup shut
-//      and the login form was simply still there, live button and all. It
+//      which is every new signup. Something has to fill that gap, or the popup
+//      shuts and the login form is simply still there, live button and all. It
 //      reads as a failure, and pressing the button again is the one response
 //      that actually breaks the sign-in: the second popup cancels the first.
-//   5. The email form's own immediate-session branch had the same gap, on the
+//   5. The email form's own immediate-session branch has the same gap, on the
 //      longest wait in the app in front of the person least able to read it.
 //   6. And when the popup is BLOCKED, the redirect fallback replaces the
 //      document — so a redirect that fails has no caller left to report to.
-//      BgbAuth.consumeRedirectResult was written for that and never called,
-//      so the user went to Google, came back, and got a login screen with no
-//      error on it. The gating matters as much as the wiring: asking the SDK
+//      BgbAuth.consumeRedirectResult is what reports it; without it the user
+//      goes to Google, comes back, and gets a login screen with no error on
+//      it. The gating matters as much as the wiring: asking the SDK
 //      when no redirect was started reaches for storage that ITP blocks on a
 //      cross-origin authDomain, which would put an error in front of people
 //      whose popup sign-in worked perfectly.
 //
 // AND THE BOUNDARY IS A PROPERTY OF THE SHELL, NOT OF A NAVIGATION (7):
 //
-//   7. Two halves of one report — "then to feed but with bottom bar missing.
-//      And then i was able to do the back gesture and it returned me to the
-//      initial login screen but with a functional bottom nav bar and header."
-//      The chrome was computed only inside router.go(), off whatever `user`
-//      happened to be at that instant, and init.js routes a valid session
-//      forward before /bootstrap has answered rather than strand it on the
-//      splash. So the feed painted with no nav, and the back press — a
-//      navigation — was what finally turned it on. Meanwhile the login
-//      screen's own history entry sat directly under the first screen of the
-//      session, so one back gesture put a signed-in account on the login
-//      form. Signing in spends that entry now, and a back press that would
-//      cross the session boundary either way is refused.
+//   7. init.js routes a valid session forward before /bootstrap has answered
+//      rather than strand it on the splash, so chrome computed only inside
+//      router.go(), off whatever `user` happened to be at that instant, would
+//      paint the feed with no nav until a back press — a navigation — turned
+//      it on. And the login screen's own history entry must not sit directly
+//      under the first screen of the session, or one back gesture puts a
+//      signed-in account on the login form. Signing in spends that entry, and
+//      a back press that would cross the session boundary either way is
+//      refused.
 //
 import fs from "node:fs";
 import vm from "node:vm";
@@ -185,7 +180,7 @@ console.log("\n1. push-prompt reads its state only for a signed-in account");
   await Promise.resolve();
   ok("one read when an account signs in", reads === 1);
 
-  // The bug: store.reset() on logout fires this same subscriber.
+  // store.reset() on logout fires this same subscriber.
   store.signOut();
   await Promise.resolve();
   ok("NO read on sign-out (this was the 401)", reads === 1);
@@ -312,7 +307,7 @@ function newAuth(outcome, redirect = { err: null }) {
   win.BgbIcons = { render() {} };
   // Not just a recorder: routing AWAY from the form unmounts it and coming
   // back mounts it again, which is what clears every transient field. The
-  // handover now happens before the outcome is known, so a cancel returns
+  // handover happens before the outcome is known, so a cancel returns
   // through a real navigation — and _backToForm has to re-apply the address
   // AFTER that mount, not before. A recorder-only router cannot tell the two
   // orderings apart.
@@ -361,7 +356,7 @@ const googleDisabled = (html) =>
   ok("the popup was opened", calls.popups === 1);
   ok("the button was dead while the popup was open",
      googleDisabled(calls.htmlDuringPopup));
-  // The bug: this used to be [] and the user was left looking at the form.
+  // An empty route list here leaves the user looking at the form.
   ok("a credential hands over to the loader", calls.routes.join() === "splash");
 }
 
@@ -369,7 +364,7 @@ const googleDisabled = (html) =>
   const { view, calls, el } = newAuth("cancelled");
   await view.oauth("google");
   // The handover happens when the popup OPENS, so a cancel is a return trip
-  // now rather than a screen that never moved.
+  // rather than a screen that never moved.
   ok("a shut popup puts the form back", calls.routes.join() === "splash,auth");
   ok("a shut popup says nothing", view._error === null);
   ok("a shut popup gives the button back", !googleDisabled(el.innerHTML));
@@ -549,8 +544,8 @@ function newAuthLayer({ storageThrows = false, redirectResult = null } = {}) {
   ok("...having actually redirected", calls.redirects === 1);
   ok("...and marked the tab", storage.getItem("bgb.auth.redirectPending") === "1");
 
-  // This is the report that did not exist: the document was replaced, so the
-  // rejection had no caller left to tell.
+  // The document was replaced, so the rejection has no caller left to tell;
+  // consumeRedirectResult is what brings it back.
   ok("the failure comes back to be worded",
      (await win.BgbAuth.consumeRedirectResult()) === err);
   ok("...the marker is spent", storage.getItem("bgb.auth.redirectPending") === null);
@@ -566,8 +561,7 @@ function newAuthLayer({ storageThrows = false, redirectResult = null } = {}) {
 }
 
 {
-  // Safari private mode. Unmarkable, so unconsumable — back to the old
-  // silence, which is worse than a message and better than a broken sign-in.
+  // Safari private mode. Unmarkable, so unconsumable — silence, which is worse than a message and better than a broken sign-in.
   const { win, calls } = newAuthLayer({ storageThrows: true, redirectResult: () => Promise.reject(new Error("x")) });
   ok("storage being unavailable does not break the redirect",
      (await win.BgbAuth.signInWithGoogle()) === "redirecting");
@@ -710,14 +704,9 @@ const chromeShown = (chrome) => chrome.every((n) => !n.isHidden);
 const chromeHidden = (chrome) => chrome.every((n) => n.isHidden);
 
 {
-  // THE REPORT: "then to feed but with bottom bar missing … i was able to do
-  // the back gesture and it returned me to the initial login screen but with
-  // a functional bottom nav bar and header."
-  //
-  // Both halves are one fact: the chrome was only ever computed inside go(),
-  // and init.js routes a valid session forward even when /bootstrap has not
-  // answered yet. So the feed painted with no nav, and the next navigation —
-  // the back press — was what finally turned it on.
+  // init.js routes a valid session forward even when /bootstrap has not
+  // answered yet, so chrome computed only inside go() would paint the feed
+  // with no nav until the next navigation — a back press — turned it on.
   const { router, store, chrome } = newRouter();
   await router.go("splash", {}, { skipPush: true });
   ok("the splash shows no chrome", chromeHidden(chrome));

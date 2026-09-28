@@ -1,7 +1,7 @@
 // widgets/round-score-grid.js — shared rounds × players scoring grid.
 //
-// Lifted out of play-flow-view's _renderScoringSection so the play-detail
-// popup can render the same table (view + edit mode). Pure-string renderer:
+// Shared by play-flow-view's scoring section and the play-detail popup
+// (view + edit mode), so both render the same table. Pure-string renderer:
 // callers embed the returned HTML directly. State mutations stay with the
 // host so each consumer keeps its own persistence path (PlaySession draft
 // vs popup edit draft).
@@ -33,9 +33,8 @@
 //   editable: false — every cell is a static number and no controls render.
 //                     The spectator's mirror and the popup's view mode.
 //
-// There used to be a third, per-column mode (`editableColumnId`) for the
-// spectator, back when a joiner owned their own column. The host is the only
-// person who scores now, so a grid is either yours to type in or it isn't.
+// There is no per-column mode: the host is the only person who scores, so a
+// grid is either yours to type in or it isn't.
 //
 // Opts:
 //   editable        — when false, cells render as static spans, "Add round"
@@ -59,8 +58,8 @@
 //                     loses together). "team" is what MERGES a side's seats
 //                     into one column, one cell per round and one Total — see
 //                     roundGridColumns, and note that a host which renders a
-//                     team play without passing this gets the old per-seat
-//                     grid rather than a wrong one.
+//                     team play without passing this gets the per-seat grid
+//                     rather than a wrong one.
 //   getCellValue    — optional resolver `(player, roundIdx) → string`. Lets
 //                     play-flow-view overlay live realtime scores when a
 //                     player has a real user_id. Defaults to reading from
@@ -111,10 +110,9 @@
 //     materializes a template's rows into every player's roundScores when it
 //     applies one, so the model stays authoritative and _maxRoundCount /
 //     _addRound / _removeRoundAt keep agreeing with what is on screen. A grid
-//     that invented rows its host had never heard of would put those three back
-//     into the disagreement the comments at play-flow-view.js:2401 and :1755 are
-//     a museum of. If a play ever arrives with more labels than round_scores the
-//     surplus labels simply don't render.
+//     that invented rows its host had never heard of would put those three
+//     into disagreement with the paint. If a play ever arrives with more
+//     labels than round_scores the surplus labels simply don't render.
 //   * Extras keep ABSOLUTE numbering — R9, R10 under an 8-row template, not
 //     "Extra 1". The number a row shows is its round_index, which is the key the
 //     live-scores overlay and the spectator's mirror are both stored under; a
@@ -122,10 +120,10 @@
 //
 // THE GRID IS THREE TABLES, not one, and that is load-bearing rather than
 // incidental. The column headers pin against the PAGE scroll (there is no
-// inner vertical scroller any more), which they can only do from outside the
+// inner vertical scroller), which they can only do from outside the
 // horizontal scroller — an `overflow-x: auto` box is a scroll container on
 // both axes, so a <thead> inside it pins to a scrollport that never scrolls
-// down. Splitting the Total row out again is what bounds the pin: .rg__head's
+// down. Splitting the Total row out too is what bounds the pin: .rg__head's
 // containing block is .rg__pinzone, which ends at the last round row, so the
 // header is handed back exactly there and can never cover the Total row. The
 // three tables are held in column by ONE colgroup (renderColGroup) plus
@@ -138,10 +136,9 @@
 // range — so "the column doesn't add up" is not a state the grid can reach.
 // Consumers that patch the totals row in place must call the exported
 // window.roundGridTotal() with the same arguments; anything that recomputes a
-// total its own way is a bug waiting to happen (it was: hosts summed each
-// player's own roundScores array while the grid rendered the longest array's
-// worth of rows, so a short array silently dropped visible cells from its
-// total, and a total refresh awaited a network write that could hang).
+// total its own way is a bug waiting to happen: summing a player's own
+// roundScores array while the grid renders the longest array's worth of rows
+// silently drops visible cells from a short array's total.
 
 (function () {
   // What separates two teammates in a merged column's header text. A comma
@@ -242,10 +239,9 @@
               // literal, the one legitimate inline-colour case in
               // .claude/rules/theming.md §10.
               const src = (tpl && tpl.source_color) || null;
-              // The three tables no longer share a <thead>, so a cell can no
-              // longer be associated with its column by structure. Every cell
-              // says what it is instead — which these inputs never did at all
-              // before, so it is a gain rather than a patch for the split.
+              // The three tables do not share a <thead>, so a cell cannot be
+              // associated with its column by structure. Every cell says what
+              // it is instead.
               const rowName = tpl ? tpl.label : `Round ${r + 1}`;
               return `
               <tr>
@@ -308,25 +304,25 @@
   // ── Columns ─────────────────────────────────────────────────────────────
   //
   // What the grid draws, as opposed to who is in the play. Outside team mode
-  // the two are the same thing — one column per seat, which is every grid this
-  // widget has ever rendered — and the abstraction costs nothing there.
+  // the two are the same thing — one column per seat — and the abstraction
+  // costs nothing there.
   //
   // In a TEAM play a side is ONE column. The seats that share a tag hold one
   // cell per round between them, the host types into it once, and the write
   // fans out so every seat on that side carries the number (see
   // PlaySession.teamSeats and the _setRoundScore in either editable host). A
   // side scores as a unit, so a row of identical numbers under identical
-  // headers was the table saying the same thing four times — and on a phone it
-  // was saying it in four columns that a 3v3 game could not fit.
+  // headers would be the table saying the same thing four times — and on a
+  // phone saying it in four columns that a 3v3 game could not fit.
   //
   // The saved rows do not change shape: each seat still stores its own
   // round_scores and its own score, and they are equal by construction. That
   // is what keeps every reader that never heard of this — the feed card, the
-  // stats RPCs, an export — reading a team play exactly as it did.
+  // stats RPCs, an export — reading a team play correctly.
   //
   // A SIDE OF ONE IS NOT A MERGE. It keeps its own column and its own tint,
-  // because there is nothing to merge it with; the grid has never drawn a
-  // colspan around a single seat and this must not start.
+  // because there is nothing to merge it with; the grid does not draw a
+  // colspan around a single seat.
   //
   // ── WHEN A SIDE STAYS SPLIT ─────────────────────────────────────────────
   //
@@ -335,12 +331,12 @@
   // round holds two different non-empty values among its seats. Three things
   // fall out of that wording, and all three are the reason for it:
   //
-  //   * A play scored SEAT BY SEAT stays split. Team mode has existed since
-  //     migration 007 and per-seat round scores since 028, so plays where a
-  //     side's members each carry their own number are real and already saved.
+  //   * A play scored SEAT BY SEAT stays split. Team mode (migration 007) and
+  //     per-seat round scores (migration 028) mean plays where a side's members
+  //     each carry their own number are real and saved.
   //     Merging those would pick one member's number and print it over
   //     everybody's — the detail popup would misreport a play it is the record
-  //     of. They render as they always did instead.
+  //     of. They render split instead.
   //   * A seat that is merely EMPTY where its teammate has a number does not
   //     split the side. That is not a disagreement, it is a write in flight:
   //     the host's fan-out is local and synchronous, but a SPECTATOR receives
@@ -367,7 +363,7 @@
     // banded roster: nothing here decides which side is which, or what colour
     // it is (ui/team-colors.js). Null covers a competitive play, a co-op play
     // and a team play whose sides were never named — all of which are one
-    // column per seat, exactly as before.
+    // column per seat.
     const teams = (mode === "team" && window.BgbTeams)
       ? window.BgbTeams.indexMap(safe)
       : null;
@@ -486,8 +482,8 @@
   // is on the side, so the text state that replaces them has to answer the
   // same question or tapping loses information rather than trading it. The tag
   // alone is already on screen three other ways (the column's tint, its Total
-  // and its trophy), so it was the half of the answer the grid could afford to
-  // repeat and the names were the half it could not.
+  // and its trophy), so it is the half of the answer the grid can afford to
+  // repeat and the names are the half it cannot.
   //
   // Names through shownName, so a viewer's private alias reaches this header
   // exactly as it reaches the badge stack under it.
@@ -507,16 +503,16 @@
   //     Red
   //     Ana, Bo
   //
-  // rather than the one run-on line the colon made of it. A column header is
-  // about 4.3rem wide, so "Red: Ana, Bo" wrapped wherever the box ran out and
-  // the break landed mid-list as often as after the tag; stacking puts the
+  // rather than one run-on line. A column header is about 4.3rem wide, so
+  // "Red: Ana, Bo" on one line wraps wherever the box runs out and the break
+  // lands mid-list as often as after the tag; stacking puts the
   // break where the meaning already is. The underline is what keeps the two
   // lines from reading as one list with a stray first item — it is the tag
   // doing the job a heading does, which is also what it is.
   //
   // A seat column is one name and stays one span: there is no second thing to
-  // put under it, and the markup it has always emitted is what the nowrap
-  // ellipsis rule is written against.
+  // put under it, and that single span is what the nowrap ellipsis rule is
+  // written against.
   function columnLabelHtml(col) {
     if (!col.merged) return escapeHtml(shownName(col.players[0]));
     const roster = col.players.map(shownName).filter(Boolean).join(TEAM_NAME_DELIM);
@@ -562,7 +558,7 @@
   //
   // NOT "plus two". The count is already generous per character and the cell
   // already has 0.4rem of padding either side, which is the breathing room;
-  // two extra characters on top of both was a third of the column on the
+  // two extra characters on top of both would be a third of the column on the
   // R1..R9 grids this is for. The generosity is in the unit: `ch` is the width
   // of a ZERO in the table's font — 7.1px where the row label's average letter
   // is ~5.3px — so five characters of "Total" are budgeted about 20% wider
@@ -570,13 +566,12 @@
   // is the one case the estimate is tight on, is exactly what `ch` is measured
   // from.
   //
-  // It used to be a flat 6.6rem, which is about eleven characters of room
-  // spent on a column whose contents are "R1" through "R9" on most tables —
-  // width taken off the score columns beside it, which are the ones a player
-  // across the table is trying to read. A template's labels are the case the
-  // 6.6rem was for, and they still get it: the cap in styles.css is exactly
-  // the width this was, so a labelled grid is no narrower than before and a
-  // plain one is much.
+  // Not a flat 6.6rem, which is about eleven characters of room spent on a
+  // column whose contents are "R1" through "R9" on most tables — width taken
+  // off the score columns beside it, which are the ones a player across the
+  // table is trying to read. A template's labels are the case 6.6rem suits,
+  // and they still get it: the cap in styles.css is 6.6rem, so a labelled
+  // grid keeps that width and a plain one is much narrower.
   //
   // "TOTAL" IS ONE OF THE HEADERS. It sits in the same column, drawn by the
   // foot table off the same colgroup, so a count taken over the round rows
@@ -612,15 +607,13 @@
   // a column that is otherwise about 45px wide, so it is reserved on the
   // renders that draw one and on no others.
   //
-  // This used to be a flat "the grid is editable", on the argument that an
-  // exact rule would widen the column on the first press of Next round, every
-  // game. The argument was right about the mechanics and wrong about the
-  // price: the last remaining round draws no × (minRounds) and a template's
-  // rows never do, so the Play screen — a grid that opens on Round 1 and holds
-  // exactly one — spent 22px of a phone on a control that was not on it, for
-  // the whole of the first round of every game. The shift is still real; it
-  // now lands on the press of Next round, in the same frame as the new row
-  // that press adds, rather than being paid for up front and forever.
+  // Not a flat "the grid is editable": the last remaining round draws no ×
+  // (minRounds) and a template's rows never do, so the Play screen — a grid
+  // that opens on Round 1 and holds exactly one — would spend 22px of a phone
+  // on a control that is not on it, for the whole of the first round of every
+  // game. The exact rule widens the column on the first press of Next round
+  // instead, in the same frame as the new row that press adds, rather than
+  // paying for it up front and forever.
   //
   // Asked of the same values the row renders from, and in the same terms
   // (`editable && !tpl && roundCount > minRounds`), so the reservation cannot
@@ -636,7 +629,7 @@
 
   // The row's own label, and — on a template row whose author wrote a
   // description — the info affordance that opens it. Absent otherwise, so the
-  // common grid is exactly the markup it always was.
+  // common grid carries no extra markup.
   //
   // THE WHOLE LABEL IS THE BUTTON, rather than a separate icon beside it. A
   // grid row is about 36px tall, so a control inside one cannot carry a 44px
@@ -701,8 +694,8 @@
     const negClass = Number(total) < 0 ? " is-neg" : "";
     const tdClass = won ? "scoring-total-cell--winner" : "";
     // Labelled for the same reason the score cells are: the Total row is its
-    // own table now, so "which column is this" is no longer answerable from
-    // the markup around it.
+    // own table, so "which column is this" is not answerable from the markup
+    // around it.
     const name = columnName(col);
     const totalLabel = escapeAttr(`${name} total`);
     if (mode === "coop") {
@@ -735,9 +728,8 @@
   // How many round rows a player set renders. `explicit` (opts.roundCount)
   // wins when the caller knows the count from somewhere other than the local
   // arrays — the joiner sizes its mirror from live-scores round indexes.
-  // Otherwise it's the longest roundScores array, which is what the grid has
-  // always rendered; the point of exporting it is that totals are now summed
-  // over exactly this many rounds too.
+  // Otherwise it's the longest roundScores array; the point of exporting it is
+  // that totals are summed over exactly this many rounds too.
   function roundGridRoundCount(players, explicit) {
     if (explicit != null) return Math.max(0, Number(explicit) || 0);
     const safe = Array.isArray(players) ? players : [];
@@ -801,12 +793,12 @@
   // and the header's text, and remembers the choice (RoundGridNames). Both
   // spans are always emitted; CSS shows one.
   //
-  // Still no host method and still no re-render, for the same reason it never
-  // had one: the two states differ by a single class, so there is nothing to
-  // rebuild. Routing the tap through a host's `outerHTML` repaint instead
+  // No host method and no re-render: the two states differ by a single class,
+  // so there is nothing to rebuild. Routing the tap through a host's
+  // `outerHTML` repaint instead
   // would reset `.rg__body`'s scrollLeft — on a 5-6 player grid the
   // table snaps back to column 1 — blur whatever cell was being typed in, and
-  // give the read-only spectator mirror a host contract it has never needed.
+  // give the read-only spectator mirror a host contract it does not need.
   //
   // `fallback` is the caller's opts.headerNames default — already forced to
   // the badges on a team grid — so the first tap on a surface the user has
@@ -828,9 +820,8 @@
 
   // What a column READS AS: the viewer's private alias when they set one,
   // otherwise the name the seat carries. Resolved HERE rather than in each of
-  // the six hosts, because a host that forgot it produced a grid whose headers
-  // disagreed with the scoreboard printed directly above them — which is
-  // exactly what the play-detail popup did.
+  // the six hosts, because a host that forgot it would produce a grid whose
+  // headers disagree with the scoreboard printed directly above them.
   //
   // Safe in every host including the editable ones: the grid writes SCORES.
   // A name only ever reaches the DOM through this function, never a value, so
@@ -849,10 +840,9 @@
 
   // ── Score value helpers (shared by every grid host) ──────────────────────
   // Cells are stored as STRINGS ("", "-5", "12") so a leading minus survives
-  // the round trip through the draft. A lone "-" is still handled: the number
-  // input can no longer produce one, but drafts persisted before it was a
-  // number input can, and parseRoundScore has to read those back as empty
-  // rather than as NaN. These helpers convert to a clean string for storage /
+  // the round trip through the draft. A lone "-" (a half-typed negative) is
+  // read back by parseRoundScore as empty rather than as NaN. These helpers
+  // convert to a clean string for storage /
   // display and to a number|null for math.
 
   // Strip anything that isn't a digit or a leading minus.
@@ -890,8 +880,8 @@
   //    note on renderScoringHead describes). So the offset is remembered per
   //    host and reapplied on the next render.
   //
-  //    The scrollTop half of this is gone with the pane: the page holds its own
-  //    position across an innerHTML swap. What the page cannot do by itself is
+  //    There is no scrollTop half: the page holds its own position across an
+  //    innerHTML swap. What the page cannot do by itself is
   //    the "Add round" case — the new row lands below the fold and the button
   //    reads as doing nothing — so when the round count grew we scroll the new
   //    last row to the middle of the screen, where the next scores go in with
@@ -902,7 +892,7 @@
   // The restore runs in a rAF because the renderer hands back a STRING: the
   // host injects it synchronously in the same task, so the next frame is the
   // first moment the regions exist. If a host ever injects late the restore
-  // simply finds nothing and the grid starts at column 1, exactly as before.
+  // simply finds nothing and the grid starts at column 1.
   const _paneScroll = Object.create(null);
   const RoundGridScroll = {
     /**
@@ -924,10 +914,10 @@
      * can show many records in turn — every card of the play-detail popup is
      * "PlayDetailPopup" — so a render for a different record is a different
      * grid: it starts at column 1 and has not "grown". Without this, opening a
-     * play with more rounds than the last one read as "Add round" and
-     * scrolled the whole popup down to the grid. Hosts that pass no key (the
-     * live play screens, one play each) compare undefined to undefined and
-     * behave as they always have.
+     * play with more rounds than the last one would read as "Add round" and
+     * scroll the whole popup down to the grid. Hosts that pass no key (the
+     * live play screens, one play each) compare undefined to undefined, so
+     * each is one grid.
      * @param {string} host @param {number} roundCount
      * @param {string} [key] @param {boolean} [centre]
      */
@@ -967,11 +957,11 @@
   // team grid). One tap and the stored value wins everywhere.
   //
   // TWO KEYS, ONE PER GRID SHAPE, and the split is the whole of why a team
-  // grid can have a default of its own. A single value made "solo grids show
-  // names, team grids show badges" unexpressible the moment the user tapped
-  // anything: the first tap on any competitive play would have carried names
+  // grid can have a default of its own. A single value would make "solo grids
+  // show names, team grids show badges" unexpressible the moment the user
+  // tapped anything: the first tap on any competitive play would carry names
   // into every team play the user ever opened, and the badge default — the one
-  // thing that says who is on which side — would have been reachable only by a
+  // thing that says who is on which side — would be reachable only by a
   // user who had never touched a header. The shapes answer different
   // questions (a seat column asks "who is this", a side column asks "who is on
   // this"), so they remember different answers.
@@ -1035,9 +1025,9 @@
     /** @param {boolean} on @param {string} [scope] */
     apply(on, scope) {
       const k = namesScope(scope);
-      // A grid rendered before this shipped carries no data-rg-scope; it is a
-      // solo grid by construction (the attribute and the team column model
-      // ship together), so the solo selector takes it.
+      // A grid with no data-rg-scope is a solo grid by construction (the
+      // attribute and the team column model go together), so the solo
+      // selector takes it.
       const sel = k === "team"
         ? '.rg[data-rg-scope="team"] .scoring-head'
         : '.rg:not([data-rg-scope="team"]) .scoring-head';

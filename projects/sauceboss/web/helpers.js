@@ -64,9 +64,9 @@ const api = SBShared.api.makeApi({
   baseUrl: API,
 });
 
-// Existing call sites use these names; the bodies just delegate to `api` now.
-// Keeping the shims means no churn across the 60-odd callers in init.js,
-// settings.js, builder.js, sauces.js, and auth.js.
+// Call sites use these names; the bodies just delegate to `api`. The shims
+// spare the 60-odd callers in init.js, settings.js, builder.js, sauces.js,
+// and auth.js from calling `api` directly.
 const fetchInitialLoad         = () => api.initialLoad();
 const fetchIngredientCategories = () => api.ingredientCategories();
 const fetchSubstitutions       = () => api.substitutions();
@@ -181,7 +181,7 @@ function isKnownIngredient(name) {
 }
 
 // Update the local ingredientCategories map immediately so any open recipe /
-// builder view re-renders with the new category. Server-side persistence now
+// builder view re-renders with the new category. Server-side persistence
 // happens via api.updateIngredient(id, { category }) — see settings.js
 // submitFoodForm — which requires the ingredient id, not just the name.
 // Builder-side classification only updates the local cache; the category
@@ -790,7 +790,7 @@ async function refreshSaucebookAndPantry() {
   }
 }
 
-// Each pantry row now carries its `category` from sauceboss_ingredient.category
+// Each pantry row carries its `category` from sauceboss_ingredient.category
 // (migration 015), so the pantry tab can render in one round-trip. The same
 // per-row data is enough to populate state.ingredientCategories for the
 // meal-builder filter panel — no separate /ingredient-categories call needed
@@ -848,8 +848,7 @@ async function togglePantryMissing(ingredientId) {
 }
 
 // ─── Lazy reference-data loaders ────────────────────────────────────────────
-// These slices used to fire on every boot. They're now loaded on demand the
-// first time a feature that needs them opens (meal-builder, recipe-builder,
+// These slices are loaded on demand, not on boot — the first time a feature that needs them opens (meal-builder, recipe-builder,
 // Pantry tab). Each helper is idempotent + concurrency-safe via an in-flight
 // promise cache so multiple call sites awaiting it share one fetch.
 

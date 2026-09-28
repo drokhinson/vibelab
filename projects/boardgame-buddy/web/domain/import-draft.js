@@ -33,8 +33,8 @@
  *
  * @property {() => string} resumeLabel  What the picker's Resume row says. Each
  *   model words it, because only the model knows what it is holding — the
- *   shell used to branch on sourceKey to build this, which is exactly the
- *   source-specific knowledge its own header says it has none of.
+ *   shell would have to branch on sourceKey to build this, which is exactly
+ *   the source-specific knowledge its own header says it has none of.
  *
  * @property {() => Array<{key: string, name: string, game: any, rows: any[]}>} reviewGroups
  * @property {() => string[]} reviewWarnings
@@ -68,11 +68,10 @@
   const VERSION = 1;
 
   // EVERY source's draft key. clear() sweeps this list, and it is separate
-  // from LEGACY below for a reason that bit once already: clear() used to
-  // sweep LEGACY, which made "the keys we probe" and "the keys we delete" the
-  // same list by accident. A third source added without touching it would
-  // survive a discard and resurrect on the next open — a finished import
-  // offering itself again.
+  // from LEGACY below on purpose: "the keys we probe" and "the keys we
+  // delete" are different lists. Sweeping LEGACY instead would let a source
+  // missing from it survive a discard and resurrect on the next open — a
+  // finished import offering itself again.
   const KEYS = [
     "bgb.playImport.draft",
     "bgb.photoImport.draft",
@@ -80,8 +79,8 @@
     "bgb.bggPlayImport.draft",
   ];
 
-  // Probed in this order when the envelope is absent — a user who was mid-
-  // wizard when the wizard shipped. Photos first: that draft costs more to
+  // Probed in this order when the envelope is absent — a draft saved without
+  // one. Photos first: that draft costs more to
   // rebuild, because its files are gone and its assignments are not.
   //
   // BGA and BGG are deliberately absent: neither has ever existed outside

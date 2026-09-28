@@ -25,9 +25,9 @@
 //      finger that tapped it.
 //
 //   4. IT CAN OPEN WITH THE COMPOSE SHEET UP. `?compose=1` opens it empty,
-//      `?compose=bug` opens it with the type preselected. Settings no longer
-//      links that way — it has one row and that row lands on the board — but the
-//      param stays a supported deep link, so a release notice or a support
+//      `?compose=bug` opens it with the type preselected. Settings does not
+//      link that way — its one row lands on the board — but the
+//      param is a supported deep link, so a release notice or a support
 //      reply can still point somebody straight at the form. It is stripped with
 //      replaceUrl immediately, so a refresh or a back-then-forward lands on the
 //      board rather than re-opening the sheet.
@@ -61,8 +61,8 @@
       this._type = "";
       // Topic ids whose group is expanded. Empty is the default state of the
       // screen, not an accident: the board is a set of topics you open one at a
-      // time, and a board that starts fully expanded is the flat list this
-      // grouping replaced.
+      // time, and a board that starts fully expanded is just a flat list with
+      // extra headers.
       this._openTopics = new Set();
       this._loading = false;
       this._loaded = false;
@@ -316,7 +316,7 @@
      *
      * The trailing slot is the admin's Resolved switch. It sits here rather than
      * over the list because it is not a filter over the board — it swaps the
-     * board for the other half of it — and because the slot is free now that Add
+     * board for the other half of it — and because the slot is free while Add
      * floats. Non-admins get nothing there: the server only ever serves them
      * open items, so a control they could flip would be a lie.
      */
@@ -372,9 +372,8 @@
      * hardcoded list — which is the point of the options living in the database.
      * Renders nothing until they land.
      *
-     * There is exactly one rail. Topic used to have one too; it is the board's
-     * grouping now, and a filter that hides every group but one is the same
-     * control twice.
+     * There is exactly one rail. Topic has none: it is the board's grouping,
+     * and a filter that hides every group but one is the same control twice.
      */
     _renderTypeChips() {
       if (!this._types.length) return "";

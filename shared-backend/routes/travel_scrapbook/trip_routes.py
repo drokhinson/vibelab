@@ -1,10 +1,10 @@
 """Trip CRUD, checkpoint (stay/travel) and bookend (arrival/departure) management.
 
-Since migration 020 a checkpoint is a place + scrap + role-bearing
-travelscrapbook_scrap_trips membership (not an anchors-table row). The
+A checkpoint is a place + scrap + role-bearing travelscrapbook_scrap_trips
+membership (020). The
 /checkpoints endpoints return the CheckpointResponse shape — the checkpoint id
 is the membership id, and responses are synthesized via
-services/checkpoints.py. Since 026 arrival/departure use a different mechanism:
+services/checkpoints.py. Arrival/departure (026) use a different mechanism:
 they are ordinary role-NULL stops flagged is_arrival/is_departure, managed
 through the /trips/{id}/bookends routes and returned as ScrapResponse. Both
 read as "checkpoints" in the UI.
@@ -124,8 +124,8 @@ async def _backfill_trip_geocodes(trip_ids: list[str]) -> None:
             .execute()
         ).data
         if rows and rows[0].get("destination") and not rows[0].get("destination_geocoded_at"):
-            # Backfill (incl. the post-005 dest_* re-arm): infer a legacy trip's
-            # scope from its destination since it predates the scope picker.
+            # Backfill (incl. trips 005 re-armed for dest_*): infer a legacy trip's
+            # scope from its destination, since it has no picked scope level.
             await geocode_trip_destination(sb, rows[0], infer_scope=True)
 
 
@@ -447,7 +447,7 @@ async def update_checkpoint(
         if "checkpoint_time" in update:
             membership_update["plan_time"] = update["checkpoint_time"]
 
-    # Location comes only from a Maps link now — a rename (query/label change)
+    # Location comes only from a Maps link — a rename (query/label change)
     # never re-resolves, so an existing pin is never moved or wiped by an edit
     # to the name. A bare-name checkpoint stays unlocated. (The URL-capture flow
     # is the only place a text location is geocoded — see resolve_checkpoint_geo.)

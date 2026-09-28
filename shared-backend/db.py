@@ -1,6 +1,6 @@
 """
 db.py — Supabase client singleton for the shared vibelab backend.
-ONE Supabase project serves ALL apps. Tables are app-prefixed (e.g. sauceboss_carbs).
+ONE Supabase project serves ALL apps. Tables are app-prefixed (e.g. sauceboss_sauce).
 
 The client that `get_supabase()` hands back differs from a stock `create_client`
 in one way: its PostgREST session retries a round trip that died on the wire.
@@ -33,14 +33,12 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 #   httpx.RemoteProtocolError: <ConnectionTerminated error_code:0, last_stream_id:3, ...>
 #   httpx.RemoteProtocolError: Server disconnected
 #
-# Nothing retried it, and RemoteProtocolError is not a postgrest APIError, so it
-# escaped main.py's APIError handler as an unhandled 500 — the browser saw an
-# opaque failure on a read that would have succeeded a millisecond later. Seven
-# of them landed in a two-minute window of ordinary BoardgameBuddy browsing
-# (GET /plays/{id}, the /plays page RPC), each one a visible error on a healthy
-# database.
+# RemoteProtocolError is not a postgrest APIError, so unless something retries
+# it, it escapes main.py's APIError handler as an unhandled 500 — the browser
+# sees an opaque failure on a read that would succeed a millisecond later, a
+# visible error on a healthy database.
 #
-# The fix belongs at the transport, not at 400-odd call sites: this is the one
+# The retry belongs at the transport, not at 400-odd call sites: this is the one
 # place that sees the request method AND the exception, which is what decides
 # whether repeating the request is safe.
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})

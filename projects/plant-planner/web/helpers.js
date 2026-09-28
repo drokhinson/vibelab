@@ -108,7 +108,6 @@ function showThemeSettings() {
       '</label>';
   }).join("");
 
-  // Draw-style options retired alongside the legacy 3D renderer.
   var styleHtml = '';
 
   var showAccount = !!(session && currentUser);
@@ -252,7 +251,7 @@ function bindFilterChipRow(rootEl, groupAttr, onPick) {
 //   5. "Data from <source>" footer.
 // Missing values render as `_PLANT_DETAIL_PLACEHOLDER` ("—") so the user
 // can scan the popup for unknown fields. Perenual is the sole upstream
-// source — Trefle/Flora support was removed in May 2026.
+// source.
 
 // Fixed placeholder for unknown values. Every bullet/chip row renders even
 // when the underlying data is missing so the user can scan for "—" rows.
@@ -626,8 +625,8 @@ function render() {
 
 // Returns 'ok' | 'overlap' | 'oob'. Single source of truth used by every drag
 // path (desktop tile drag, picked-up plant move, mobile touch drag) to keep
-// preview state and commit-time validation in lockstep — the bug they fix is
-// drops being committed even when the preview disk shows an invalid spot.
+// preview state and commit-time validation in lockstep, so a drop is never
+// committed where the preview disk shows an invalid spot.
 // `ignoreId` lets a picked-up placement skip its own row in the overlap check.
 function validatePlacement(posX, posY, r, gw, gh, existingPlacements, ignoreId) {
   if ((posX - r) < 0 || (posX + r) > gw || (posY - r) < 0 || (posY + r) > gh) return 'oob';

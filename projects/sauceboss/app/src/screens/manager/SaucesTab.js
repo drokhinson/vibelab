@@ -1,6 +1,6 @@
-// Sauces tab body for the Sauce Manager. Extracted from SauceManagerScreen so
-// we can mount it side-by-side with the new Dish + Ingredients tabs without
-// pushing a single file past 1000 lines.
+// Sauces tab body for the Sauce Manager. Its own module so it mounts
+// side-by-side with the Dish + Ingredients tabs without pushing a single file
+// past 1000 lines.
 
 import React, { useEffect, useMemo } from 'react';
 import {

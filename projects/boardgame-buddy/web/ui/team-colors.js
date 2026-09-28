@@ -31,8 +31,8 @@
   const TEAM_SLOTS = 6;
 
   // The circles Gather offers, in the order it offers them. `slot` points at
-  // the --team-N token that already carries that hue (styles.css), so naming
-  // the palette moved no colour. `label` is what gets stored on the seat.
+  // the --team-N token that carries that hue (styles.css), so the palette and
+  // the tokens cannot disagree. `label` is what gets stored on the seat.
   const TEAM_COLORS = [
     { id: "red",    label: "Red",    slot: 5 },
     { id: "orange", label: "Orange", slot: 2 },
@@ -41,7 +41,7 @@
     { id: "purple", label: "Purple", slot: 4 },
     { id: "gray",   label: "Gray",   slot: 6 },
   ];
-  // Spellings a host may have typed before the circles existed, or the token
+  // Spellings a host may type by hand, or the token
   // block's own names for the hues. They paint as the colour they name.
   const ALIASES = { grey: "gray", violet: "purple", crimson: "red", slate: "gray" };
   const BY_ID = new Map(TEAM_COLORS.map((c) => [c.id, c]));
@@ -102,9 +102,8 @@
       map.set(key, slot);
     }
     if (!map.size) return null;
-    // Re-key in first-appearance order so iteration order stays what it was
-    // before colours were pinned: callers read .values() as "the sides, in
-    // roster order".
+    // Re-key in first-appearance order rather than pin order: callers read
+    // .values() as "the sides, in roster order".
     const ordered = new Map();
     for (const p of (players || [])) {
       const key = keyOf(p && p.team);

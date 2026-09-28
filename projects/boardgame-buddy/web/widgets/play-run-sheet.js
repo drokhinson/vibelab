@@ -13,25 +13,22 @@
 // THE RUN MAY NOT BE THE VIEWER'S. The feed carries plays logged by buddies
 // (and imports a buddy ran that sat the viewer at the table), so a run card on
 // your timeline can belong to someone else's log. Deleting by import group is
-// owner-scoped server-side — bgb_delete_import_group takes p_user — so the
-// button on a borrowed run was a dead control that reported "Nothing to
-// delete". It is not drawn at all now; a non-owner's sheet is the roster
+// owner-scoped server-side — bgb_delete_import_group takes p_user — so a
+// button on a borrowed run would be a dead control that reports "Nothing to
+// delete". It is not drawn at all; a non-owner's sheet is the roster
 // instead, and says whose import it is.
 //
-// The "what the card is" job grew when grouping moved onto the row identity: a
-// run holds plays that are INDISTINGUISHABLE, which is not the same as
+// A run holds plays that are INDISTINGUISHABLE, which is not the same as
 // featureless, so it can carry a note or a scoreline as long as every play in
 // it carries the same one. Those have nowhere else to appear — so this sheet
-// is where they belong. The note rides on the card; so does the roster, since
-// migration 015 put the whole play on the feed card, and the fetch below is
+// is where they belong. The note rides on the card; so does the roster
+// (migration 015 put the whole play on the feed card), and the fetch below is
 // only the fallback for a card that predates it.
 //
-// That used to read "the stack's front shows no note, exactly as an ordinary
-// card shows one only on its back", and the second half of it is no longer
-// true: an ordinary card now previews its note on a paper plate across the
-// bottom of its photo. The run card still doesn't, for its own reason — it has
-// no photograph. Its frame is a big centred count over a dimmed thumbnail on
-// --polaroid-bg-soft, which is a chrome surface, and the band's
+// An ordinary card previews its note on a paper plate across the bottom of
+// its photo. The run card does not, because it has no photograph. Its frame
+// is a big centred count over a dimmed thumbnail on --polaroid-bg-soft, which
+// is a chrome surface, and the band's
 // --photo-plate / --on-photo pair is only correct on top of an actual photo.
 // A note preview on a run card would be a different treatment on a different
 // surface, not this one moved across.

@@ -680,7 +680,7 @@ function renderWizardStepFilters() {
   _initIcons();
 }
 
-// Kept for review-row labels even though the dedicated water step is gone.
+// Used for review-row labels.
 function _wizardWaterOptions() {
   if (wizardDraft && gardenTypeIsClimateControlled(wizardDraft.garden_type)) {
     return WATER_OPTIONS.filter(function(o) { return o.id !== 'none'; });
@@ -874,7 +874,7 @@ async function openGarden(id) {
       for (var i = 0; i < data.plants.length; i++) {
         var row = data.plants[i];
         var cachePlant = row.plantplanner_plant_cache || null;
-        if (!cachePlant) continue;  // post-Phase-2 placements always reference the cache
+        if (!cachePlant) continue;  // placements always reference the cache
         var pid = row.id ||
           ((window.crypto && typeof crypto.randomUUID === 'function')
             ? crypto.randomUUID()

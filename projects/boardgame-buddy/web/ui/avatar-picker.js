@@ -1,17 +1,13 @@
 // ui/avatar-picker.js — the badge picker: icon carousel, colour target toggle,
 // swatch grid.
 //
-// Extracted from PolaroidPopup.avatarCustomizer the moment it acquired a second
-// caller — the onboarding deck's first slide (.claude/rules/ui-object-design.md
-// §4, "extract at instance #2"). The split follows the rule's shape: this file
+// Shared by PolaroidPopup.avatarCustomizer and the onboarding deck's first
+// slide (.claude/rules/ui-object-design.md §4, "extract at instance #2"). The split follows the rule's shape: this file
 // owns the picker's own markup, state and behaviour; each caller keeps its own
 // chrome (a polaroid card with Cancel/Save, or a slide with Continue) and
 // decides when to read the value.
 //
-// The class family is unchanged — `.avatar-cust__*` — because the CSS was
-// already right and moving it would have been a rename with no reader. What
-// used to be one modal's private carousel is now a mountable component; that is
-// the whole change.
+// The class family is `.avatar-cust__*`.
 
 (function () {
   /**
@@ -203,7 +199,7 @@
       },
       /**
        * Re-run the reel maths. Call after the host becomes visible or changes
-       * width — a picker built off-screen measured its reel as 0 and left the
+       * width — a picker built off-screen measures its reel as 0 and leaves the
        * active slot parked at the left edge.
        */
       refresh() { rerender(); },

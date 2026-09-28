@@ -14,7 +14,7 @@
 //   • Join: the JoinPanel widget — a 5-char code input and the list
 //     of active sessions the user can join or spectate.
 //
-// Game browsing lives on its own screen now (views/game-explorer-view.js,
+// Game browsing lives on its own screen (views/game-explorer-view.js,
 // /games); the Game Explorer card is the way in, and picking a game there
 // lands the user on Gather with it prefilled.
 //
@@ -50,8 +50,8 @@
       this._hydrateFromCache();
       // Signal dropping (or returning) changes which host cards make sense.
       // The upload queue is account-level state and lives in Settings' Pending
-      // uploads section, with the gear's dot as its signal, so this view no
-      // longer watches it.
+      // uploads section, with the gear's dot as its signal, so this view does
+      // not watch it.
       // View.listen auto-unsubscribes on unmount.
       // Only the Host card's copy moves: hosting is the one thing on this
       // screen that works either way, and offline it works DIFFERENTLY (the
@@ -148,9 +148,9 @@
     // and Discard / Resume are the only tap targets.
     //
     // The code rides in the meta line rather than its own ticket column. That
-    // column (plus the perforation and the notches pinned to it) is exactly
-    // what used to push Discard and Resume onto a detached second row; with
-    // it gone, both actions fit on the game's own line.
+    // column (plus the perforation and the notches pinned to it) would push
+    // Discard and Resume onto a detached second row; without it, both actions
+    // fit on the game's own line.
     _renderResumeCard() {
       const ps = this._resumableSession();
       if (!ps) return "";
@@ -221,13 +221,12 @@
     // card directly above this one is for — and it is the only thing that
     // does it.
     //
-    // This used to skip the clear whenever a resumable draft existed, so a host
-    // who tapped Host with one lying around silently landed back in the old
-    // session, code and all. The guard was there because bgb_create_session
-    // abandons every other open session this host owns, and minting here would
-    // close the lobby the banner was offering. That is now the intended
-    // outcome: starting a new play ends the previous one, the same way
-    // "Another Round" already abandons deliberately.
+    // The clear runs even when a resumable draft exists, or a host who taps
+    // Host with one lying around silently lands back in the old session, code
+    // and all. bgb_create_session abandons every other open session this host
+    // owns, so minting here closes the lobby the in-progress card was offering
+    // — the intended outcome: starting a new play ends the previous one, the
+    // same way "Another Round" abandons deliberately.
     //
     // The empty game slot is deliberate too — a stale draft from an earlier
     // explorer pick must not silently decide tonight's game. Picking a game is
@@ -256,9 +255,9 @@
     // Sync source of truth for the Another Round card. The `play.last` seed is
     // written by bootstrap, by every profile-bundle fetch, and by the host
     // flow the instant a play saves — so it survives the profile bundle being
-    // invalidated after a save and being expired after 60s, which is what used
-    // to make the card arrive late. The bundle peek is the bridge for a
-    // session that started before the seed existed.
+    // invalidated after a save and being expired after 60s, either of which
+    // would make the card arrive late. The bundle peek is the bridge for a
+    // session where the seed has not been written yet.
     _cachedLastPlay() {
       const seed = (window.Play && window.Play.cachedLastPlay)
         ? window.Play.cachedLastPlay()
@@ -286,7 +285,7 @@
     }
 
     /**
-     * Repaint just the option list — resume card included, since it now lives
+     * Repaint just the option list — resume card included, since it lives
      * in the same list. Re-reading _resumableSession() is a localStorage hit,
      * so this stays cheap.
      *

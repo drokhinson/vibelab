@@ -1,11 +1,10 @@
 // @ts-check
 // widgets/shelf-picker-sheet.js — "which shelf am I looking at" chooser.
 //
-// The Collection spoke used to carry a row of toggle pills. At three they were
-// already squeezed (.spoke-toggle--3 dropped the labels to 0.72rem to fit a
-// 390px screen); Wishlist made four, which does not fit at all. So the control
-// became a dropdown — a trigger that states the current shelf, and this sheet
-// as the list behind it.
+// The Collection spoke's shelves do not fit a row of toggle pills: three
+// already squeeze (their labels drop to 0.72rem to fit a 390px screen), and
+// four do not fit at all. So the control is a dropdown — a trigger that
+// states the current shelf, and this sheet as the list behind it.
 //
 // It is a sheet rather than an absolute dropdown because the trigger sits under
 // a pinned sub-header on a screen with docked chrome, which is exactly the
@@ -16,8 +15,8 @@
 //
 // Lifecycle — creation, scroll lock, Escape, focus return, close animation —
 // belongs to ui/bottom-sheet.js. This file owns the panel markup and nothing
-// else. The row family (.bgb-sheet__opt*) is the shared one, promoted out of
-// the status sheet when this became its second user.
+// else. The row family (.bgb-sheet__opt*) is the shared one the status sheet
+// also uses.
 
 (function () {
   /**

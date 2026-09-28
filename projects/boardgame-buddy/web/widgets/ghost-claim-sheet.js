@@ -3,8 +3,8 @@
 //
 // Opened by tapping a ghost row on the back of a polaroid or in the play-detail
 // popup (see ui/player-row-action.js, which decides when the row offers it).
-// Until this existed those rows were inert, which meant the one row a person
-// most needs to tap — their own name, typed by someone else — did nothing.
+// Without it those rows would be inert, and the one row a person most needs
+// to tap — their own name, typed by someone else — would do nothing.
 //
 // Built on ui/bottom-sheet.js rather than as another bespoke modal: overlays.md
 // §7 already records four widgets re-implementing that lifecycle by hand.
@@ -174,7 +174,7 @@
      * The sheet's buttons. ONE set per state, and never a "Not me" next to a
      * "Cancel": the sheet asks a single yes/no question, so it offers exactly
      * the two answers to it. The way out WITHOUT answering is the backdrop,
-     * Escape and the grip — a third button competing with "Not me" only made
+     * Escape and the grip — a third button competing with "Not me" only makes
      * the two look interchangeable, which they are not ("Not me" is a write
      * that suppresses the suggestion for good).
      *

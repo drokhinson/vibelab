@@ -3,13 +3,13 @@
 //
 // Every overlay in this app is a body-level element painted over a screen that
 // never went anywhere: the sheet shell, the polaroid modals, the play-detail
-// card. The router, meanwhile, owns one history entry per screen. So with a
-// picker open, the phone's back button (Android) or the edge swipe (iOS) walked
-// the page BEHIND the picker to the previous screen — and left the picker
-// sitting on top of it. The user's mental model is the opposite: back means
+// card. The router, meanwhile, owns one history entry per screen. So unguarded,
+// with a picker open, the phone's back button (Android) or the edge swipe (iOS)
+// would walk the page BEHIND the picker to the previous screen — and leave the
+// picker sitting on top of it. The user's mental model is the opposite: back means
 // "close this thing", the same as the X they can see.
 //
-// The fix is one entry per overlay. Opening arms a guard — a history entry at
+// The answer is one entry per overlay. Opening arms a guard — a history entry at
 // the SAME url as the screen under it, so nothing about the address bar or a
 // reload changes — and the back press that pops that entry closes the overlay
 // instead of reaching the router. Closing by any other means (X, backdrop,
@@ -26,7 +26,7 @@
 //
 // Two presses, not one, when a keyboard is up: the first dismisses the
 // keyboard, the second closes the overlay. That is what every native picker
-// does. No overlay raises a keyboard on open any more (overlays.md §5), but the
+// does. No overlay raises a keyboard on open (overlays.md §5), but the
 // user still raises one by tapping the search field, and back is how they put it
 // away. Android's own back-with-keyboard is swallowed by the system and never
 // reaches the page, so the branch here is what makes iOS and desktop agree with
@@ -226,10 +226,10 @@
   /**
    * Arm a guard for an overlay that is now on screen.
    *
-   * The layer is registered whether or not the entry lands. It used to be
-   * registered only on a successful pushState, which made a refused push
-   * (History API throttling; a browser with no History API at all) fail in the
-   * worst possible way — SILENTLY, and as the pre-guard bug itself: the sheet
+   * The layer is registered whether or not the entry lands. Registering only
+   * on a successful pushState would make a refused push (History API
+   * throttling; a browser with no History API at all) fail in the worst
+   * possible way — SILENTLY, and as if there were no guard at all: the sheet
    * stays up and the back press walks the page behind it, host → play → feed,
    * with nothing in the console to say why. Registering regardless means the
    * press is still spent on the overlay; all that is lost is the entry that

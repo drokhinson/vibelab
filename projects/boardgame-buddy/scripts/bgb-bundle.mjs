@@ -7,7 +7,7 @@
 // bundler, no build step) and it is genuinely nice to work in — but shipped
 // verbatim it means every visitor fetches ~120 files and ~1.9 MB of
 // unminified JS, 39% of which is comments, before a single line of the app
-// can run. That wait IS the loading screen users were reporting.
+// can run. That wait IS the loading screen.
 //
 // So the repo keeps its 120 tags and local dev is untouched; this rewrites the
 // CHECKOUT that `vercel deploy` uploads, and nothing is committed back. That
@@ -160,8 +160,8 @@ html = html.replace(cssLink, `<link rel="stylesheet" href="${cssName}" />`);
 
 fs.writeFileSync(htmlPath, html);
 
-// styles.css itself is left in the artifact on purpose. Nothing references it
-// any more, so it is never fetched; deleting it would only add a way for a
+// styles.css itself is left in the artifact on purpose. Nothing references it,
+// so it is never fetched; deleting it would only add a way for a
 // stale shell to 404 on the one file it needs to render anything.
 
 const rawKB = (Buffer.byteLength(combined) / 1024).toFixed(0);

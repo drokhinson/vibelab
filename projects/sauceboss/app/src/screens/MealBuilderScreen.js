@@ -2,8 +2,8 @@
 // items. Tapping an item kicks off the item-load fetch, then navigates to
 // PrepSelector (auto-redirecting to SauceSelector if no variants exist).
 //
-// Post-three-tab migration this is no longer the home screen — it's
-// launched from the Saucebook chef-hat FAB and pushes onto the root stack.
+// This is not the home screen — it's launched from the Saucebook chef-hat FAB
+// and pushes onto the root stack.
 
 import React, { useMemo } from 'react';
 import {

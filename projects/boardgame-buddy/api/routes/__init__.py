@@ -9,9 +9,7 @@ router = APIRouter(
     tags=["boardgame_buddy"],
 )
 
-# Import sub-modules so their routes register on the router. The OOP/Strava
-# redesign added the buddy / feed / session / stats / search modules; the
-# existing modules are still served while the new frontend cuts over.
+# Import sub-modules so their routes register on the router.
 from . import game_routes      # noqa: F401, E402
 # Right behind game_routes: its one path is a literal under /games/admin/, the
 # same shape as the backfill-metadata route declared there.
@@ -101,7 +99,7 @@ from . import feedback_routes  # noqa: F401, E402
 # No ordering constraint: `/affiliate` is a prefix nothing else touches, and
 # within the module every literal (`/links`, `/click`, `/admin/partners`,
 # `/admin/clicks`) is declared ahead of the parameterised
-# `/admin/partners/{partner_id}…` forms. Last because it is the newest and
-# the least entangled — nothing here reads anything but its own two tables
+# `/admin/partners/{partner_id}…` forms. Last because it is the least
+# entangled — nothing here reads anything but its own two tables
 # and a game's name.
 from . import affiliate_routes  # noqa: F401, E402

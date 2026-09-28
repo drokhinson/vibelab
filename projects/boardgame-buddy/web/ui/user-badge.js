@@ -26,11 +26,11 @@
   });
 
   // Ghost players (free-text nicknames with no profile) render as a ghost
-  // silhouette outline holding their initials, in BGB brown. They used to be a
-  // filled disc — gold #C9922A initials on a #C9C2B0 warm grey — which was
-  // 1.9:1, far under the 4.5:1 floor and the least legible mark in the app.
+  // silhouette outline holding their initials, in BGB brown. Not a filled
+  // disc: gold #C9922A initials on a #C9C2B0 warm grey measure 1.9:1, far
+  // under the 4.5:1 floor.
   //
-  // Only `icon` is meaningful now: the outline and the initials both take their
+  // Only `icon` is meaningful: the outline and the initials both take their
   // colour from --ghost-ink in CSS, because a placeholder seat has no
   // user-chosen palette to honour and the mark has to stay legible on the cream
   // paper surfaces AND the espresso app ground.

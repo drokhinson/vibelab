@@ -2,7 +2,7 @@
 //
 // Wraps a Supabase Realtime channel on boardgamebuddy_play_session_scores.
 // The host's browser writes straight to the table via the anon key and
-// everybody else reads — RLS (migration 053, now 029's split policies)
+// everybody else reads — RLS (migration 029's split policies)
 // enforces that only the host of the session can write, and only while
 // phase='play'.
 //
@@ -27,7 +27,7 @@
 // Cell lookups are keyed (participant_id, round_index) — the roster row, not
 // the account. That is what lets a GUEST's column stream: a guest has a
 // participant row like anyone else but no user_id, so a user-keyed table
-// could never carry their scores and spectators watched their column sit
+// could never carry their scores and spectators would watch their column sit
 // empty all game.
 
 // @ts-check
@@ -46,9 +46,9 @@
    * re-applies it. A permission error is not transient: every subsequent
    * keystroke will fail the same way for the rest of the session, the table
    * stays empty, and every spectator watches a grid that never fills in.
-   * Swallowing that one hid a misconfigured RLS setup behind a UI that looked
-   * like it was working, on the screen belonging to the one person who could
-   * have fixed it.
+   * Swallowing that one would hide a misconfigured RLS setup behind a UI that
+   * looks like it is working, on the screen belonging to the one person who
+   * could fix it.
    *
    * 42501 is Postgres's insufficient_privilege — what an RLS WITH CHECK
    * failure raises. The PGRST3xx family is PostgREST's own auth class (an
@@ -102,7 +102,7 @@
       // rather than overwrite it.
       this._seed = new Map();
       // Has a direct table read ever returned rows? Everyone watching a
-      // session may read the table now — host, seated player or spectator
+      // session may read the table — host, seated player or spectator
       // alike (migration 027, on the viewer row POST /sessions/{code}/watch
       // leaves behind) — so the answer is normally yes for anybody who got as
       // far as this screen. It is still no when that registration did not
@@ -157,10 +157,10 @@
           }
         )
         .subscribe((status) => {
-          // Supabase reports the channel's fate here and nothing used to read
-          // it, so a channel that never connected was indistinguishable from
-          // one that was connected and quiet — the difference between "poll as
-          // a fallback" and "polling is the only thing that will ever work".
+          // Supabase reports the channel's fate here; unread, a channel that
+          // never connected is indistinguishable from one that is connected
+          // and quiet — the difference between "poll as a fallback" and
+          // "polling is the only thing that will ever work".
           if (status === "SUBSCRIBED") {
             this._realtimeDead = false;
           } else if (
@@ -212,10 +212,10 @@
         // A failed read leaves the cached map alone — better a slightly stale
         // grid than an empty one.
         if (error) throw error;
-        // REPLACE the map rather than merging into it. Merging meant a row the
-        // host deleted (a removed round) lived on in the cache forever, so
-        // totalFor() and maxRound() kept counting a round that was no longer
-        // on anyone's grid.
+        // REPLACE the map rather than merging into it. Merging would let a row
+        // the host deleted (a removed round) live on in the cache forever, so
+        // totalFor() and maxRound() would keep counting a round that is no
+        // longer on anyone's grid.
         const rows = data || [];
         if (rows.length) this._tableReadable = true;
         // Zero rows is ambiguous: either nobody has scored yet, or RLS is
@@ -293,8 +293,8 @@
      * either (the same policy gates both) and a caller polling on a "Realtime
      * is the fast path" cadence must not stand down for us.
      *
-     * Since migration 027 this is the exception rather than the spectator's
-     * lot: watching a session earns the read, so the seeded path is what is
+     * This is the exception rather than the spectator's lot: watching a
+     * session earns the read (migration 027), so the seeded path is what is
      * left when the viewer row could not be written (an API older than this
      * client, or a POST that failed). The degraded mode is worth keeping
      * precisely because it is invisible to the person watching.
@@ -356,12 +356,13 @@
      * the rounds after it down one slot, mirroring the Array.splice the host
      * just did to its local roundScores.
      *
-     * Deleting the index without shifting was a silent data corruption: rows
-     * stayed keyed to their original round_index while the grid re-numbered
-     * around the gap, so every cell below the removed round rendered the
-     * round above it — and the Total, being the sum of those cells, went with
-     * them. The joiner's mirror (which sizes itself from the highest
-     * round_index it has seen) kept a phantom trailing round too.
+     * Deleting the index without shifting would silently corrupt the grid:
+     * rows would stay keyed to their original round_index while the grid
+     * re-numbers around the gap, so every cell below the removed round would
+     * render the round above it — and the Total, being the sum of those
+     * cells, would go with them. The joiner's mirror (which sizes itself from
+     * the highest round_index it has seen) would keep a phantom trailing
+     * round too.
      *
      * @param {number} roundIndex
      */
@@ -567,7 +568,7 @@
      * .throwOnError() is set, and nothing here sets it. Converting to a
      * rejection is what makes the queue's failure path real: without it a 403
      * from the host-only RLS policy, or a write made with no network at all,
-     * took the success path and reported a row as landed that never did.
+     * would take the success path and report a row as landed that never did.
      *
      * @param {Array<{participant_id: string, round_index: number, score: number?}>} rows
      * @returns {Promise<any>}
@@ -634,7 +635,7 @@
       });
       this._emit();
       // The queue guarantees at most one request per cell is outstanding, so
-      // two keystrokes in one cell can no longer reach the table out of order.
+      // two keystrokes in one cell cannot reach the table out of order.
       return this._writes.queue(participantId, roundIndex, numeric);
     }
 

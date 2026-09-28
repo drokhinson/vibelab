@@ -17,13 +17,14 @@
 // reopens with your ticks intact, because a round trip to BGG is not a decision
 // to start the selection over.
 //
-// It is MULTI-SELECT, and was not: every pick used to close the sheet, so a
-// play with three expansions cost three opens, three reads of the same list and
-// three taps on "Add an expansion". Which expansions were on the table is a
-// SET — a play carries expansion_ids, a shelf carries a group of them — and
-// ".claude/rules/overlays.md" names the old shape under its anti-patterns: "a
-// single-select combo used to pick N things one at a time. If the underlying
-// model is a set, the sheet is multi-select with one confirm."
+// It is MULTI-SELECT: closing on every pick would make a play with three
+// expansions cost three opens, three reads of the same list and three taps on
+// "Add an expansion". Which expansions were on the table is a SET — a play
+// carries expansion_ids, a shelf carries a group of them — and
+// ".claude/rules/overlays.md" names the single-pick shape under its
+// anti-patterns: "a single-select combo used to pick N things one at a time.
+// If the underlying model is a set, the sheet is multi-select with one
+// confirm."
 //
 // It is deliberately the same sheet as widgets/player-picker-sheet.js, down to
 // the method names: ticked rows ride at the top under "Selected" in tick order
@@ -189,10 +190,9 @@
       const dot = exp.color
         ? `<span class="exp-picker__dot" style="background:${escapeAttr(exp.color)}"></span>`
         : "";
-      // role=checkbox + aria-checked, not the role=option with a hard-coded
-      // aria-selected="false" this row carried while it was single-select — a
-      // listbox option that is never selected describes a control that cannot
-      // be ticked, which is what this one used to be.
+      // role=checkbox + aria-checked, not role=option with a hard-coded
+      // aria-selected="false" — a listbox option that is never selected
+      // describes a control that cannot be ticked.
       return `
         <button class="game-picker__row" type="button" role="checkbox"
                 aria-checked="${on ? "true" : "false"}"
@@ -246,7 +246,7 @@
         .filter((e) => !this._isPicked(e.expansion_game_id))
         .filter((e) => this._hits(e, q));
       if (!picked && !rest.length) {
-        // Three different nothings now, and the differences matter: one is
+        // Three different nothings, and the differences matter: one is
         // "your search matched none of them", one is "you have them all", and
         // one is "BgB doesn't know about any yet" — only the last makes the
         // import action the primary thing to do.

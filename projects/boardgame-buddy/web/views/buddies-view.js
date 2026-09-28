@@ -40,7 +40,7 @@
       this._playedWith = [];   // PlayedWithUser[]
       this._ghosts = [];       // GhostPlayer[]
 
-      // Ghost linking has no state here any more: it is one bottom sheet
+      // Ghost linking has no state here: it is one bottom sheet
       // (widgets/player-picker-sheet.js), which owns its own query, its own
       // results and its own lifecycle. See _openLinkSheet.
 
@@ -52,7 +52,7 @@
       this._mutationSeq = 0;
       // Keys with a write in flight — "req:<userId>", "accept:<edgeId>", etc.
       // A second tap on the same control is dropped rather than firing twice.
-      // Every mutation takes one; only _request used to.
+      // Every mutation takes one.
       this._busy = new Set();
       // What this session DID to a person, keyed by user_id:
       // "sent" | "accepted" | "declined" | "cancelled".
@@ -171,7 +171,7 @@
       // Paint the requests /bootstrap has already fetched, BEFORE any await.
       // Both request lists ride along in the profile bundle, which is the same
       // payload the Profile hub's badge counts — so tapping a card that says
-      // "2 waiting" can no longer open a screen with nothing on it for as long
+      // "2 waiting" cannot open a screen with nothing on it for as long
       // as /buddies/requests takes. The network results below overwrite this;
       // it only governs what is on screen until they land.
       this._seedRequestsFromBundle();
@@ -192,9 +192,7 @@
       // Ghost claims, both directions. Uncached for the same reason as the
       // rail (GhostClaim.suggestions), and null-on-failure for the same reason
       // as requests: the Profile dot must not be cleared because the network
-      // dropped. Suggestions caught [] rather than null until they joined that
-      // dot — which is exactly the failure the line above describes, so both
-      // catch null now.
+      // dropped. Suggestions feed that dot too, so both catch null.
       const claimSuggestionsPromise = window.GhostClaim.suggestions().catch(() => null);
       const claimsPromise = window.GhostClaim.list().catch(() => null);
       try {
@@ -208,8 +206,8 @@
           // Sorted here as well as in _accept. Necessary in both places:
           // _goBuddiesPage renders without loading, so if only one side sorted,
           // a page turn would show a newly-accepted buddy appended at the end
-          // and the next load would move it — reintroducing exactly the motion
-          // this change removes.
+          // and the next load would move it — exactly the motion the
+          // patch-in-place rule below exists to prevent.
           this._buddies = this._sortBuddies(combined.accounts || []);
           // The lists are re-forming, so the session's past-tense chips retire.
           this._resolved.clear();
@@ -468,7 +466,7 @@
     }
 
     /**
-     * The same placeholder for "Is this you?", which now sits ABOVE the
+     * The same placeholder for "Is this you?", which sits ABOVE the
      * roster. Height, not decoration: this list is uncached and is not in the
      * profile bundle, so without a reservation the section pops in mid-load
      * and shoves the whole screen down under the user's thumb.
@@ -703,11 +701,11 @@
 
     // ── Adding (header) ─────────────────────────────────────────────────────
     //
-    // This screen used to lead with its own profile-search bar, whose hits were
-    // a third row shape carrying a third copy of the relation affordance. The
-    // Add-buddies card does the same job better — it ranks people the viewer
-    // may know, multi-selects, and sends one batch — so the bar became the
-    // button that opens it, and the card grew the search the bar had.
+    // No profile-search bar of its own: its hits would be a third row shape
+    // carrying a third copy of the relation affordance. The Add-buddies card
+    // does the same job better — it ranks people the viewer may know,
+    // multi-selects, sends one batch and carries the search — so the header
+    // is the button that opens it.
     async _openAdd() {
       const result = await window.AddBuddiesModal.open({
         suggestions: this._suggested,
@@ -764,10 +762,9 @@
     // One renderer for the four states a person can be in relative to the
     // viewer. The played-with rows draw it directly; the Add-buddies card
     // consumes _relationFor through the relationFor callback _openAdd hands it,
-    // so a person who is already a buddy reads the same on both surfaces. They
-    // used to carry their own copies of the same switch, and only one of them
-    // ever grew a Cancel — per .claude/rules/ui-object-design.md §2 the surface
-    // difference is a parameter, not a second implementation.
+    // so a person who is already a buddy reads the same on both surfaces — per
+    // .claude/rules/ui-object-design.md §2 the surface difference is a
+    // parameter, not a second implementation.
 
     /**
      * @typedef {Object} BuddyRelation
@@ -881,10 +878,10 @@
 
     // ── Friend-graph mutations ──────────────────────────────────────────────
     //
-    // Every one of these used to await the write, drop the SWR bundle, then
-    // re-run _load() — three endpoints and a repaint through the loading
-    // branch. Tapping Add meant watching the button sit on "…" for a round
-    // trip before anything moved.
+    // None of these awaits the write before painting: awaiting it, dropping
+    // the SWR bundle and re-running _load() is three endpoints and a repaint
+    // through the loading branch, with the button sitting on "…" for a round
+    // trip before anything moves.
     //
     // Per .claude/rules/web-frontend.md ("Mutations feel instantaneous") local
     // state moves first and the write flows through behind it. Each handler
@@ -896,10 +893,10 @@
     // These all change list MEMBERSHIP — a person moves between Sent, Buddies,
     // Played-with and the suggestion rail — which web-frontend.md exempts from
     // the surgical-repaint rule. That exemption is about the SCOPE of a
-    // structural repaint and says nothing about its TIMING, and the timing was
-    // the bug: a full render() in the tap's own frame moved the rows, so a user
-    // reaching for the next suggestion landed on whoever slid into that slot
-    // and sent an invite to the wrong person.
+    // structural repaint and says nothing about its TIMING, and the timing is
+    // what matters: a full render() in the tap's own frame moves the rows, so a
+    // user reaching for the next suggestion lands on whoever slid into that
+    // slot and sends an invite to the wrong person.
     //
     // So the rule here is:
     //
@@ -1085,10 +1082,10 @@
         pending_request_direction: "outgoing",
         pending_request_id: tempId,
       });
-      // The tile STAYS. Splicing it out here is what caused the reported bug:
-      // the rail repainted in the tap's own frame, every tile to the right slid
-      // left one width, and the next tap — already on its way down — landed on
-      // whoever moved into that slot and sent them a request. The suggestion
+      // The tile STAYS. Splicing it out here would repaint the rail in the
+      // tap's own frame: every tile to the right slides left one width, and the
+      // next tap — already on its way down — lands on whoever moved into that
+      // slot and sends them a request. The suggestion
       // RPC excludes anyone the viewer shares an edge with, so the tile drops
       // itself on the next _load(); until then it reads "Sent".
       this._resolved.set(userId, "sent");
@@ -1148,8 +1145,8 @@
     async _cancel(requestId) {
       if (!requestId || requestId.startsWith("tmp:")) return;
       const key = "cancel:" + requestId;
-      // Had no guard at all: a double-tap 404'd the second call and toasted
-      // "Couldn't cancel that request" for a cancel that had just succeeded.
+      // Without the guard a double-tap 404s the second call and toasts
+      // "Couldn't cancel that request" for a cancel that has just succeeded.
       if (this._busy.has(key)) return;
       this._busy.add(key);
       this._mutationSeq++;
@@ -1508,10 +1505,10 @@
       if (this._busy.has(key)) return;
       const incoming = this._requests.incoming || [];
       const idx = incoming.findIndex((r) => r.id === requestId);
-      // Guard the miss like _reject does. Without it a double-tap ran with
+      // Guard the miss like _reject does. Without it a double-tap runs with
       // req = null and otherId = undefined, and _personFor(undefined) falls
       // through to its placeholder — pushing a row literally named "Buddy",
-      // with a duplicate id, into _buddies until the 404 rolled it back.
+      // with a duplicate id, into _buddies until the 404 rolls it back.
       if (idx < 0 && !userId) return;
       this._busy.add(key);
       this._mutationSeq++;
@@ -1534,7 +1531,7 @@
       const buddiesBefore = this._buddies;
       // Sorted on the way in, and _load() sorts too, so the row lands in its
       // final position first time. Without both, the first accept of a session
-      // re-ordered every buddy row and changed which six were on the page.
+      // re-orders every buddy row and changes which six are on the page.
       this._buddies = this._sortBuddies([...this._buddies, optimistic]);
       const undoPlayed = this._patchPlayedWith(otherId, {
         is_buddy: true,
@@ -1603,7 +1600,7 @@
       if (this._busy.has(key)) return;
       const incoming = this._requests.incoming || [];
       const idx = incoming.findIndex((r) => r.id === requestId);
-      // Bail BEFORE bumping _mutationSeq — a no-op reject used to invalidate a
+      // Bail BEFORE bumping _mutationSeq — a no-op reject must not invalidate a
       // legitimate in-flight _load().
       if (idx < 0) return;
       this._busy.add(key);
@@ -1650,7 +1647,7 @@
       // Bail before the seq bump, as _reject does.
       if (idx < 0) return;
       // The project's one destructive-confirm surface
-      // (.claude/rules/ui-object-design.md §3c); this was a bare confirm().
+      // (.claude/rules/ui-object-design.md §3c).
       const yes = await window.PolaroidPopup.confirm({
         title: "Remove this buddy?",
         body: "You'll both drop off each other's buddy lists. You can send a new request any time.",
@@ -1658,7 +1655,7 @@
         cancelLabel: "Keep",
       });
       if (!yes) return;
-      // Re-read the index: the confirm is async now, so the list can have moved
+      // Re-read the index: the confirm is async, so the list can have moved
       // under it while the dialog was up.
       const at = this._buddies.findIndex((b) => b.id === edgeId);
       if (at < 0) return;
@@ -1745,11 +1742,10 @@
     // ── Ghost → account linking ─────────────────────────────────────────────
     //
     // The same sheet the play importer's Players step opens, asking the same
-    // question of the same list. It used to be an inline panel that expanded
-    // inside the row: a search field that fired /profiles/search on a 300ms
-    // debounce per keystroke, and showed NOTHING until something was typed —
-    // so the buddy this ghost obviously is sat one tap away behind a search
-    // for a name the user had to remember first.
+    // question of the same list — not an inline search panel inside the row,
+    // which fires /profiles/search per keystroke and shows NOTHING until
+    // something is typed, so the buddy this ghost obviously is sits one tap
+    // away behind a search for a name the user has to remember first.
     //
     // The sheet answers all of that with machinery that already exists: the
     // viewer's buddies and their other ghosts filter instantly off the cached
@@ -1803,7 +1799,7 @@
      * /ghost-players/link rejects that outright — your own ghost is a play you
      * logged yourself out of, and the fix for it lives on the play. And any
      * ghost sharing the viewer's display name, which is the same case wearing
-     * a nickname, and which this screen has always filtered out of the list.
+     * a nickname, and which this screen filters out of the list.
      * @param {string} displayName
      */
     _linkCandidates(displayName) {
@@ -1847,10 +1843,9 @@
     /**
      * Stamp every play this ghost appears in with a real account.
      *
-     * Confirmed first, and that is new. The old panel showed nothing until
-     * the user typed a name, so a result was always something they had gone
-     * looking for; the sheet puts the whole buddy list a tap away, which makes
-     * a stray thumb able to hand somebody else's history to the wrong person.
+     * Confirmed first: the sheet puts the whole buddy list a tap away, not
+     * just results the user went looking for, which makes a stray thumb able
+     * to hand somebody else's history to the wrong person.
      * Hard to undo, too: the plays keep the account until each of those people
      * removes themselves from them one by one.
      * @param {string} displayName @param {string} targetUserId

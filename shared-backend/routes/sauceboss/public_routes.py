@@ -63,8 +63,8 @@ async def health():
 async def list_ingredient_categories() -> dict[str, str]:
     """Returns {ingredient_name: category} for the filter-panel grouping.
 
-    Streamlined post-013: reads sauceboss_ingredient.category directly, no
-    join. Skips uncategorized rows so the response stays small.
+    Reads sauceboss_ingredient.category directly, no join. Skips
+    uncategorized rows so the response stays small.
     """
     sb = get_supabase()
     result = (
@@ -487,7 +487,6 @@ async def initial_load() -> InitialLoadResponse:
 async def item_load(item_id: str) -> ItemLoadResponse:
     """Single round-trip returning everything the per-selection screen needs.
 
-    Replaces the legacy carb-load / protein-load / salad-base-load endpoints.
     Returns an empty ``variants`` list for items with no preparation variants
     (proteins and salad bases today). The ``sauces`` field is the universal
     payload regardless of category — the frontend renders it as sauces /
@@ -700,7 +699,7 @@ async def list_ingredients_with_usage() -> IngredientsWithUsageResponse:
 
 
 # ── release/sauceboss-1.0 compat shims ─────────────────────────────────────
-# The release-branch web/native still call /foods, /foods-with-usage, and
+# The release-branch web/native call /foods, /foods-with-usage, and
 # POST /ingredient-categories. These thin aliases reshape responses to the
 # legacy `{foods: [...]}` envelope and forward category writes into the
 # consolidated sauceboss_ingredient.category column. Remove once the release

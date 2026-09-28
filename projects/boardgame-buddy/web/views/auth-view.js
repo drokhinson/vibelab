@@ -63,8 +63,7 @@
      * and a redirect that FAILS is silent by construction: the document was
      * replaced, so the rejection has no caller left to report to. The user
      * went to Google, came back, and landed on the login screen with no error
-     * and no idea whether to try again. BgbAuth.consumeRedirectResult existed
-     * for exactly this and had no callers.
+     * and no idea whether to try again.
      *
      * Asked from here rather than the boot path because this is the screen
      * that cares and the screen that can show an answer — no cross-module
@@ -94,10 +93,10 @@
      * "Failed to fetch" (or, from Firebase, an `auth/…` code) that is true and
      * tells the user nothing. This asks the connectivity signals directly.
      *
-     * It replaces a banner this screen used to paint the moment BgbNet
-     * latched, before the user had typed anything. That was offline as a mode:
-     * it answered a question nobody had asked, and it was wrong every time the
-     * latch was stale. Signing in does need a connection — it is a network
+     * The screen paints no banner the moment BgbNet latches, before the user
+     * has typed anything. That would be offline as a mode: it answers a
+     * question nobody has asked, and it is wrong every time the latch is
+     * stale. Signing in does need a connection — it is a network
      * call by definition — and this is where that gets said.
      *
      * @param {any} e
@@ -154,8 +153,8 @@
     }
 
     render() {
-      // Ask the auth layer, not config.js: supabaseUrl stays populated after
-      // the swap because the DB and realtime still use it, so a check on those
+      // Ask the auth layer, not config.js: supabaseUrl stays populated whichever
+      // provider signs in, because the DB and realtime still use it, so a check on those
       // two fields would report "configured" on a page that cannot sign anyone
       // in. BgbAuth.backend is null until one provider actually stood up.
       const configMissing = !window.BgbAuth || !window.BgbAuth.backend;
@@ -197,11 +196,11 @@
 
       // REPAINT THE CARD, NOT THE SCREEN.
       //
-      // Every re-render used to rewrite the container, which meant the logo,
-      // the wordmark and the feature strip were thrown away and rebuilt for a
-      // change that never touches them. The strip's rows carry a staggered
+      // Rewriting the container on every re-render would throw away and
+      // rebuild the logo, the wordmark and the feature strip for a change
+      // that never touches them. The strip's rows carry a staggered
       // entrance animation (.feat-strip__row in styles.css), so rebuilding
-      // them re-runs it: tapping between Log In and Sign Up made the five
+      // them re-runs it: tapping between Log In and Sign Up would make the five
       // lines under the card flicker out and cascade back in, which reads as
       // the page reloading under a tap that should only have moved a tab.
       // Same for every setError() — including the signup path that flips to
@@ -211,12 +210,12 @@
       // So the shell is painted once per visit and the card body is patched
       // after that. `_shellPainted` is reset by _resetFormState (constructor,
       // mount, unmount), so a fresh arrival still gets the full paint and the
-      // strip still animates in — it just no longer re-animates in place.
+      // strip still animates in — it just does not re-animate in place.
       const body = this.container.querySelector("#auth-card-body");
       if (this._shellPainted && body) {
         body.innerHTML = cardBody;
         // Scoped to the patched subtree: the only icons outside it are the
-        // strip's, and they were never removed.
+        // strip's, and the patch never removes them.
         this.refreshIcons(body);
         return;
       }
@@ -256,24 +255,24 @@
      * signInWithPopup resolves the moment the credential comes back over
      * postMessage. What happens after that is init.js's auth state listener:
      * bind the cache, and — for an account this device has never seen, which
-     * is every new signup — wait on /bootstrap before it routes anywhere. This
-     * method used to resolve into that gap and do nothing, so the popup
-     * vanished and the login form was simply still there, complete with a live
-     * "Continue with Google" button. It reads as a failure, and the obvious
+     * is every new signup — wait on /bootstrap before it routes anywhere. A
+     * method that resolved into that gap and did nothing would leave the
+     * login form simply still there as the popup vanished, complete with a live
+     * "Continue with Google" button. That reads as a failure, and the obvious
      * response to it (press the button again) is the one thing that actually
      * can break the sign-in: the second popup cancels the first.
      *
-     * HANDING OVER WHEN THE PROMISE RESOLVED WAS STILL TOO LATE. On Android
+     * HANDING OVER WHEN THE PROMISE RESOLVES IS STILL TOO LATE. On Android
      * the "popup" is a whole tab: Chrome brings the app's tab back to the
      * front the moment Google's closes, and the credential does not arrive
      * over postMessage until after that. So the login form is what the user
-     * is returned to, for as long as that leg takes — which is exactly the
-     * report ("it makes it feel like the sign in failed"), and pressing the
-     * button in that window is what cancels the sign-in in flight.
+     * would be returned to, for as long as that leg takes — which feels like
+     * the sign-in failed — and pressing the button in that window is what
+     * cancels the sign-in in flight.
      *
      * So the handover happens when the popup is OPENED, not when it answers,
      * and the splash covers the whole exchange. There is nothing left to
-     * double-tap, because there is no longer a form on screen to tap.
+     * double-tap, because there is no form on screen to tap.
      *
      * Order is load-bearing: signInWithGoogle() must be called in the tap's
      * own task, because opening a window is only allowed while the user
@@ -416,11 +415,10 @@
             // listener to land the user on the feed, for the same reason the
             // Google path does (see oauth): the listener's first move for an
             // account this device has never seen is to wait on /bootstrap,
-            // and a brand-new signup is never a device that has seen it. This
-            // branch used to fall through to the `finally` below, which put
-            // the Sign Up button back exactly as it was — on the longest wait
-            // in the app, in front of the person least able to tell that it
-            // had worked.
+            // and a brand-new signup is never a device that has seen it.
+            // Falling through to the `finally` below would put the Sign Up
+            // button back exactly as it was — on the longest wait in the app,
+            // in front of the person least able to tell that it had worked.
             this._error = null;
             window.router.go("splash");
           } else {

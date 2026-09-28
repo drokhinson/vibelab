@@ -14,9 +14,9 @@
 // itself survives that. bind() is therefore idempotent (it flags the node) and
 // safe to call after every paint.
 //
-// Ported from projects/travel-scrapbook/web/widgets/timeline-gestures.js —
-// same Pointer Events shape, same deferred pointer capture, same rAF edge
-// auto-scroll, same capture-phase click swallower. What is new here is
+// The same shape as projects/travel-scrapbook/web/widgets/timeline-gestures.js
+// — same Pointer Events shape, same deferred pointer capture, same rAF edge
+// auto-scroll, same capture-phase click swallower. What differs here is
 // index-insertion: that widget drops onto a container, this one has to land
 // between two rows, so the dragged <li> is moved through the live list as the
 // finger passes each midpoint and the list itself parts around it. No separate
@@ -49,8 +49,8 @@
   }
 
   // The element that actually scrolls behind the list. Resolved per drag rather
-  // than assumed: the cascade has been both a document scroller and an inner
-  // one, and scrolling the wrong box during a drag does nothing at all.
+  // than assumed: the cascade can be a document scroller or an inner one,
+  // and scrolling the wrong box during a drag does nothing at all.
   function scrollerFor(el) {
     for (let n = el.parentElement; n; n = n.parentElement) {
       const st = window.getComputedStyle(n);

@@ -12,9 +12,9 @@
 // instantly rather than after the deadline when this latch is set, and
 // helpers.js#notifyRequestError turns that into a sentence.
 //
-// That matters because a latch can be wrong, and a wrong latch used to disable
-// real controls and paint a banner over screens that were working fine.
-// Consumed the way it is now, being wrong costs one toast and a probe.
+// That matters because a latch can be wrong. A latch that disabled controls or
+// painted a banner would break screens that are working fine; consumed this
+// way, being wrong costs one toast and a probe.
 //
 // The concept exists at all because board games get played in basements,
 // cabins and pub back rooms. The host still needs to run the Gather → Play →
@@ -40,16 +40,15 @@
 // requests. A state that can only be left by evidence it also stops anyone
 // from gathering will stay put forever.
 //
-// (The short-circuit is why. It replaced a pile of per-caller isOffline()
-// gates, which had exactly the same property one layer up: the pickers, the
-// join panel and the guide each declined to ask, for the same reason.)
+// (The short-circuit is why. Per-caller isOffline() gates would have exactly
+// the same property one layer up: each caller would decline to ask, for the
+// same reason.)
 //
 // The browser's `online` event is not the answer on its own: it fires on a
 // TRANSITION, and the failure modes that get the app here don't involve one.
 // A phone that never lost its link (a stalled socket, a cold dyno, a PWA the
 // OS froze mid-request) has no transition to report, so nothing fires and the
-// user is left with a "No connection" banner on full bars. That was the bug:
-// "stuck in offline mode when my phone is online."
+// app stays offline on full bars.
 //
 // So everything below exists purely to make the latch let go:
 //   * an epoch on every failure, so evidence from before a connectivity change
@@ -60,30 +59,26 @@
 //     installed PWA (see _onResume);
 //   * a backing-off auto-probe while offline and on screen, so recovery never
 //     depends on the user doing anything at all;
-//   * a probe kicked by any request the short-circuit blocks, since the
-//     offline banner's "Try again" button is gone and the user's own retry tap
-//     is what replaces it (throttled — see ATTEMPT_PROBE_MIN_MS).
+//   * a probe kicked by any request the short-circuit blocks, since there is
+//     no "Try again" button and the user's own retry tap stands in for it
+//     (throttled — see ATTEMPT_PROBE_MIN_MS).
 //
 // AND NONE OF IT MAY DEPEND ON A REQUEST ANSWERING
 // ------------------------------------------------
-// The version before this one had all of the above and still stranded the app
-// offline until it was force-quit, because both halves of recovery hung off one
-// promise:
+// All of the above still strands the app offline until it is force-quit if
+// both halves of recovery hang off one promise:
 //
 //   * probe() is single-flight, so while `_probing` is set every later probe
 //     hands back that same promise instead of asking again; and
-//   * the ladder was a CHAIN — each rung armed by the previous probe settling.
+//   * a ladder built as a CHAIN — each rung armed by the previous probe
+//     settling — stops when one probe does.
 //
-// A fetch that never settles therefore ended recovery permanently. That is the
-// exact failure this app already knows it has to survive: api.js's header
-// describes requests that stall instead of failing, and the deadline it puts on
-// every fetch assumes the abort lands. When it doesn't — sockets the OS has
-// dropped, a connection pool full of them, a page thawing out of suspension —
-// the deadline never fires either. Seen in the field: the app latched offline
-// with a working connection, and from that moment the server logged not one
-// /health probe, while fire-and-forget analytics pings (which bypass
-// api._fetch, so they never see the latch) kept arriving 200 for another
-// quarter of an hour.
+// A fetch that never settles would then end recovery permanently. That is the
+// exact failure this app has to survive: api.js's header describes requests
+// that stall instead of failing, and the deadline it puts on every fetch
+// assumes the abort lands. When it doesn't — sockets the OS has dropped, a
+// connection pool full of them, a page thawing out of suspension — the
+// deadline never fires either.
 //
 // Two rules fall out of that, and every change here is one of them:
 //   * A PROBE THAT DOES NOT ANSWER STANDS ASIDE — the single-flight slot is
@@ -168,9 +163,9 @@
 
     /** Wire the browser events. Called once from init.js. */
     start() {
-      // Drop the sticky flag the short-lived "Play offline" card used to set.
-      // Nothing reads it any more, and a device still carrying it would look
-      // like it had unexplained offline state to anyone inspecting storage.
+      // Drop the stale sticky offline flag some devices still carry. Nothing
+      // reads it, and a device carrying it would look like it had unexplained
+      // offline state to anyone inspecting storage.
       try { localStorage.removeItem("bgb_offline_v1"); } catch (_) {}
 
       window.addEventListener("offline", () => {
@@ -263,8 +258,8 @@
     }
 
     /**
-     * Actively test the connection. Backs the offline banner's "Try again" and
-     * the automatic recovery ladder.
+     * Actively test the connection. Backs the automatic recovery ladder and
+     * the retry-tap probe.
      *
      * Everything else here is passive — it learns from requests the app was
      * making anyway. This is the one path that asks on purpose, for the case
@@ -307,9 +302,9 @@
       // THE SLOT IS HELD FOR A BOUNDED TIME AND NO LONGER.
       //
       // Single-flight is what keeps a leaning-on-the-button user to one check,
-      // and it is also what turned one request that never settled into an app
-      // that could not get back online: every later probe() handed back that
-      // same pending promise, so no further request was ever made. api.js's own
+      // and it is also what would turn one request that never settles into an
+      // app that cannot get back online: every later probe() would hand back
+      // that same pending promise, so no further request would ever be made. api.js's own
       // deadline does not cover this, because it assumes the abort settles the
       // fetch — and the case that wedges here is the one where it doesn't.
       //
@@ -356,10 +351,9 @@
      * Somebody tried to do something and api._fetch short-circuited it.
      *
      * Not evidence — no request was made — so nothing here touches the strike
-     * count or _lastOutcome. It is an intent signal, and it exists because the
-     * offline banner's "Try again" button was removed: a user who can see they
-     * have signal has no button left to press, so their own retry tap has to
-     * BE the button. Restart the ladder at its quick first rung and ask now.
+     * count or _lastOutcome. It is an intent signal, and it exists because
+     * there is no "Try again" button: a user who can see they have signal has
+     * no button to press, so their own retry tap has to BE the button. Restart the ladder at its quick first rung and ask now.
      *
      * Safe to call on every blocked request. The throttle is what makes it so —
      * probe()'s single-flight guard alone would not, since a 2s poller would
@@ -423,8 +417,8 @@
       // navigator.onLine is an INPUT to the answer, and a browser that moves it
       // without firing the matching event (iOS does, across a network change)
       // moves the answer with nothing calling _publish(). Gating the ladder on
-      // the stale copy meant the one state where recovery matters most — offline
-      // by a flag nobody announced — was the one state with no auto-probe
+      // the stale copy would make the one state where recovery matters most —
+      // offline by a flag nobody announced — the one state with no auto-probe
       // running at all.
       //
       // Republishing lands back in here via _publish(), which then does the
@@ -453,11 +447,10 @@
         }
         this._recoveryStep++;
         // Fired, not awaited — and the next rung is armed right here rather than
-        // when this probe settles. The ladder used to be a chain, which made it
-        // exactly as durable as the flakiest thing it waited on: one probe that
-        // never answered ended recovery for the life of the page, which is the
-        // field bug the header describes. A heartbeat cannot be stopped that
-        // way. probe() is single-flight, so a rung that lands while the previous
+        // when this probe settles. A chain would be exactly as durable as the
+        // flakiest thing it waited on: one probe that never answered would end
+        // recovery for the life of the page (see the header). A heartbeat cannot
+        // be stopped that way. probe() is single-flight, so a rung that lands while the previous
         // probe is still out costs nothing — and by then PROBE_DEADLINE_MS has
         // handed the slot back anyway.
         this.probe();

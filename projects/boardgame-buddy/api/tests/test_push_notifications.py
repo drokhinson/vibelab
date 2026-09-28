@@ -209,8 +209,8 @@ def test_an_unset_tier_reads_as_off():
     """A profile row written before migration 017 has no value at all.
 
     It must read as "off" rather than as anything else: push is opt-in, and a
-    missing column silently meaning "yes" would notify every existing account
-    the moment this shipped.
+    missing column silently meaning "yes" would notify every such account
+    unasked.
     """
     for missing in ("", None):
         assert not push_tier_admits(missing, PushEvent.BUDDY_REQUEST)
@@ -379,13 +379,13 @@ def test_the_whole_feature_is_inert_without_keys(monkeypatch):
 
 # ── A key that is present but wrong ──────────────────────────────────────────
 #
-# The failure this guards against was live: BGB_VAPID_PUBLIC_KEY held something
-# that was not an uncompressed P-256 point, enabled() asked only whether the
-# string was non-empty, GET /push/config said yes, and the first person to reach
-# for the setting got `Failed to execute 'subscribe' on 'PushManager': The
-# provided applicationServerKey is not valid` — a deploy-time mistake surfaced
-# as a DOM exception in somebody else's browser. The server had everything it
-# needed to know better.
+# The failure this guards against: BGB_VAPID_PUBLIC_KEY holds something that is
+# not an uncompressed P-256 point, enabled() asks only whether the string is
+# non-empty, GET /push/config says yes, and the first person to reach for the
+# setting gets `Failed to execute 'subscribe' on 'PushManager': The provided
+# applicationServerKey is not valid` — a deploy-time mistake surfaced as a DOM
+# exception in somebody else's browser, when the server has everything it
+# needs to know better.
 
 
 def _bad_public_keys() -> dict[str, str]:
@@ -446,10 +446,10 @@ def test_a_malformed_public_key_sends_nothing(monkeypatch):
 
 
 def test_an_unparseable_private_key_switches_the_feature_off(monkeypatch):
-    """The other half, which enabled() never used to consult: _vapid() logged
-    and returned None while /push/config went on advertising the feature, so
-    the setting worked, the subscription was stored, and every send silently
-    did nothing."""
+    """The other half, which enabled() must consult: if _vapid() logs and
+    returns None while /push/config goes on advertising the feature, the
+    setting works, the subscription is stored, and every send silently does
+    nothing."""
     monkeypatch.setattr(P, "BGB_VAPID_PRIVATE_KEY", "not-a-key")
     monkeypatch.setattr(P, "_complained", set())
     monkeypatch.setattr(P, "_vapid_instance", None)   # forget the memoised good one
@@ -534,7 +534,7 @@ def test_a_finalised_session_rewrites_the_invite_it_concludes():
 
 def test_a_play_logged_outside_a_lobby_is_unchanged():
     """No session, no rewrite. This play was never announced in advance, so it
-    keeps the per-actor tag and alerts like it always has."""
+    keeps the per-actor tag and alerts as usual."""
     play = SimpleNamespace(game_name="Catan", players=_seated("guest-1"))
 
     (pushed,) = _pushes(N.play_logged, _actor(), play)
@@ -545,7 +545,7 @@ def test_a_play_logged_outside_a_lobby_is_unchanged():
 
 def test_quiet_is_absent_from_every_other_payload():
     """A key the worker reads as "do not alert" is opt-in, and stays opt-in:
-    the default payload is byte-identical to what it was before."""
+    the default payload carries no trace of it."""
     assert P.payload(
         event=PushEvent.BUDDY_REQUEST, title="t", body="b", url="/u", tag="x"
     ) == {"kind": "buddy_request", "title": "t", "body": "b", "url": "/u", "tag": "x"}

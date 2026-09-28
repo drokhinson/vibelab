@@ -2,13 +2,13 @@
 // table. One cell, one request at a time.
 //
 // Why this exists. Score cells are an `oninput` handler with no debounce, so
-// typing "36" used to fire two INDEPENDENT upserts for the same row — one
+// typing "36" would fire two INDEPENDENT upserts for the same row — one
 // carrying 3, one carrying 36 — over separate HTTP requests with no ordering
-// between them. If the second one committed first, the row ended at 3 and
-// stayed there. The host saw the corruption the moment they clicked away,
-// because the cell repaint skips only the cell that currently has focus.
+// between them. If the second one committed first, the row would end at 3 and
+// stay there, and the host would see it the moment they clicked away, because
+// the cell repaint skips only the cell that currently has focus.
 //
-// The fix is structural rather than a guard bolted on top: for a given cell
+// The ordering is structural rather than a guard bolted on top: for a given cell
 // there is never more than one request outstanding, so the database cannot see
 // two writes to that row out of order. Keystrokes arriving while a write is in
 // flight replace the queued value, and the pump laps to send the newest one
@@ -52,8 +52,7 @@
        * An intent lives from the local edit until the TABLE is observed to
        * agree with it — not until the HTTP resolves. That gap (write committed,
        * its own Realtime echo not yet delivered, host already typing the next
-       * digit) is exactly where a stale echo lands, and it is the gap the old
-       * `_pending` map had already deleted itself out of.
+       * digit) is exactly where a stale echo lands.
        * @type {Map<string, Intent>}
        */
       this._intents = new Map();
@@ -98,7 +97,7 @@
         sending: !!(prev && prev.sending),
       });
       // A pump already owns this cell; it will pick the new value up on its
-      // next lap. Starting a second one is exactly the race being fixed.
+      // next lap. Starting a second one is exactly the race this prevents.
       if (prev && prev.sending) return Promise.resolve();
       const p = this._pump(key, participantId, roundIndex);
       this._inflight.add(p);

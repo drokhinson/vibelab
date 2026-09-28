@@ -24,7 +24,7 @@
 /**
  * @typedef {Object} OutboxEntry
  * @property {string} clientKey     UUID, also carried on payload.client_key
- * @property {string|null} userId   Supabase uid that recorded it — see _mine()
+ * @property {string|null} userId   id of the account that recorded it — see _mine()
  * @property {Object} payload       A PlayCreate body (PlaySession.toPlayCreate())
  * @property {Object|null} gameSnapshot  {id,name,thumbnail_url} for the pending UI
  * @property {number} queuedAt      Date.now() at enqueue
@@ -75,9 +75,9 @@
    * POST /plays writes under whoever's token is attached, not under whoever
    * recorded the game. On a shared device — sign out after an offline night,
    * a housemate signs in before the queue drains — an unscoped flush would
-   * file someone else's play into their history. Entries queued before this
-   * field existed have userId == null and are treated as the current user's,
-   * which is the only account that could have produced them.
+   * file someone else's play into their history. An entry with userId == null
+   * is treated as the current user's, which is the only account that could
+   * have produced it.
    *
    * @param {OutboxEntry[]} entries
    * @returns {OutboxEntry[]}

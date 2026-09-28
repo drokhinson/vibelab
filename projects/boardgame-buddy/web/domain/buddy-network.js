@@ -84,8 +84,8 @@
 
   const BuddyNetwork = {
     /**
-     * Build an index from an onboarding-suggestions response. Tolerates the
-     * response shape from before migration 072 (no `network` key) and returns
+     * Build an index from an onboarding-suggestions response. Tolerates a
+     * response with no `network` key (a backend without migration 072) and returns
      * an index that simply never promotes anything — first-run must survive a
      * backend that has not caught up.
      *

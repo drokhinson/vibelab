@@ -1,10 +1,9 @@
 // views/add-games-view.js — "Add games": the whole BgB catalog as one scroll,
 // with a single tap per row to put a game on your shelf or take it off again.
 //
-// This replaced a search modal. The old "+ Add" on the Collection and Wishlist
-// spokes opened a search popup, which meant the only way to reach a game was to
-// already know its name and type it — fine for "I just bought Ark Nova",
-// useless for "what does BgB even have?". The catalog is browsable, so it is
+// A search popup only reaches a game whose name you already know and type —
+// fine for "I just bought Ark Nova", useless for "what does BgB even have?".
+// The catalog is browsable, so it is
 // browsed: every base game, alphabetical, revealed a batch at a time by the
 // same scroll sentinel the two spokes use (ui/infinite-scroll.js).
 //
@@ -52,7 +51,7 @@
 
   // One table drives the toggle pills, the header verb, the aria-labels and
   // where each shelf goes back to, so a third shelf can't leave one of them
-  // wired to nothing. Both shelves land on the same spoke now, told apart by
+  // wired to nothing. Both shelves land on the same spoke, told apart by
   // ?shelf= — `routeParams` is what keeps the back arrow returning to the one
   // the user was adding to rather than dumping them on Owned.
   const SHELVES = [
@@ -343,12 +342,12 @@
      * The tap does not touch the network. It repaints the button from what the
      * user just asked for and records that intent; _drain is what talks to the
      * server, on its own schedule. That split is the difference between a
-     * screen you can run your thumb down and one that goes grey under you: the
-     * previous version held the row in an `aria-busy` state — dimmed and
-     * `pointer-events: none` — for the whole round trip, so every tap was
-     * followed by a few hundred milliseconds of a button that looked broken
-     * and ignored the correction tap, on a screen whose entire job is a long
-     * run of taps.
+     * screen you can run your thumb down and one that goes grey under you:
+     * holding the row in an `aria-busy` state — dimmed and
+     * `pointer-events: none` — for the whole round trip would follow every tap
+     * with a few hundred milliseconds of a button that looks broken and
+     * ignores the correction tap, on a screen whose entire job is a long run
+     * of taps.
      *
      * A game already on the OTHER shelf moves rather than duplicating:
      * POST /collection upserts on (user, game), so wishlist → owned is the
@@ -483,9 +482,8 @@
     /**
      * "Add to:" + the two pills, as one row.
      *
-     * The label is the whole explanation of this screen — it replaced a
-     * sentence of prose above the toggle that described the catalog rather
-     * than the control under it. "Add to: [Collection] [Wishlist]" says what
+     * The label is the whole explanation of this screen, and it describes the
+     * control under it rather than the catalog. "Add to: [Collection] [Wishlist]" says what
      * the pills do and what a row's + will do, in two words, and it is also
      * the toggle's accessible name (`aria-labelledby`) rather than a
      * duplicate `aria-label` that would have to be kept in step with it.
@@ -513,7 +511,7 @@
      * The header count, and the tail of the end-of-list label. "N matches"
      * rather than "N games match" while searching — the header slot is what
      * is left of the row after the back button and the title, and the longer
-     * phrasing ran off the edge of a 390px screen.
+     * phrasing runs off the edge of a 390px screen.
      */
     _countLabel() {
       if (!this._loadedOnce) return "";
@@ -586,7 +584,7 @@
       // sold — each explains why the row isn't already a check.
       //
       // window.statusLabel, not shelfOf(): shelfOf falls back to SHELVES[0]
-      // for anything it doesn't know, so a prev_owned game read "Collection" —
+      // for anything it doesn't know, so a prev_owned game would read "Collection" —
       // the one word that is actively wrong for it.
       const note = status ? window.statusLabel(status) : null;
       const other = (!on && note)

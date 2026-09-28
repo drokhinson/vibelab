@@ -1,7 +1,6 @@
 """Play logging endpoints.
 
-Game-buddy endpoints used to live here under the legacy one-way model. The
-new mutual graph lives in buddy_routes.py.
+Buddy endpoints (the mutual graph) live in buddy_routes.py.
 
 Every handler runs its Supabase round trips through `asyncio.to_thread`; the
 `_<handler>_sync` helper directly above a route is that blocking half.
@@ -94,9 +93,8 @@ def _build_play_response(
 def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse]]:
     """Bulk-fetch players for a list of play IDs (no N+1).
 
-    Reads from the post-migration-009 columns directly so the response survives
-    migration 013 dropping buddy_id. The legacy buddies-table join is gone;
-    real-account players resolve their display name from their profile, and
+    Reads the migration-009 columns directly (buddy_id is dropped, migration
+    013): real-account players resolve their display name from their profile, and
     free-text ghost players use player_display_name.
     """
     players_by_play: dict[str, list[PlayPlayerResponse]] = {pid: [] for pid in play_ids}
@@ -146,10 +144,10 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
         )
     # Sorted to match what the feed RPC already promises
     # (bgb_feed_page: is_winner DESC, score DESC NULLS LAST). PostgREST gives
-    # no order at all, so the same play served here and via the feed came back
-    # with its roster in two different orders — and the client paints one from
-    # the feed projection and then repaints from this row, so the whole card
-    # rebuilt for a difference nobody had made. Sorted in Python rather than as
+    # no order at all, so unsorted, the same play served here and via the feed
+    # would come back with its roster in two different orders — and the client
+    # paints one from the feed projection and then repaints from this row, so
+    # the whole card would rebuild for a difference nobody made. Sorted in Python rather than as
     # an .order() on the query: no extra round trip, and no dependence on how a
     # given PostgREST version orders an embedded resource.
     for rows_for_play in players_by_play.values():
@@ -258,10 +256,9 @@ def _write_play_players(
 ) -> list[PlayPlayerResponse]:
     """Insert the play_players rows for a play in ONE bulk statement.
 
-    Writes go through the new (post-migration-009) columns directly:
+    Writes go through the migration-009 columns directly:
     player_user_id for real-account players, player_display_name as the
-    free-text label. This was previously one round trip PER PLAYER (a
-    5-player log = 10 round trips, paid again by every session finalize).
+    free-text label.
 
     `linked_at_by_user` is the edit path's carry-over (see _read_linked_at). A
     player already on the play keeps the timestamp they were first seated at;
@@ -276,8 +273,7 @@ def _write_play_players(
     `DEFAULT now() NOT NULL` (migration 008), so one carried-over seat beside
     one uncarried seat is a `null value in column "linked_at" ... violates
     not-null constraint` and a 500 — i.e. editing any play that seats a ghost,
-    or adds a player, once the host's own seat has a timestamp to carry. Seen in
-    the field: two failed saves of the same play, one minute apart.
+    or adds a player, once the host's own seat has a timestamp to carry.
 
     One timestamp for the whole batch rather than a default evaluated per row,
     which is also the truer answer — the seats it stamps all happened in the
@@ -366,9 +362,9 @@ def _list_plays_sync(
             status_code=403, detail="Only buddies can see this user's plays"
         )
 
-    # Single RPC (migration 039). The old path fetched EVERY visible play
-    # tuple, merged/sorted/paginated in Python, then hydrated players and
-    # expansions — 8-11 sequential round trips per History-tab page.
+    # Single RPC (migration 039): merging, sorting and paginating every
+    # visible play, then hydrating players and expansions, is one round trip
+    # per History-tab page rather than 8-11 sequential ones.
     data = (
         sb.rpc("bgb_plays_page", {
             "p_target": target_user_id,
@@ -464,8 +460,7 @@ async def log_play(
 
     One round trip: bgb_log_play (migration 042) resolves the game, inserts
     the play with its denormalized game columns and bulk-writes the player and
-    expansion rows, returning the PlayResponse-shaped payload — replacing six
-    sequential PostgREST calls.
+    expansion rows, returning the PlayResponse-shaped payload.
 
     When the body carries a client_key (migration 048), a repeat of a key
     already stored returns the original play instead of writing a second one.
@@ -729,7 +724,7 @@ async def attach_play_photo(
 
     The log-play flow saves the play first and uploads the photo alongside
     it, so all that's left is writing one column. Routing that through
-    PUT /plays/{id} cost twelve round trips and tore down and re-inserted
+    PUT /plays/{id} would cost twelve round trips and tear down and re-insert
     every player and expansion row; this is one.
 
     Ownership is enforced by the WHERE clause rather than a prior SELECT —
@@ -765,10 +760,10 @@ async def delete_play(
     Ownership rides in the WHERE clause, so a missing play and someone else's
     both report 404 rather than reporting success for a delete that did
     nothing. There is deliberately no separate play_players delete:
-    play_players.play_id is ON DELETE CASCADE (001_baseline.sql:190), and the
-    explicit version this replaces was scoped by play_id ALONE — any signed-in
-    user could strip every player, winner and score off anyone's play, and the
-    endpoint still answered 200. RLS is not a backstop here; the backend holds
+    play_players.play_id is ON DELETE CASCADE (001_baseline.sql:190), and an
+    explicit one scoped by play_id ALONE would let any signed-in user strip
+    every player, winner and score off anyone's play while the endpoint
+    answered 200. RLS is not a backstop here; the backend holds
     the service-role key.
     """
     res = await asyncio.to_thread(

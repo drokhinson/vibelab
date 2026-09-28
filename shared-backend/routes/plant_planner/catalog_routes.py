@@ -244,7 +244,7 @@ def _build_cache_query(
     return q
 
 
-# shade_level / water_plan now use Perenual's `sunlight` / `watering` enums
+# shade_level / water_plan store Perenual's `sunlight` / `watering` enums
 # directly — no runtime mapping needed. These thin wrappers stay so callers
 # don't have to care; they normalize "" / unknown values to None.
 _VALID_SUNLIGHT = {"full_sun", "sun-part_shade", "part_shade", "full_shade"}
@@ -260,8 +260,8 @@ def _water_plan_to_watering(water_plan: Optional[str]) -> Optional[str]:
 
 
 def _zone_label_to_int(zone_label: Optional[str]) -> Optional[int]:
-    """Stored zone is now a plain integer string '1'-'13'. Tolerates legacy
-    a/b half-zone suffixes for any rows in flight before migration 015."""
+    """Stored zone is a plain integer string '1'-'13'. Tolerates legacy
+    a/b half-zone suffixes on rows written before migration 015."""
     if not zone_label:
         return None
     digits = "".join(ch for ch in zone_label if ch.isdigit())
@@ -380,13 +380,13 @@ async def catalog_search(
     effective_watering = watering or _water_plan_to_watering(water_plan)
     effective_zone = zone if zone is not None else _zone_label_to_int(usda_zone)
     # cycle is informative-only — kept on the cache row but not derived from
-    # planting_season any more. The query param still works as an explicit
+    # planting_season. The query param still works as an explicit
     # override for callers that want it.
     effective_cycle = cycle
 
     # Indoor planters require indoor-tolerant plants; outdoor planters
     # require non-indoor plants. Always send the boolean so Perenual filters
-    # both directions (was previously None for outdoor → no filter).
+    # both directions (None would mean no indoor filter at all).
     effective_indoor = indoor
     if effective_indoor is None and garden_type:
         effective_indoor = garden_is_climate_controlled(garden_type)
@@ -600,8 +600,8 @@ def _build_query_from_body(body: FillBody) -> Dict[str, Any]:
     sunlight = _shade_to_sunlight(body.shade_level)
     watering = _water_plan_to_watering(body.water_plan)
     zone     = _zone_label_to_int(body.usda_zone)
-    # cycle stays on the cached row but is no longer used as a filter (it's
-    # informational); the planting_season → cycle bridge has been retired.
+    # cycle stays on the cached row but is not used as a filter (it's
+    # informational).
     cycle    = None
     # Always-explicit boolean: True for indoor planters, False for outdoor.
     indoor   = garden_is_climate_controlled(body.garden_type) if body.garden_type else None

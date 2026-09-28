@@ -9,11 +9,11 @@ and marks the session 'finalized'.
 Every path through this module is a single Postgres RPC: create / join /
 the 2s GET poll (migration 036), the Save (042), and the host's Gather-time
 writes — add and remove a participant, swap the game, move the phase cursor,
-abandon (046). Each previously fanned out 2-10 sequential PostgREST round
-trips, which made host/join taps, the Gather screen and the wrap-up crawl
-at cross-region RTTs. The RPCs return SessionResponse- or PlayResponse-shaped
+abandon (046). As PostgREST calls each would be 2-10 sequential round trips,
+which make host/join taps, the Gather screen and the wrap-up crawl at
+cross-region RTTs. The RPCs return SessionResponse- or PlayResponse-shaped
 JSONB, or {"error": "<code>"} for gate failures, which raise_for_rpc_error
-maps to the same HTTPExceptions the routes have always raised.
+maps to the routes' HTTPExceptions.
 """
 
 from typing import Any
@@ -115,14 +115,13 @@ def join_session(
 def watch_session(sb: Client, code: str, *, viewer_id: str) -> SessionResponse:
     """Record that this account is watching, and hand back the lobby bundle.
 
-    The read side of a live session used to ask "are you SEATED?" — which made
-    a spectator (anyone who opened the session after Gather, so
-    bgb_join_session never gave them a participant row) a second-class viewer:
-    RLS hid the scores table and its Realtime channel from them, and their grid
-    came from the bundle's baked-in copy plus a faster poll. Watching is now its
-    own fact, recorded in its own table, and the grid reads the same for
-    everyone in the room. Only the host can write it — bgb_session_scores_write
-    is unchanged.
+    Watching is its own fact, recorded in its own table, so the read side of a
+    live session does not ask "are you SEATED?". Asking that would make a
+    spectator (anyone who opened the session after Gather, so
+    bgb_join_session never gave them a participant row) a second-class viewer
+    that RLS hides the scores table and its Realtime channel from. The grid
+    reads the same for everyone in the room. Only the host can write it
+    (bgb_session_scores_write).
 
     Deliberately NOT a join: seating someone would put them in the roster, which
     is what the scoring columns and the finalized play's player rows are built
@@ -156,7 +155,7 @@ def add_participant(
 
     Gather-only — once Play starts the roster is frozen. One RPC:
     bgb_add_participant (migration 046) gates, dedups and seats in a single
-    round trip, where this used to cost four.
+    round trip.
     """
     data = (
         sb.rpc("bgb_add_participant", {
@@ -214,11 +213,11 @@ def set_session_teams(
 ) -> SessionResponse:
     """Host-only: publish how the table is scored and which side each seat is on.
 
-    The tags are typed on the host's local draft, and until migration 050 they
-    had nowhere to live server-side — so a team night showed the host a grid
-    banded into sides and every spectator the same grid with identical columns,
-    and the pairings only became visible once the play was saved and the tints
-    no longer mattered.
+    The tags are typed on the host's local draft, and this is where they live
+    server-side (migration 050) — without it a team night would show the host a
+    grid banded into sides and every spectator the same grid with identical
+    columns, and the pairings would only become visible once the play was saved
+    and the tints no longer mattered.
 
     Full replacement: `teams` is the whole map and a participant it omits is
     cleared. NOT Gather-only, unlike add / remove / reorder — a tag repaints a
@@ -289,7 +288,7 @@ def update_session_game(
     """Host-only: change the game on an open lobby (or clear it).
 
     Lets joiners see the pick live via their poll loop — without this the
-    game_id on the row was frozen at create time. Idempotent: the RPC skips
+    game_id on the row would be frozen at create time. Idempotent: the RPC skips
     the write when the value is unchanged. Allowed in any open phase, not
     just Gather — the host flow's picker relies on that.
     """
@@ -321,9 +320,7 @@ def finalize_session(sb: Client, *, host_user_id: str, code: str, payload: dict[
 
     bgb_finalize_session (migration 042) does the open/expiry/host gating,
     overlays the joiners' live-scoring totals onto the host's player list,
-    writes the play (via bgb_log_play) and marks the session finalized — the
-    work that used to be four service calls and ten sequential PostgREST
-    round trips.
+    writes the play (via bgb_log_play) and marks the session finalized.
 
     `payload` is a PlayCreate dumped in JSON mode (dates as ISO strings).
     """
@@ -357,8 +354,8 @@ def finalize_session(sb: Client, *, host_user_id: str, code: str, payload: dict[
 
 # ALLOWED_PHASE_TRANSITIONS, in the shape bgb_advance_phase wants. Passing the
 # table to the RPC rather than encoding it in SQL keeps constants.py the single
-# source of truth — 036/038's comments, still pointing at code constants that
-# no longer exist, are what the alternative looks like after a few migrations.
+# source of truth; a copy encoded in SQL drifts from the code constants within
+# a few migrations.
 def _transitions_payload() -> dict[str, list[str]]:
     return {
         phase.value: sorted(nxt.value for nxt in allowed)
@@ -407,7 +404,7 @@ def update_phase(
     jump straight from Gather to Settle, or resurrect a terminal session.
 
     One RPC (bgb_advance_phase, migration 046) — gate, transition check and
-    write together. Re-asserting the current phase is a no-op, as before.
+    write together. Re-asserting the current phase is a no-op.
     """
     data = (
         sb.rpc("bgb_advance_phase", {
@@ -421,7 +418,7 @@ def update_phase(
     )
     _reject_non_host(data, "Only the host can update the phase")
     # Composed here rather than in RPC_ERROR_STATUS because the message names
-    # both ends of the rejected move — same 400 body the route always sent.
+    # both ends of the rejected move.
     if isinstance(data, dict) and data.get("error") == "invalid_transition":
         raise HTTPException(
             status_code=400,
@@ -443,8 +440,7 @@ def list_joinable(sb: Client, viewer_id: str) -> list[JoinableSession]:
     spectator-only — the FE surfaces a "Spectate" badge so the user
     knows what they're stepping into. Finalized and abandoned sessions
     are excluded. All the filtering (visibility, expiry, buddy edges)
-    lives in bgb_joinable_sessions (migration 037) — one RPC instead of
-    the five queries this used to fan out.
+    lives in bgb_joinable_sessions (migration 037), one RPC.
     """
     data = sb.rpc("bgb_joinable_sessions", {"p_viewer": viewer_id}).execute().data
     return [JoinableSession.model_validate(item) for item in (data or [])]

@@ -10,10 +10,10 @@
 --   * `bgb_chapters_link_shape`, whose whole job is to be the backstop for a
 --     caller that forgot to validate. A CHECK is only worth what it REJECTS,
 --     and the most important rejection is the one that looks like it happens
---     for free: **a CHECK whose expression evaluates to NULL passes.** The
---     first draft of this constraint tested `link_url ~* '^https?://…'` with no
---     IS NOT NULL beside it, which admits a rulebook link with no URL at all —
---     the row every read path would then have to guess about.
+--     for free: **a CHECK whose expression evaluates to NULL passes.** Testing
+--     `link_url ~* '^https?://…'` with no IS NOT NULL beside it admits a
+--     rulebook link with no URL at all — the row every read path would then
+--     have to guess about.
 --   * `idx_bgb_chapters_rulebook_author`, which is what makes a denial stick.
 --     A denied row keeps its author's one slot, so re-posting the same link
 --     under a new row collides instead of quietly re-entering every buddy's

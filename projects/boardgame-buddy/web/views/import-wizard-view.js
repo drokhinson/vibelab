@@ -4,13 +4,10 @@
 // from, runs that source's own steps, and lands every one of them on the same
 // review and the same summary.
 //
-// There used to be two of these, at /settings/import-plays and
-// /settings/import-photos, and they had already converged on most of a shared
-// implementation: the same `.imp-*` chrome, the same progress bar, the same
-// POST /plays/import write behind a client-minted import_batch_id, the same
-// pickers. What they had NOT converged on was the part the user sees last —
-// two summaries that differed in one tile and two sentences, and a review that
-// only one of them had.
+// Every source shares one implementation: the same `.imp-*` chrome, the same
+// progress bar, the same POST /plays/import write behind a client-minted
+// import_batch_id, the same pickers — and the same part the user sees last,
+// one review and one summary.
 //
 // ─── The split ───────────────────────────────────────────────────────────────
 //
@@ -164,8 +161,9 @@
       if (!this._resume && asked && window.ImportDraft.SOURCES.indexOf(asked) !== -1
           && window.ImportSourceStep.isLive(asked)) {
         this._enter(asked, { skipRender: true });
-        // The two retired paths resolve here through route aliases, so the
-        // address bar still says /settings/import-plays. The BGG sync's done
+        // /settings/import-plays and /settings/import-photos resolve here
+        // through route aliases, so the address bar can say
+        // /settings/import-plays. The BGG sync's done
         // screen arrives the same way, as ?source=bgg. replaceUrl rather than
         // history.replaceState, because it stamps the back guard.
         window.router.replaceUrl("import-wizard", {});
@@ -366,10 +364,10 @@
     /**
      * The Resume row's label, or null when there is nothing to resume.
      *
-     * Asked of the model. This used to branch on sourceKey and reach into each
-     * model's own fields to build the sentence — which is exactly the
-     * source-specific knowledge this file's header says it holds none of, and
-     * which every new source could only join by growing another arm.
+     * Asked of the model. Branching on sourceKey and reaching into each
+     * model's own fields to build the sentence is exactly the source-specific
+     * knowledge this file's header says it holds none of, and every new
+     * source could only join by growing another arm.
      */
     _resumeOffer() {
       if (!this._resume) return null;
@@ -416,8 +414,8 @@
      * Leave the branch and go back to the picker.
      *
      * Confirmed when there is anything to lose. Backing out of "pick photos"
-     * with thirty files read, and silently dropping them, is the bug; a clean
-     * draft goes back for free.
+     * with thirty files read must not silently drop them; a clean draft goes
+     * back for free.
      */
     async _unpickSource() {
       const d = this._draft;

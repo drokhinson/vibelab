@@ -4,8 +4,7 @@
 // report is somebody objecting to prose AFTER it was published; a rulebook link
 // is an outbound destination looked at on the way IN. Two queues, two
 // questions, two badges — and one screen stacking both could only ever carry
-// one count, which is the bug that split the admin tools into spokes in the
-// first place.
+// one count.
 //
 // What an admin is deciding here is one thing: does this URL go where it says
 // it goes. So the row leads with the host, carries the full URL underneath it
@@ -92,9 +91,8 @@
       const busy = this._busy.has(l.chapter_id);
       const pending = l.moderation_status === "pending";
       const author = l.created_by_name
-        // A backfilled link (migration 052 lifted these out of the old catalog
-        // column) has no author at all, and the queue says so rather than
-        // inventing one.
+        // A backfilled link (see migration 052) has no author at all, and the
+        // queue says so rather than inventing one.
         ? `Submitted by ${escapeHtml(l.created_by_name)}`
         : "Curated — no submitter";
       // The number that makes a pending row urgent rather than merely

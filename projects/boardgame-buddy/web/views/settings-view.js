@@ -11,8 +11,8 @@
 // labelled sections come the three unlabelled trailers, in descending
 // consequence: Log out / Delete account, the BGG credit, and the legal links.
 //
-// The identity/"Edit profile" account card moved to the Profile hub
-// (views/profile-self-view.js). What is left under "Account" here is the
+// The identity/"Edit profile" account card lives on the Profile hub
+// (views/profile-self-view.js). What sits under "Account" here is the
 // admin-key escalation block, shown only to non-admins.
 
 (function () {
@@ -39,15 +39,15 @@
      *
      * This view is a singleton (init.js builds one per tab) and logging out is
      * a route change, not a reload, so every field below outlives both the
-     * visit and the ACCOUNT unless something drops it. Two ways that bit:
+     * visit and the ACCOUNT unless something drops it. Two ways that bites:
      *
      *   • `_deleting` is set between the confirm and the sign-out that follows
-     *     a successful delete, and that path used to end at the sign-out with
-     *     the flag still up. The next account on the tab opened Settings to a
-     *     disabled "Deleting…" button and a Log out it could not click.
+     *     a successful delete. Left up past the sign-out, the next account on
+     *     the tab opens Settings to a disabled "Deleting…" button and a Log out
+     *     it cannot click.
      *   • `_bgg` and `_imports` are one account's BGG handle and one account's
      *     import history. onMount refetches both, but render() runs first, so
-     *     the frame after a switch painted the PREVIOUS account's.
+     *     the frame after a switch would paint the PREVIOUS account's.
      */
     _resetFormState() {
       // The admin-key escalation form, shown only to non-admins.
@@ -157,7 +157,7 @@
       this._bggLoading = true;
       try {
         // One call: the card needs the linked handle and the last-synced line,
-        // and the push readout moved to the flow, which fetches its own.
+        // and the push readout belongs to the flow, which fetches its own.
         this._bgg = await window.Bgg.status();
       } catch (e) {
         this._bggError = e.message || "Failed to load BGG status";
@@ -222,8 +222,8 @@
     // (init.js#toggleScreen) and stays lit and turned while this screen is up,
     // so the control that opened it is visibly the one that closes it. The
     // device back button already meant the same thing. That is two exits the
-    // user has without learning anything; a third one in the corner was chrome
-    // for its own sake. router.back() returns them wherever they opened it
+    // user has without learning anything; a third one in the corner would be
+    // chrome for its own sake. router.back() returns them wherever they opened it
     // from — profile-self is only the cold /settings deep-link fallback, where
     // there is no previous screen and the bottom nav already highlights the
     // Profile tab.
@@ -487,12 +487,10 @@
         });
     }
 
-    // One row per admin tool, each its own spoke. Previously all three tools
-    // lived on one /admin screen behind a row labelled "Chapter reports" — so
-    // the two catalog backfills were unreachable by name, and the single badge
-    // could only ever count one of the three queues. The catalog backfills
-    // share a row again, but not that bug: the row is named for what it holds
-    // and its badge sums every queue behind it.
+    // One row per admin tool, each its own spoke, so every tool is reachable
+    // by name and no badge counts one queue while standing for several. The
+    // catalog backfills share a row, but it is named for what it holds and
+    // its badge sums every queue behind it.
     //
     // `tool` keys into domain/notifications.js, which owns the count and how
     // to say it; this table owns only how the row looks.
@@ -516,15 +514,13 @@
           title: "Rulebook links",
           sub: "Approve the rulebook links players add to their reference guides.",
         },
-        // ONE row for the catalog backfills. They were four Settings rows —
-        // Missing images, Missing descriptions, Missing BGG stats, Missing
-        // publishers — which is four rows saying the same sentence with a
-        // different noun in it, and a fifth was already in sight. They became
-        // four panels on one spoke (views/admin-backfill-view.js), and then
-        // TWO: three of them asked BoardGameGeek the same question and are one
-        // queue now. The badge sums both counts and the aria-label names them
-        // one by one, so nothing is hidden by the collapse except the
-        // scrolling.
+        // ONE row for the catalog backfills. A row per gap — Missing images,
+        // Missing descriptions, Missing BGG stats, Missing publishers — is
+        // four rows saying the same sentence with a different noun in it. The
+        // spoke (views/admin-backfill-view.js) holds TWO panels: three of
+        // those gaps ask BoardGameGeek the same question and are one queue.
+        // The badge sums both counts and the aria-label names them one by
+        // one, so nothing is hidden by the collapse except the scrolling.
         {
           route: "admin-bgg-data",
           // Two sub-tools behind one row, so the pill shows whichever of them
@@ -533,8 +529,8 @@
           // happening, the log IS what you came to see.
           runTools: ["bgg-images", "bgg-metadata", "bgg-image-links"],
           tool: "bggData",
-          // Not `image-off`, which the images spoke carried: it names one of
-          // the two queues and would read as the row's whole subject.
+          // Not `image-off`: it names one of the two queues and would read as
+          // the row's whole subject.
           icon: "layers",
           title: "Missing BGG data",
           sub: "Backfill missing photos, descriptions, stats, publishers, years and image links from BGG.",
@@ -562,12 +558,11 @@
           title: "Affiliate partners",
           sub: "Retailer links under every game. Nothing shows until a partner is enabled.",
         },
-        // A spoke again, and this time honestly. It was an action row — a tap
-        // that WAS the deed, with a pill instead of a chevron, because a
-        // chevron promising a screen and silently firing a BGG sync was the
-        // one tap on this card you could not take back. Now there IS a screen:
-        // it shows the run step by step and offers Run now, so the chevron
-        // tells the truth and nothing fires until you are looking at it.
+        // A spoke, not an action row: a chevron promising a screen and
+        // silently firing a BGG sync would be the one tap on this card you
+        // could not take back. The screen shows the run step by step and
+        // offers Run now, so the chevron tells the truth and nothing fires
+        // until you are looking at it.
         {
           route: "admin-run",
           params: { tool: "trending" },
@@ -805,18 +800,16 @@
      * "0 pending uploads" row would train people to ignore the one place that
      * tells them a play is still only on this phone.
      *
-     * That reasoning got STRONGER when the header's upload button was deleted.
-     * It used to be the always-present affordance, greying out at zero, which
-     * is what made this section safe to hide; now the always-present thing is
-     * the gear's DOT, fed by the `outboxCount` row in domain/notifications.js.
-     * A dot only lights when there is something here, so arriving to find
-     * nothing is no longer reachable — you are sent by the signal or not at
-     * all.
+     * What makes this section safe to hide is that the always-present thing
+     * is the gear's DOT, fed by the `outboxCount` row in
+     * domain/notifications.js. A dot only lights when there is something
+     * here, so arriving to find nothing is not reachable — you are sent by
+     * the signal or not at all.
      *
      * The list, the upload action and the per-entry retry/remove all live in
-     * widgets/outbox-modal.js, which the global header opens too. Settings had
-     * its own parallel rendering of the same queue before that consolidation
-     * — see .claude/rules/ui-object-design.md §4.
+     * widgets/outbox-modal.js, which the global header opens too. Settings
+     * keeps no parallel rendering of the same queue — see
+     * .claude/rules/ui-object-design.md §4.
      */
     _renderPendingUploadsSection() {
       const n = window.Outbox ? window.Outbox.count() : 0;
@@ -851,24 +844,21 @@
      * user already has, once. Filing them together would suggest an importer
      * needs an account somewhere, which is the whole point of it not doing.
      *
-     * ONE row, where there used to be two. The old pair argued that a note and
-     * a camera roll are not two sources for one flow — they ask for different
-     * things and end somewhere different — and that the choice was better made
-     * from two lines here than from a picker inside. That was true while the
-     * two flows ended on two different screens. They end on the same review and
-     * the same summary now, so which record you happen to have is a question
-     * about your evening rather than a question about which wizard to open,
-     * and it belongs on the first step of the one that exists.
+     * ONE importer row, not one per source. A note and a camera roll end on
+     * the same review and the same summary, so which record you happen to
+     * have is a question about your evening rather than a question about
+     * which wizard to open, and it belongs on the first step of the one
+     * wizard.
      *
-     * The wizard also names the sources it does not have yet, which two rows
-     * here could not: a door that says "Board Game Arena, coming soon" is worth
-     * more than the absence of one.
+     * The wizard also names the sources it does not have yet, which per-source
+     * rows here could not: a door that says "Board Game Arena, coming soon" is
+     * worth more than the absence of one.
      *
-     * TWO rows now: the door in, and the history of what came through it
+     * TWO rows in all: the door in, and the history of what came through it
      * (views/imports-view.js). The second is not a second importer — it is the
-     * list that used to be rendered out in full below this card, with a trash
-     * can per row and no way to see what any of them had written. It is a spoke
-     * for the reasons the What's new archive is: this file is past 1250 lines,
+     * list of past imports, where each one can be opened to see what it
+     * wrote. It is a spoke
+     * for the reasons the What's new archive is: this file is far past the ~300-line guideline,
      * Settings' whole vocabulary is the one-line row below, and a list that
      * grows every time somebody imports wants its own screen.
      */
@@ -918,21 +908,18 @@
      * What shipped, and what you want to say about it.
      *
      * TWO rows, TWO destinations, one per destination — which is the thing to
-     * know before editing. This card used to carry three rows: "Add feedback"
-     * and "Report a bug" were separate, both landing on /settings/feedback with
-     * the compose sheet already up and only the preselected type differing.
-     * They are one row now. The split cost a decision at the top of an errand
-     * that the compose sheet then asks about again in its own type picker, and
-     * the board they both land on is one board — a bug and a feature request
-     * sit in the same list, under the same topics, and are voted on the same
-     * way. The board carries its own floating "Add" (see
-     * views/feedback-view.js), so nothing was lost by handing the errand over
-     * at the door rather than a tap earlier.
+     * know before editing. Feedback and bug reports share ONE row: splitting
+     * them costs a decision at the top of an errand that the compose sheet
+     * then asks about again in its own type picker, and the board they both
+     * land on is one board — a bug and a feature request sit in the same
+     * list, under the same topics, and are voted on the same way. The board
+     * carries its own floating "Add" (see views/feedback-view.js), so the
+     * errand is handed over at the door rather than a tap earlier.
      *
-     * `?compose=` is still a supported deep link into the sheet — the view
-     * still reads it — it simply has no caller in Settings any more. Point a
-     * release notice or a support reply at /settings/feedback?compose=bug if
-     * one ever wants the form open on arrival.
+     * `?compose=` is a supported deep link into the sheet — the view reads
+     * it — with no caller in Settings. Point a release notice or a support
+     * reply at /settings/feedback?compose=bug if one ever wants the form open
+     * on arrival.
      *
      * `What's new` is a GENUINELY different destination (/settings/whats-new,
      * views/whats-new-view.js) and is not a shortcut into the board. It sits
@@ -968,7 +955,7 @@
       try {
         this._imports = await window.Play.listImports();
       } catch (_) {
-        // Left NULL, not []. The row is permanent now, so a failed fetch that
+        // Left NULL, not []. The row is permanent, so a failed fetch that
         // wrote an empty list would tell somebody with twelve imports that they
         // have never imported anything — and the row is a door either way.
         this._imports = null;
@@ -1092,9 +1079,9 @@
     // ── Data management ───────────────────────────────────────────────────────
     // Two cards under one label, and they are opposites on purpose: the export
     // is about getting data OUT of the account, the cache card below is about
-    // the copy of it this device happens to be holding. The label used to read
-    // "Local cache", which is a heading nobody would think to look under for
-    // "how do I get my plays out of this thing".
+    // the copy of it this device happens to be holding. A label like "Local
+    // cache" is a heading nobody would think to look under for "how do I get
+    // my plays out of this thing".
 
     /**
      * The way out of the app, one tap from a screen anybody can find.
@@ -1220,10 +1207,9 @@
     // not look alike. Logging out is reversible — you sign back in and
     // everything is where you left it — so it reads as a neutral control.
     // Deleting is not, so it is separated by a rule, inked in --rust, carries
-    // the bin glyph, and says underneath exactly what goes with it. Before
-    // this, logout was itself a filled red button "so it gets the same visual
-    // weight as a delete affordance", which left the app's one genuinely
-    // irreversible action with nowhere louder to stand.
+    // the bin glyph, and says underneath exactly what goes with it. A filled
+    // red logout would leave the app's one genuinely irreversible action with
+    // nowhere louder to stand.
     _renderAccountActions() {
       return `
         <div class="settings-account">
@@ -1293,9 +1279,9 @@
         return;
       }
       // Cleared on the way out, not left standing — see _resetFormState for
-      // what a latch surviving the sign-out did to the next account. Cleared
+      // what a latch surviving the sign-out does to the next account. Cleared
       // HERE as well as there because this is the one path that sets it and
-      // then navigates: nothing about the fix should depend on which screen
+      // then navigates: nothing about the reset should depend on which screen
       // the router happens to unmount next.
       this._deleting = false;
       // The row is gone but this device still holds a token that looks valid
@@ -1319,11 +1305,11 @@
     /**
      * The two legal pages, last thing on the screen.
      *
-     * They used to sit between Log out and the delete-account rule, which put
-     * a pair of read-only links inside the one block on this screen whose
-     * whole job is to separate what you can undo from what you cannot. They
-     * are not account actions and they are not part of that warning, so they
-     * are the footer they always read as — below the BGG credit, where the
+     * Not between Log out and the delete-account rule, which would put a pair
+     * of read-only links inside the one block on this screen whose whole job
+     * is to separate what you can undo from what you cannot. They are not
+     * account actions and they are not part of that warning, so they are the
+     * footer they read as — below the BGG credit, where the
      * rest of the web keeps its policy links and where nobody scanning for
      * something to *do* has to step over them.
      */

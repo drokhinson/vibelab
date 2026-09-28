@@ -1,6 +1,6 @@
-// One step in a recipe — header, instructions, pie chart, legend. Replaces the
-// step rendering that PieChart was doing inline so RecipeScreen can compose
-// it with reference-step badges, instructions toggle, and substitution hints.
+// One step in a recipe — header, instructions, pie chart, legend. Its own
+// component (not inline in PieChart) so RecipeScreen can compose it with
+// reference-step badges, instructions toggle, and substitution hints.
 
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
@@ -9,8 +9,7 @@ import { prepareItems, cumulativeStepTsp, tspToDisplay, ingColor, formatAmount, 
 import PieChart from './PieChart';
 import { COLORS } from '../theme';
 
-// Four-tone rotation matches the web's data-shade="0..3" pattern from
-// commit 27bd051. Cycled by `index % 4` so adjacent step cards in a
+// Four-tone rotation matches the web's data-shade="0..3" pattern. Cycled by `index % 4` so adjacent step cards in a
 // recipe read distinctly.
 const STEP_SHADES = ['#FFFFFF', '#F8F5F0', '#F1ECE3', '#EAE3D6'];
 
@@ -32,7 +31,7 @@ export default function StepCard({
   const displayItems = prepareItems(step.ingredients, { servings, unitSystem, baseServings });
 
   // Reference steps (combined input) — one synthetic slice per ref. Reads the
-  // new `inputFromSteps[]` array but falls back to the legacy `inputFromStep`
+  // `inputFromSteps[]` array but falls back to the legacy `inputFromStep`
   // singular for older saved sauces.
   const refOrders = (step.inputFromSteps && step.inputFromSteps.length > 0)
     ? step.inputFromSteps
@@ -243,9 +242,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.text,
   },
-  // Disabled (out-of-pantry) ingredients render muted but no longer striked.
-  // Striking implied "this recipe can't be made", which is confusing mid-cook;
-  // the substitution hint is the better signal. Matches web 27bd051.
+  // Disabled (out-of-pantry) ingredients render muted, not struck through.
+  // Striking implies "this recipe can't be made", which is confusing mid-cook;
+  // the substitution hint is the better signal. Matches web.
   legendNameDisabled: {
     color: COLORS.textMuted,
   },

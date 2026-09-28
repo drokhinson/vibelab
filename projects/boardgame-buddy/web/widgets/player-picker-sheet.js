@@ -1,18 +1,18 @@
 // @ts-check
 // widgets/player-picker-sheet.js — "who's playing?" as a multi-select bottom sheet.
 //
-// Replaces the Gather screen's inline buddy combo. That list was
-// `position: absolute` inside the Players card, and the Players card sits at
-// the bottom of Gather with the roster above it — so with four players already
-// added, ui/dropdown-fit.js had to squeeze it to its own MIN (132px) "below
-// this a dropdown is a keyhole" floor, on top of the docked Continue CTA, and
-// it still ran off the bottom edge. A sheet is position:fixed and sized off
+// A sheet, not an inline combo. The Players card sits at the bottom of Gather
+// with the roster above it, so a `position: absolute` list inside it, with
+// four players already added, gets squeezed by ui/dropdown-fit.js to its own
+// MIN (132px) "below this a dropdown is a keyhole" floor, on top of the docked
+// Continue CTA, and still runs off the bottom edge. A sheet is position:fixed
+// and sized off
 // --bgb-vv-h, so none of that geometry can happen: no fit pass, no flip, no
 // z-index race with .cascade-cta-wrap, and the keyboard shrinks it correctly.
 //
 // It is MULTI-SELECT: a game night is a set of people, not one person picked
-// five times. Tap to tick, tap again to untick, then Add — the old combo made
-// you re-open it, re-focus it and re-read the same list once per player.
+// five times. Tap to tick, tap again to untick, then Add — one open, not a
+// re-open, re-focus and re-read of the same list once per player.
 //
 // Selection order is preserved, and that matters: the roster array IS the
 // scoring grid's column order (widgets/round-score-grid.js maps it straight to
@@ -23,35 +23,32 @@
 // box included. A query filters that section like every other row: a pick that
 // doesn't match what you typed is not an answer to what you typed.
 //
-// Two behaviours the dropdown couldn't offer, both from being able to afford
-// the height:
-//   - no 8-row cap (the dropdown capped because it was a keyhole);
-//   - a typed name with no match gets an explicit "add as a guest" row. The
-//     dropdown HID itself on zero matches, so the guest path was invisible
-//     unless you already knew Enter would do it.
+// Two behaviours that come from being able to afford the height:
+//   - no row cap;
+//   - a typed name with no match gets an explicit "add as a guest" row, so
+//     the guest path is visible without knowing Enter would do it.
 //
-// Two more the play importer needed, both about a list that is no longer
-// simply "your buddies in alphabetical order":
+// Two more for callers like the play importer, whose list is not simply
+// "your buddies in alphabetical order":
 //   - SUGGESTIONS. A caller that already knows which rows are likely (the
 //     importer ranks its buddies against the name a note wrote) passes them as
 //     `suggestions`, and they sit above the full list rather than replacing it.
 //     Nobody is hidden; the likely answers are just first.
 //   - A GLOBAL SEARCH. `candidates` is a cached bundle, so typing filters it
 //     with no round trip at all; `searchAll` reaches past it to every account
-//     in the app. See the next block for how the two now run together.
+//     in the app. See the next block for how the two run together.
 //
 // ── TWO LISTS, ONE QUERY ────────────────────────────────────────────────────
 //
-// The global search used to be a BUTTON, on the reasoning that a round trip
-// should be something you ask for. What that actually produced was a search
-// box that answers "who is Dan?" with "no buddy matches Dan" while an account
-// called Dan sits one unpressed button away — and the button only reads as an
-// offer if you already suspect the list you are looking at is not the whole
-// app. People do not suspect that. They type a name, read "no match", and add
+// The global search is not a BUTTON. A button behind a round trip gives a
+// search box that answers "who is Dan?" with "no buddy matches Dan" while an
+// account called Dan sits one unpressed button away — and the button only
+// reads as an offer if you already suspect the list you are looking at is not
+// the whole app. People do not suspect that. They type a name, read "no match", and add
 // a guest with the same name as an account that was there all along, which is
 // a play that never reaches the other person's history.
 //
-// So both lists answer every query now, in the order they can:
+// So both lists answer every query, in the order they can:
 //   1. `candidates` filters SYNCHRONOUSLY on the keystroke — no debounce, no
 //      request, no spinner over rows that were already right.
 //   2. `searchAll` is debounced GLOBAL_DEBOUNCE_MS behind it and APPENDS its
@@ -59,8 +56,8 @@
 // The local list never waits on the remote one, a late response can never
 // land under a query the user has typed past (`_globalSeq`), and anyone the
 // local list already holds is dropped from the remote rows rather than shown
-// twice. The button survives only as a retry after a failed request — which
-// is the one moment pressing something is the user's actual intent.
+// twice. The only button is a retry after a failed request — which is the
+// one moment pressing something is the user's actual intent.
 //
 // ── PENDING BUDDIES ARE PEOPLE ──────────────────────────────────────────────
 //
@@ -143,7 +140,7 @@
    *   "TWO LISTS, ONE QUERY" at the top of this file. Given one, every caller
    *   gets the same contract, so there is nothing to opt into per screen.
    * @property {string} [searchAllLabel]       Titles the retry button a failed
-   *   search leaves behind. Nothing else shows it now that the search is not
+   *   search leaves behind. Nothing else shows it: the search is not
    *   something the user presses.
    * @property {boolean} [allowGuest]          Default true. False when a name
    *   that matches nobody is not an answer the caller can take — linking a
@@ -221,13 +218,11 @@
     // ── Markup ──────────────────────────────────────────────────────────────
 
     /**
-     * Same predicate the dropdown used: case-insensitive substring over name
-     * OR username. Kept identical so the sheet can't quietly surface a
-     * different set from the one people are used to.
+     * Case-insensitive substring over name OR username.
      *
      * LOCAL ONLY, and that is the point: these rows come off a cached bundle
      * (domain/buddy.js SWRs it for a day), so typing filters them with no
-     * round trip. `searchAll` is the deliberate, button-pressed alternative.
+     * round trip. `searchAll` runs behind it — see "TWO LISTS, ONE QUERY".
      */
     _matches() {
       const q = this._query.trim().toLowerCase();
@@ -339,7 +334,7 @@
       if (!this._single
           && (named(this._candidates)
               // Global rows count from the moment they land. They arrive
-              // unasked now, so "add Dana Okoro as a guest" can sit directly
+              // unasked, so "add Dana Okoro as a guest" can sit directly
               // under the account of that exact name without anyone having
               // pressed anything — and a guest seat beside the real account is
               // the mistake this whole search exists to prevent.
@@ -368,7 +363,7 @@
     /**
      * WHAT THE SHEET IS ABOUT TO DO, at the top, always. Ticked people render
      * here and nowhere else — _renderList() takes them out of the body — so
-     * clearing the search box can no longer scatter the four people you just
+     * clearing the search box cannot scatter the four people you just
      * ticked back through a list of forty buddies.
      *
      * A query filters this section by the same predicate as everything else:
@@ -421,10 +416,10 @@
     }
 
     /**
-     * What is left of the old "search everyone" button: a RETRY, and only
-     * after a request actually failed.
+     * The global search's one button: a RETRY, and only after a request
+     * actually failed.
      *
-     * The search itself is automatic now (see _scheduleGlobal), so offering a
+     * The search itself is automatic (see _scheduleGlobal), so offering a
      * button for it would be offering to do a thing already done. A failure is
      * the exception — the next keystroke would retry it, but a user who has
      * finished typing the name has no next keystroke to give, and without this
@@ -473,8 +468,8 @@
     /**
      * The local rows, sectioned. With a query it is one flat filtered list;
      * without one it is the caller's ranking (closest first), then anyone with
-     * a buddy request waiting, then everyone else — or the old recent-first
-     * behaviour when the caller ranked nothing.
+     * a buddy request waiting, then everyone else — or recent-first when the
+     * caller ranked nothing.
      * @param {string} q
      * @param {PlayerCandidate[]} sugg  The caller's ranking, already stripped of
      *   anything ticked — those rows belong to the Selected section, and a row
@@ -541,9 +536,9 @@
         const note = q
           ? this._sec(`No buddy matches “${q}”`)
           : this._sec("No buddies yet — search to find one");
-        // Once the global search has been asked, ITS answer leads: the user
-        // pressed a button to get those rows, and burying them under "keep
-        // them as a ghost" would answer a question they didn't ask.
+        // Once the global search has been asked, ITS answer leads: burying
+        // those rows under "keep them as a ghost" would answer a question the
+        // user didn't ask.
         if (this._globalQuery || this._globalBusy || this._globalError) {
           return note + tail + (guest ? this._sec(this._single ? "Or" : "Not in your buddies?") + guest : "");
         }
@@ -586,8 +581,8 @@
     _renderPanel() {
       const seated = this._seated;
       // Name both lists when both are searched. A box that says "buddies" on a
-      // sheet that also answers with strangers is describing the old
-      // behaviour, and the promise a placeholder makes is the reason people
+      // sheet that also answers with strangers is describing a different
+      // sheet, and the promise a placeholder makes is the reason people
       // stop typing when it is not kept.
       const ph = this._searchAll
         ? "Search people, or type a name…"
@@ -658,8 +653,8 @@
         onOpen: (root) => {
           const input = /** @type {HTMLInputElement|null} */ (root.querySelector(`#${INPUT_ID}`));
           if (input) {
-            // Enter ticks the typed name — the same key that added one from the
-            // old combo — and leaves the sheet open for the next person.
+            // Enter ticks the typed name and leaves the sheet open for the next
+            // person.
             input.addEventListener("keydown", (e) => {
               if (e.key !== "Enter") return;
               e.preventDefault();
@@ -929,8 +924,7 @@
     /**
      * Enter on the search field. An exact match ticks that person as
      * themselves — with their account and avatar — rather than a same-named
-     * guest; this mirrors the old `_addPlayerFromInput`, which did the same
-     * lookup before deciding account-vs-ghost.
+     * guest.
      */
     _submitTyped() {
       const q = this._query.trim();

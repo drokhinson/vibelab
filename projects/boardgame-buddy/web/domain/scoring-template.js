@@ -15,8 +15,8 @@
 // A base game's own grid has no mode: the question is "how does this meet the
 // base game's grid", which it cannot be asked.
 //
-// WHAT THIS MODULE IS FOR. The play screen used to treat two adopted grids as
-// two rival scorepads and make the host pick — which is wrong for both modes.
+// WHAT THIS MODULE IS FOR. Treating two adopted grids as two rival scorepads
+// and making the host pick is wrong for both modes.
 // An add-on's rows are not an ALTERNATIVE to the base game's, and a
 // replacement is not a choice the host should have to remember to make every
 // game. So the two questions are separated here:
@@ -402,8 +402,8 @@
    * whichever grid led them, and the seam list.
    *
    * `parts` is omitted when one grid supplied the whole thing, so an
-   * uncomposed template is byte-identical to what shipped before migration
-   * 032 and every reader of a pre-032 snapshot keeps reading it unchanged.
+   * uncomposed template has the single-grid shape a pre-032 snapshot has, and
+   * every reader of that shape reads it unchanged.
    *
    * @param {GridChapter|null} base
    * @param {GridChapter[]} addOns

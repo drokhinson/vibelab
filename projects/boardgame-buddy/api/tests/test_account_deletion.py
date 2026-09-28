@@ -1,35 +1,34 @@
 """Deleting an account deletes the credential, not just the rows.
 
-THE BUG THESE PIN. `DELETE /profile` used to drop the
-`boardgamebuddy_profiles` row and stop. The Identity Platform account stayed,
-so signing back in with Google handed back the same uid and `get_current_user`
-auto-created a fresh profile — an emptied account wearing the deleted one's
-identity — and signing up again with the same address and a password answered
-`auth/email-already-in-use`. Both outcomes tell the user the deletion did not
-take, and both were right.
+THE FAILURE THESE PIN. A `DELETE /profile` that drops the
+`boardgamebuddy_profiles` row and stops leaves the Identity Platform account in
+place, so signing back in with Google hands back the same uid and
+`get_current_user` auto-creates a fresh profile — an emptied account wearing
+the deleted one's identity — and signing up again with the same address and a
+password answers `auth/email-already-in-use`. Both outcomes tell the user the
+deletion did not take, and both would be right.
 
-Migration 051 then added a third failure to the list, in the other direction:
-deleting an account CASCADEd `plays.user_id`, so deleting the person who
-LOGGED a game night deleted the night and every other account's seat on it.
-Such a play is handed over now. **The handover itself is SQL and is not
+A third failure runs in the other direction: CASCADEing `plays.user_id` would
+mean deleting the person who LOGGED a game night deletes the night and every
+other account's seat on it. Such a play is handed over (migration 051). **The handover itself is SQL and is not
 exercised here** — these tests drive the service with a fake PostgREST and
 there is no Postgres in this suite — so what they pin at this layer is that
 the service calls `bgb_delete_account_rows` and never a direct table delete,
 which is what keeps the handover and the profile delete in one transaction.
 `db/tests/051_account_deletion_handover.sql` is the behavioural half.
 
-Four properties carry the fix, and each one is a way it could silently regress:
+Four properties carry this, and each one is a way it could silently regress:
 
   1. **The provider uid is not the app uid.** `jwt_auth` rewrites `sub` to the
      `app_uid` claim, and `accounts:delete` answers `USER_NOT_FOUND` — which
      this code treats as success — for a uid that never existed. Delete with
      the wrong field and every deletion reports success while every credential
-     survives. That is the original bug with a passing test over it, so
+     survives. That is the rows-only failure with a passing test over it, so
      `test_the_credential_is_deleted_by_the_provider_uid` is the load-bearing
      one in this file.
   2. **Unconfigured refuses instead of half-deleting.** No service account
-     means no way to delete the credential, and the only alternative is the
-     old behaviour. Nothing may be destroyed in that case.
+     means no way to delete the credential, and the only alternative is
+     deleting rows only. Nothing may be destroyed in that case.
   3. **The order survives.** Photos, then rows, then credential — so a failure
      anywhere leaves a signed-in caller holding a token and a retry that works.
   4. **A prefix delete cannot reach a sibling.** `delete_prefix` is the one
@@ -107,7 +106,7 @@ class _FakeS3:
 
 
 class _FakeBucket:
-    """supabase-py's storage bucket handle, for the retired Supabase origin."""
+    """supabase-py's storage bucket handle, for the legacy Supabase origin."""
 
     def __init__(self, entries, list_exc=None, remove_exc=None):
         self.entries = entries
@@ -268,7 +267,7 @@ def test_the_rpc_counts_are_reported_back(wired):
 
 def test_unconfigured_identity_admin_deletes_nothing(wired, monkeypatch):
     """Without a service account the credential cannot go, and rows-only is
-    exactly the bug. So this refuses BEFORE touching anything — the assertion
+    exactly the failure. So this refuses BEFORE touching anything — the assertion
     that matters is the empty log, not the exception."""
     monkeypatch.setattr(S.identity_admin, "configured", lambda: False)
     monkeypatch.setattr(S.identity_admin, "config_error", lambda: "not set")
@@ -311,7 +310,7 @@ def test_a_photo_failure_aborts_before_any_row_is_touched(wired, monkeypatch):
 
 
 def test_a_credential_failure_still_reports_failure_after_the_rows_went(wired, monkeypatch):
-    """The one path back to the original broken state. It must not be reported
+    """The one path to the rows-only broken state. It must not be reported
     as success: the rows are gone and the login is not, and only an error
     keeps the client signed in so the user can retry into it."""
     async def boom(uid):

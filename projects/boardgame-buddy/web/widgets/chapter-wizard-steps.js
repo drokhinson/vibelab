@@ -28,7 +28,7 @@
   // can't draft without it and Save can't post without it — so it gets a step
   // of its own rather than a pill scroller competing with a title field.
   //
-  // Full-width 56px rows, not the old horizontal pills: a row list is the
+  // Full-width 56px rows, not horizontal pills: a row list is the
   // shape the picker sheets already use for "choose exactly one of six", it
   // needs no scroll to see every option, and it leaves room for the type's
   // own description.
@@ -80,13 +80,13 @@
   // One idea per step: this one is a prompt box and a decision. Both ways
   // forward live in the footer (Skip / Generate, see _renderWizardFooter) —
   // nothing here is a button, so the step reads as "say what you want, or
-  // don't". Importing a file used to live here too; it fills the editor rather
-  // than steering the AI, so it moved to the editor's own toolbar on step 3.
+  // don't". Importing a file lives on the editor's own toolbar on step 3, not
+  // here: it fills the editor rather than steering the AI.
   //
-  // The picked-type row carries a Change link because the footer no longer has
-  // a Back: it is the same markup step 3 renders, so changing your mind about
-  // the type is one tap from either step. (The device back gesture still steps
-  // back too — _wizBack is unchanged.)
+  // The picked-type row carries a Change link because the footer has no Back:
+  // it is the same markup step 3 renders, so changing your mind about the type
+  // is one tap from either step. (The device back gesture steps back too — see
+  // _wizBack.)
   //
   // A SCORING GRID gets this step too, and gets it from here rather than from a
   // step of its own: the decision is identical ("draft me something, or let me
