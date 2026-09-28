@@ -5,7 +5,7 @@
 // threshold, and a release that runs the view's callback. Read that file first
 // — everything below is the same gesture pointed the other way.
 //
-// WHY A GESTURE AND NOT THE BUTTON IT REPLACES. Reaching the end of a list is
+// WHY A GESTURE AND NOT A BUTTON. Reaching the end of a list is
 // already a gesture: the thumb is mid-flick and the next thing it wants is more
 // rows. A "Load more" button answers that with a target to find and hit, which
 // on a phone means the flick stops, the eye re-acquires, and the thumb travels

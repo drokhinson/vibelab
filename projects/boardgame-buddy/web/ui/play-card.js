@@ -196,8 +196,8 @@
 
   /**
    * The one sentence a run can honestly make, and it is a SENTENCE: the winner
-   * leads. "Won all 58 You" was the ordinary card's "Won by <name>" shape bent
-   * around a count, and it read as a label with a name stuck on the end.
+   * leads. The ordinary card's "Won by <name>" shape bent around a count —
+   * "Won all 58 You" — reads as a label with a name stuck on the end.
    * "You won all 58" is the thing a person would actually say.
    */
   function stackOutcome(card, me, n) {
@@ -259,8 +259,8 @@
     // The note preview: a strip of paper laid across the bottom of the photo.
     // It lives INSIDE the frame, which is a fixed --pc-photo-h tall, so an
     // absolutely-positioned band cannot change the card's height — that is the
-    // whole reason this treatment won over a third caption row, which would
-    // have taxed every card in the app for a field most plays don't have.
+    // whole reason it is a band rather than a third caption row, which would
+    // tax every card in the app for a field most plays don't have.
     const noteHtml = notePreview(card.notes);
 
     // The frame is a fixed height in both variants, so the image is CONTAINED
@@ -293,7 +293,7 @@
     // styles.css), rather than being switched on by a flag on the card. A flag
     // would have to ride the card payload, and rerenderCard() renders one HTML
     // string from the registry and applies it to every mounted copy of the
-    // play — so a card repainted in the reel would have handed its stamp to
+    // play — so a card repainted in the reel would hand its stamp to
     // the feed's hidden copy of the same play. The feed prints the day once as a
     // .day-divider above each group; the reel has no such grouping, so the play
     // has nowhere else to say when it happened.
@@ -306,9 +306,8 @@
     // truncated preview to read the rest of it is exactly what it should do,
     // and the popup carries the note unclamped.
     //
-    // The winner used to share a row with the title and needed a post-paint
-    // re-measure to decide whether it fit; it has its own row now, so the
-    // layout is static and the title simply ellipsises.
+    // The winner has its own row, so the layout is static and the title
+    // simply ellipsises — nothing needs a post-paint re-measure.
     return `
       ${dateHtml}
       ${photoHtml}
@@ -344,7 +343,7 @@
   // "We" vs "They" depends on whether the viewer is in the play (logged it
   // OR appears in participants).
   function buildWinnerBlock(card, me) {
-    // Nobody won and nobody scored: say nothing. This is the case that used to
+    // Nobody won and nobody scored: say nothing. Otherwise this case would
     // fall through to the nobodyWon branch below and render "We lost" over a
     // play whose result was simply never entered.
     if (outcomeUnrecorded(card)) return "";
@@ -363,8 +362,7 @@
       // that carried scores but no win flags, a table that tapped Save before
       // crowning anyone — and answering that with "We lost" is the card
       // inventing a defeat out of a blank field, on the evening of the people
-      // who were there. The run card has always drawn this line; the single
-      // card now draws it too.
+      // who were there. The run card draws the same line.
       return playMode === "coop"
         ? `<span class="win-loss">${we} lost</span>`
         : `<span class="win-loss">No winner recorded</span>`;
@@ -386,7 +384,7 @@
     const joined = winners.join(", ");
     const winnerName = winnerIsViewer(card, me, joined) ? "You" : escapeHtml(joined);
     const winnerScore = winnerScoreFor(card);
-    // The winner has its own caption row now, so a bare name would read as an
+    // The winner has its own caption row, so a bare name would read as an
     // unexplained label. The team buckets above already read as sentences and
     // don't take the prefix.
     return `<span class="win"><span class="win-label">Won by</span>${winnerName}${winnerScore != null
@@ -400,10 +398,10 @@
   // that patches a card in place writes `players` — a saved edit through
   // Play.mergeIntoCard, the hand-built cards in game-detail and import-detail
   // — while `winner_display_name` is an aggregate the feed RPC computed when
-  // the page was fetched. Reading the aggregate here is how a play whose win
-  // was recorded after the fact went on telling the people who won it that
-  // they lost: the roster said Ana won, the stale aggregate said nobody did,
-  // and "nobody won" renders as "We lost".
+  // the page was fetched. Reading the aggregate here would let a play whose win
+  // was recorded after the fact go on telling the people who won it that they
+  // lost: the roster says Ana won, the stale aggregate says nobody did, and
+  // "nobody won" renders as "We lost".
   //
   // `winner_display_name` remains the fallback for a payload with no roster
   // (pre-015, or an adapter that omits it). It is a comma-joined list, and
@@ -449,11 +447,11 @@
   // place of a name.
   //
   // By user id, not by comparing the joined name list against me.display_name.
-  // That compare was already wrong for two players sharing a display name, and
-  // once the list above resolves aliases it is wrong for the viewer too: the
-  // string it tests is no longer the string the account carries. The roster
-  // holds the ids, so ask it. A card with no roster keeps the old name compare
-  // — it is all such a payload has.
+  // That compare is wrong for two players sharing a display name, and, since
+  // the list above resolves aliases, wrong for the viewer too: the string it
+  // tests is not the string the account carries. The roster holds the ids, so
+  // ask it. A card with no roster falls back to the name compare — it is all
+  // such a payload has.
   function winnerIsViewer(card, me, joined) {
     if (!me || !me.id) return false;
     const players = card.players;
@@ -478,8 +476,8 @@
   // the card has no business inventing a result for it.
   //
   // The roster is the evidence, so a card built without `players` — a payload
-  // predating migration 015, or an adapter that omits it — keeps the old
-  // reading rather than guessing from an absence it cannot see.
+  // predating migration 015, or an adapter that omits it — keeps the
+  // winner-list reading rather than guessing from an absence it cannot see.
   function outcomeUnrecorded(card) {
     if (winnerNames(card).length > 0) return false;
     const players = card.players;

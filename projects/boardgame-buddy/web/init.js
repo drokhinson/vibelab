@@ -138,7 +138,7 @@
         // domain/auth.js holds the same line on the Firebase side — a failed
         // getIdToken reports nothing rather than a null session — but this
         // guard stays, because it is what covers a provider that DOES hand us
-        // one, and supabase-js is still that provider until the cutover.
+        // one.
         //
         // Hold the last known session instead; connectivity returning re-runs this callback with a real
         // answer either way, and in the meantime anything the held session
@@ -158,13 +158,11 @@
         //
         // The stash above this branch says initAuth "flips us forward to
         // either the pending deep-link route or the feed", and for a session
-        // that resolves it does. With no session it used to go to /auth
-        // unconditionally — correct while every route in the table needed an
-        // account, and wrong the moment one did not. It sent a stranger
-        // following a marketing link to /tour to a login screen, and it did
-        // the same to /privacy and /terms, which Google's OAuth consent
-        // screen links to permanently and which strangers reach by
-        // definition.
+        // that resolves it does. With no session, going to /auth
+        // unconditionally would send a stranger following a marketing link
+        // to /tour to a login screen, and do the same to /privacy and /terms,
+        // which Google's OAuth consent screen links to permanently and which
+        // strangers reach by definition.
         //
         // Gated on wasBooting because this callback also fires on a MID-SESSION
         // sign-out, where routeAfterBoot has already consumed pendingRoute and
@@ -207,9 +205,9 @@
 
       // A plain background token refresh, once we've already landed AND have a
       // live profile, needs nothing beyond the updated token above — don't
-      // re-bootstrap (a failed refetch here used to bounce an active session).
-      // Gated on _profileLoaded rather than store.get('user'), which is now
-      // set optimistically from cache and no longer proves we reached the
+      // re-bootstrap (a failed refetch here would bounce an active session).
+      // Gated on _profileLoaded rather than store.get('user'), which is set
+      // optimistically from cache and so does not prove we reached the
       // server this session.
       if (event === "TOKEN_REFRESHED" && _profileLoaded && _bootRouted) {
         return;
@@ -259,7 +257,7 @@
   // SDK reading (and often refreshing) the stored session, then /bootstrap. Both
   // can stall rather than fail — the first launch of the installed PWA on iOS
   // is where this actually bites — and the splash has no bottom nav, so a
-  // stall there leaves the user with a loader and nothing to tap. api.js now
+  // stall there leaves the user with a loader and nothing to tap. api.js
   // puts a deadline on our own calls; this covers the leg we don't own
   // (the auth SDK does its own fetching) and any future one.
   //
@@ -302,11 +300,10 @@
    * is navigation start — so it already IS the elapsed time, with nothing to
    * stash in a global.
    *
-   * This is the whole fix for the reported "loading screen sits for close to a
-   * minute". The timer used to be armed inside the DOMContentLoaded handler,
-   * which does not run until all ~120 parser-blocking scripts have downloaded
-   * and executed. On a congested cell that is 45s of splash, and the 12s
-   * watchdog then added its 12 on top rather than covering any of it.
+   * Arming the timer inside the DOMContentLoaded handler would not start it
+   * until all ~120 parser-blocking scripts have downloaded and executed. On a
+   * congested cell that is 45s of splash, and the 12s watchdog would then add
+   * its 12 on top rather than covering any of it.
    */
   function bootWatchdogDelay() {
     const sinceNav = performance.now();
@@ -319,7 +316,7 @@
   // destination view paints its own skeleton, the nav is there, and the
   // still-in-flight /bootstrap reconciles whenever it lands. With nothing in
   // hand there is no honest answer but the auth screen — it is at least
-  // interactive, it carries the offline banner, and it is not a dead end: this
+  // interactive, and it is not a dead end: this
   // path never sets _bootRouted, so an auth callback arriving late still
   // routes the user forward on its own.
   function bootWatchdog() {
@@ -329,7 +326,7 @@
     // sign-in screen hands over to the splash as soon as the popup opens
     // (views/auth-view.js#oauth), so without this the deadline would expire
     // mid-exchange and put the login form back under a popup that is still
-    // open — which is the bug that handover exists to fix, arriving twelve
+    // open — the very thing that handover exists to prevent, arriving twelve
     // seconds later instead. Every way out of the exchange routes on its own,
     // so there is nothing for the watchdog to cover here.
     if (window.BgbAuth && window.BgbAuth.signInPending
@@ -374,8 +371,8 @@
   // Parks ONE of two arrivals behind the QR hold: the first-run onboarding deck
   // (a brand-new account) or the what's-new deck (everyone else). They are
   // mutually exclusive by construction — see handleProfileOutcome — so one slot
-  // is enough. Kept its first-run name because it is read by the public
-  // /b/<token> arrival path and the rename buys nothing the comment does not.
+  // is enough. Named for first-run; it is read by the public /b/<token>
+  // arrival path, and a rename buys nothing the comment does not.
   let _pendingFirstRun = null;
 
   // ── Release notices ────────────────────────────────────────────────────────
@@ -516,7 +513,7 @@
   // it. One idle slot for all four rather than four contending callbacks;
   // each is independent, so one failing does not stop the rest.
   //
-  //   * game bundles — no longer part of /bootstrap (an N+1 in SQL, and
+  //   * game bundles — not part of /bootstrap (an N+1 in SQL, and
   //     nothing on the first screen reads them); warm so opening a game is
   //     still instant.
   //   * the owned shelf — the Collection spoke pages entirely off one cached
@@ -671,8 +668,8 @@
   // deferred load is a link that was down, and the moment it comes back is
   // knowable rather than worth sleeping through — so connectivity returning
   // retries immediately (see the store.subscribe below). Without that, a boot
-  // that failed offline stayed failed for up to 25s after the network was
-  // fine, and then gave up entirely, waiting on a tab-switch the user has no
+  // that failed offline would stay failed for up to 25s after the network was
+  // fine, and then give up entirely, waiting on a tab-switch the user has no
   // reason to make.
   let _profileRecovering = false;
   async function retryProfileInBackground() {
@@ -718,18 +715,16 @@
   }
 
   // First-run setup: one deck, five counted slides
-  // (widgets/onboarding-deck.js). It replaced three modals opened back to back,
-  // each awaiting its own write before the next appeared — so this function is
-  // now a mount rather than a sequence, and every write it makes is queued
-  // inside the deck rather than awaited out here.
+  // (widgets/onboarding-deck.js). This function is a mount rather than a
+  // sequence: every write it makes is queued inside the deck rather than
+  // awaited out here.
   //
-  // Still best-effort in exactly the way the sequence was: an absent widget is
-  // a no-op, and every exit leaves the user on their feed. What changed is
-  // where a failure lands — the deck's finale ledger says what did not go
-  // through and that Settings is where to do it again, instead of an alert
-  // that ends the flow. The finale's one forward door is the walkthrough: it
-  // offers /tour and routes there itself once the deck has closed, so this
-  // function still has nothing to do with where the user ends up.
+  // Best-effort: an absent widget is a no-op, and every exit leaves the user
+  // on their feed. A failure lands in the deck's finale ledger, which says
+  // what did not go through and that Settings is where to do it again, rather
+  // than in an alert that ends the flow. The finale's one forward door is the
+  // walkthrough: it offers /tour and routes there itself once the deck has
+  // closed, so this function has nothing to do with where the user ends up.
   async function maybePromptFirstTimeSetup(me) {
     if (!window.OnboardingDeck) return;
     try {
@@ -751,11 +746,11 @@
   }
 
   // Everything waiting behind a nav tab → one dot on it. It sits at this level
-  // for the same reason the offline banner does: the nav bar is app chrome, it
+  // because the nav bar is app chrome: it
   // outlives every view, and something that lands while the user is on the
   // Feed has to be announced by a surface already on screen.
   //
-  // Four sources behind Profile today — pending buddy requests, incoming ghost
+  // Four sources behind Profile — pending buddy requests, incoming ghost
   // account claims, "is this you?" suggestions and unseen achievements — and
   // deliberately ONE dot for all of them. A tab of chrome is the wrong place
   // to read a figure or to distinguish kinds of news; the dot says "there is
@@ -822,8 +817,8 @@
   /**
    * Both header buttons open their screen, and close it again.
    *
-   * Neither screen carries a close x any more. It was a third control for an
-   * exit the user already had two of — the device back button, and the very
+   * Neither screen carries a close x: it would be a third control for an
+   * exit the user already has two of — the device back button, and the very
    * button they opened it with — and the header button is the one they can see
    * from the screen itself, lit and turned for as long as it is open
    * (styles.css, `[aria-pressed="true"]`). router.back() returns them wherever
@@ -837,10 +832,10 @@
    * Profile tab the bottom nav is already highlighting.
    *
    * The two of them are ONE layer over whatever the user was on, which is why
-   * the hop between them is a swap() and not a go(). Going from the bell to the
-   * gear used to stack settings ON notifications, so the gear's next press —
-   * its close — walked back into notifications instead of dismissing the pair,
-   * and the two screens handed the user to each other. Replacing the entry
+   * the hop between them is a swap() and not a go(). A go() from the bell to
+   * the gear would stack settings ON notifications, so the gear's next press —
+   * its close — would walk back into notifications instead of dismissing the
+   * pair, and the two screens would hand the user to each other. Replacing the entry
    * keeps the screen underneath exactly one press away from either button, in
    * either order, however many times the user hops between them.
    */
@@ -866,17 +861,16 @@
     window.BgbNotifications.subscribe(syncHeaderDots);
   }
 
-  // The header's pending-upload button is gone — the queue's affordance is the
-  // Pending uploads section in Settings, and its signal is now the gear's dot,
-  // fed by the `outboxCount` row in domain/notifications.js. That row is in
-  // BgbNotifications.slots(), so the subscribe above already repaints it and
-  // there is nothing left to wire here. `offline` is not a subscriber either:
-  // it only ever changed the old indicator's COPY, and a dot has none.
+  // The upload queue's affordance is the Pending uploads section in Settings,
+  // and its signal is the gear's dot, fed by the `outboxCount` row in
+  // domain/notifications.js. That row is in BgbNotifications.slots(), so the
+  // subscribe above already repaints it and there is nothing to wire here.
+  // `offline` is not a subscriber either: a dot has no copy for it to change.
 
   // There is no offline banner, and `offline` is not a chrome subscriber.
   //
-  // Connectivity used to paint a persistent strip here, which made offline a
-  // MODE the whole app was in. It is one now only for recording a play, where
+  // A persistent strip would make offline a MODE the whole app is in. It is
+  // one only for recording a play, where
   // it genuinely changes what happens (the play saves locally, scores don't
   // sync live) — see views/play-flow-view.js. Everywhere else an action is
   // simply attempted and reports its own failure through notifyRequestError,
@@ -1073,7 +1067,7 @@
 
     // Offer the install once the shell is up. The component owns its own
     // gating (phone viewport, signed in, not already installed, settle delay,
-    // and — since it is a modal now — a clear screen to land on) and no-ops on
+    // and — since it is a modal — a clear screen to land on) and no-ops on
     // browsers that never report the app as installable.
     if (window.BgbInstallPrompt) window.BgbInstallPrompt.init();
 
@@ -1092,8 +1086,8 @@
     // Pocket Buddy. An installed PWA is indistinguishable from a browser tab
     // to the backend, so the app has to say so itself — from a cold start in
     // standalone display-mode (which covers every launch of an already
-    // installed copy, including one installed on another device or before this
-    // feature shipped) and from the `appinstalled` event that fires the moment
+    // installed copy, including one installed on another device or before the
+    // app could report it) and from the `appinstalled` event that fires the moment
     // the user accepts. Both go through Achievements.reportInstalled(), which
     // keeps its own once-per-device receipt, so the pair cannot double-post.
     const reportInstall = () => {

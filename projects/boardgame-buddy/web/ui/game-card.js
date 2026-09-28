@@ -5,8 +5,6 @@
 //   "rail"               — compact tile for the feed's horizontal rails
 //   "row"                — horizontal list row for the Collection spoke's
 //                          Expansions tree (same markup, different axis)
-// The feed rails used to ship two byte-identical copies of a bespoke
-// `.hot-game-tile`; both now come through here.
 
 (function () {
 
@@ -55,8 +53,8 @@
   //
   // Three code paths paint the same .game-polaroid__status host — this file on
   // the initial render, feed-view's _syncStatusPills and game-explorer-view's
-  // _syncCardStatus on a `status-changed` repaint. All three used to spell the
-  // renderStatusTag opts out by hand, which is instance #3 of five lines that
+  // _syncCardStatus on a `status-changed` repaint. Each spelling the
+  // renderStatusTag opts out by hand would be instance #3 of five lines that
   // silently drift apart (.claude/rules/ui-object-design.md §4). The opts are
   // written once here, and the repaint itself is a function rather than a
   // recipe, so a fourth surface can't invent a fourth spelling.
@@ -73,7 +71,7 @@
   /**
    * Patch a MOUNTED .game-polaroid's corner chip in place, keeping data-status
    * in step and re-hydrating the glyph. A no-op when nothing changed — the diff
-   * guard moved here from game-explorer-view so the feed gets it too.
+   * guard lives here so every caller gets it.
    *
    * Re-running the icon pass is not optional: the chip is written as
    * `<i data-icon>` and stays an empty <i> until BgbIcons hydrates it

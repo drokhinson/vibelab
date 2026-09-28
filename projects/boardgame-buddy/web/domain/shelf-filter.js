@@ -2,9 +2,9 @@
 // domain/shelf-filter.js — client-side twin of the server's collection-grid
 // filtering, plus the shared playtime buckets and a page slicer.
 //
-// The Profile games list used to ask /collection/grid for every page, filter
-// tap and debounced keystroke. It now pulls a whole shelf once (see
-// Collection.shelf) and derives the visible rows locally, which means these
+// Rather than asking /collection/grid for every page, filter tap and debounced
+// keystroke, the collection screens pull a whole shelf once (see
+// Collection.shelf) and derive the visible rows locally, which means these
 // predicates have to agree with the backend exactly. `_passesShelfFilters` is a
 // line-for-line port of `_passes_grid_filters`
 // (shared-backend/routes/boardgame_buddy/collection_routes.py:254-282) and
@@ -20,8 +20,8 @@
 // shelves (owned, wishlist, played). Its Expansions tree is not a shelf and has
 // no ShelfFilter pass, but its search still goes through `matchesName` below so
 // the two never disagree about what "Cafe" matches. The spoke scrolls rather
-// than pages and slices the window itself; `pageOf` below is left for the Game
-// Explorer, which is still paged.
+// than pages and slices the window itself; `pageOf` below serves the Game
+// Explorer, which is paged.
 
 (function () {
   /**
@@ -136,7 +136,7 @@
   /**
    * A shelf in the order every collection screen shows it: alphabetical by
    * game name. The server returns shelves by recency (last_played DESC NULLS
-   * LAST then added_at DESC; wishlist by added_at DESC), which is still what
+   * LAST then added_at DESC; wishlist by added_at DESC), which is what
    * the Profile hub's preview strip and the feed want, so the reordering
    * happens here rather than at the endpoint.
    *

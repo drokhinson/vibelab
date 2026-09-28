@@ -5,9 +5,9 @@
 // global header's Settings gear, the global header's notification bell),
 // which section or admin spoke resolves it, and how to say it out loud.
 //
-// Before this existed the same three sums were written by hand in two places —
+// Without it the same sums would be written by hand in each surface —
 // init.js#syncNavDots and profile-self-view.js#_renderBuddiesPreview — and a
-// fourth signal meant editing both and remembering the aria-label in one of
+// new signal would mean editing both and remembering the aria-label in one of
 // them. The table below is the single place that knows.
 //
 // A signal belongs here when it is TRANSIENT: the user acts on it once and it
@@ -72,9 +72,9 @@
     // the whole story — and because each count still arrives from its own query
     // in domain/admin-review.js.
     //
-    // It was FOUR, and collapsing three of them was a fix rather than tidying:
-    // they counted three overlapping queues, so a game short of both its blurb
-    // and its year was counted twice here and the gear's dot over-reported.
+    // BGG data is one row, not three: descriptions, stats and publishers are
+    // overlapping queues, so separate rows would count a game short of both its
+    // blurb and its year twice and the gear's dot would over-report.
     // The rulebook queue (migration 051). It passes the transience test the
     // header comment sets for the same reason the reports one does — an admin
     // approves or denies and it is gone — but it is the one admin signal where
@@ -98,11 +98,11 @@
       adminTool: "bggData",
       label: (n) => `${n} game${n === 1 ? "" : "s"} missing BGG data`,
     },
-    // Pending uploads. The header's own upload button is gone: a queue that
-    // drains itself is the app doing something FOR you, which is plumbing, and
-    // plumbing lives in Settings — where a "Pending uploads" section has always
-    // rendered it. What the header control was really providing was the
-    // SIGNAL, and that is a dot, so it joins the gear's.
+    // Pending uploads. No header button of their own: a queue that drains
+    // itself is the app doing something FOR you, which is plumbing, and
+    // plumbing lives in Settings — where the "Pending uploads" section renders
+    // it. What the header needs is the SIGNAL, and that is a dot, so it joins
+    // the gear's.
     //
     // The slot is Outbox.count(), not pendingCount(): a play the server
     // rejected outright is not "waiting to upload" but it is still the one
@@ -129,7 +129,7 @@
     },
   ];
 
-  // Same clamp the hand-written sums used: a slot can hold whatever a caller
+  // Clamped: a slot can hold whatever a caller
   // put there, and a negative or a NaN must read as "nothing waiting" rather
   // than poisoning the total.
   function read(slot) {
@@ -170,9 +170,9 @@
     /**
      * Join parts into one readable clause: "a", "a and b", "a, b and c".
      *
-     * A plain `.join(" and ")` was fine while a card could only ever sum two
-     * signals; the third made it read "a and b and c". The nav bar joins with
-     * ", " instead — it is announcing a list, not speaking a sentence.
+     * A plain `.join(" and ")` reads "a and b and c" once a card sums three
+     * signals. The nav bar joins with ", " instead — it is announcing a list,
+     * not speaking a sentence.
      */
     phrase(parts) {
       if (parts.length < 2) return parts[0] || "";

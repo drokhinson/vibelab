@@ -29,7 +29,7 @@
 (function () {
   // Bumped when the bootstrap RPC's shape changes. Mismatch with the server's
   // bootstrap_version forces a full cache wipe before rehydrating.
-  // v2: game_detail_bundles moved out to /bootstrap/game-bundles.
+  // v2: game_detail_bundles come from /bootstrap/game-bundles, not this payload.
   //
   // NOT bumped for release_notices_unseen: that key seeds no cache namespace —
   // it is handed straight to a module local and re-read on every boot by
@@ -183,7 +183,7 @@
       // And the bell: its dot AND the first page of the screen behind it. Read
       // off the payload's own top-level keys rather than out of profile_bundle,
       // because that is where the backend puts them — bgb_profile_bundle is 542
-      // lines and adding to it would have meant re-emitting all of them, so
+      // lines and adding to it would mean re-emitting all of them, so
       // /bootstrap gathers both in parallel instead.
       //
       // The page is what makes the bell open instantly: it is a fetch that has
@@ -206,9 +206,9 @@
         );
       }
 
-      // Normally empty now — the bundles arrive via warmGameBundles(). Still
-      // honored here so a /bootstrap that does carry them (or a rollback to
-      // the v1 payload) seeds correctly.
+      // Normally empty — the bundles arrive via warmGameBundles(). Honored
+      // here so a /bootstrap that does carry them (a v1 payload) seeds
+      // correctly.
       Bootstrap._seedGameBundles(payload.game_detail_bundles);
 
       // Stats — pulled from profile_bundle.stats so we don't pay a separate
@@ -258,7 +258,7 @@
       // Last play → the Play tab's "Another Round" card. Its own long-lived
       // namespace rather than a read through profile_bundle, because that
       // bundle is DELETED after every save (Play.invalidateDeps) and expires
-      // after 60s — so the card's sync peek used to miss on nearly every
+      // after 60s — so a sync peek through it would miss on nearly every
       // visit and pop in after the network came back.
       if (pbRecent && window.Play && window.Play.rememberLastPlay) {
         window.Play.rememberLastPlay(pbRecent[0] || null);

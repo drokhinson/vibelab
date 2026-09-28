@@ -60,8 +60,8 @@
    * Display-name ceiling, enforced by the two surfaces that let a person type
    * one (the profile editor's avatar customizer and the onboarding deck's
    * first slide). A UI rule only: the column is unbounded text and the API
-   * takes any non-empty string, so accounts created before this limit keep
-   * their longer names until they edit them, and every read path — badges,
+   * takes any non-empty string, so a longer name already stored is kept
+   * until its owner edits it, and every read path — badges,
    * scorecards, the feed — still renders whatever is stored.
    */
   User.DISPLAY_NAME_MAX = 12;

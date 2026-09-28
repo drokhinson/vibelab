@@ -1,7 +1,7 @@
 // ui/infinite-scroll.js — viewport sentinel + footer strip for windowed lists.
 //
-// The collection grids used to turn pages behind a docked prev/next footer.
-// They now grow a batch at a time as the user scrolls, which needs two pieces
+// The collection grids grow a batch at a time as the user scrolls, which needs
+// two pieces
 // every windowed list shares: an IntersectionObserver pointed at a sentinel
 // below the last row, and the strip that sentinel lives in.
 //

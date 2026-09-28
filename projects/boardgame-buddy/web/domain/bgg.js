@@ -133,10 +133,10 @@
      * True once the catalog fill a comparison kicked off has landed.
      *
      * Reads the CATALOG session counters, not the import ones: a check queues
-     * kind='catalog' rows into the same table an import uses, and before
-     * migration 006 they shared a window — which made a finished import read
-     * as unfinished and made this exit instantly for anyone who had never run
-     * an import. Same session-counter argument as importDrained otherwise.
+     * kind='catalog' rows into the same table an import uses, in a window of
+     * their own (migration 006) — a shared window would make a finished import
+     * read as unfinished and make this exit instantly for anyone who had never
+     * run an import. Same session-counter argument as importDrained otherwise.
      *
      * @param {{catalog_session_total?:number, catalog_session_done?:number, catalog_session_errored?:number}|null} status
      */

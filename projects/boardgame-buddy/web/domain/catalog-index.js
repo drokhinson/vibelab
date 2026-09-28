@@ -2,11 +2,11 @@
 // domain/catalog-index.js — the whole base-game catalog, on the device, for
 // the game picker to search without a request.
 //
-// The Gather picker (widgets/game-finder.js) used to ask /search on every
-// keystroke past two characters: a debounce, a Railway → Supabase round trip,
-// and a repaint when the answer landed — all sharing one uvicorn worker with
-// the host's 2s lobby poll and one poll per joiner. For a string match over a
-// catalog of a couple of thousand names, that is the wrong side of the wire.
+// Asking /search from the Gather picker (widgets/game-finder.js) on every
+// keystroke costs a debounce, a Railway → Supabase round trip, and a repaint
+// when the answer lands — all sharing one uvicorn worker with the host's 2s
+// lobby poll and one poll per joiner. For a string match over a catalog of a
+// couple of thousand names, that is the wrong side of the wire.
 //
 // This pulls GET /search/index once — one compact row per base game: id, name
 // and what a result row paints (year, players, time, thumb) — and answers a

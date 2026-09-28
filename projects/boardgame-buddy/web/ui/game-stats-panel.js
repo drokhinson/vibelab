@@ -50,8 +50,8 @@
     // Wins are read against the plays that recorded a RESULT, never against
     // every play: a play nobody won and nobody scored said nothing about how
     // it went, and counting it here reports a loss that never happened. The
-    // fallback keeps a cached pre-018 payload rendering the old way rather
-    // than dividing by undefined.
+    // fallback keeps a cached pre-018 payload rendering against `plays`
+    // rather than dividing by undefined.
     const decided = g.decided_plays != null ? g.decided_plays : g.plays;
     const pct = decided ? Math.round((g.wins / decided) * 100) : 0;
     const undecided = Math.max(0, (g.plays || 0) - decided);

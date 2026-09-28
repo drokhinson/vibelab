@@ -42,12 +42,11 @@
      * session that is enough: bgbCache hands its value out by reference, so the
      * cards the view mutates ARE the cached cards.
      *
-     * A RELOAD is where that stopped being true. localStorage holds a copy
-     * taken when the page was fetched, so the next launch painted the
+     * A RELOAD is where that stops being true. localStorage holds a copy
+     * taken when the page was fetched, so the next launch would paint the
      * pre-tap state out of the 24h stale window: a "Good game" you had just
-     * taken back came straight back, and tapping it again was the only way to
-     * get rid of it — for one session at a time. So the accepted write is
-     * applied to the cached page here and re-persisted.
+     * taken back would come straight back. So the accepted write is applied
+     * to the cached page here and re-persisted.
      *
      * Idempotent, because the cards may be the very objects the view already
      * patched: only the TRANSITION moves the count, and the entry is
@@ -89,7 +88,7 @@
      * Fold an accepted play EDIT into the cached first page.
      *
      * Sibling of applyReaction above, for the same reason and by the same
-     * mechanism: the entry is no longer dropped on an update (see the `patched`
+     * mechanism: the entry is not dropped on an update (see the `patched`
      * opt in domain/play.js#_invalidatePlayDeps), so this is what keeps it
      * honest. Play.mergeIntoCard does the field mapping and is idempotent, and
      * the entry is re-persisted so the patch survives a reload rather than

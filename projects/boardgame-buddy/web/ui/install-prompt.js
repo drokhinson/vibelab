@@ -1,9 +1,9 @@
 // ui/install-prompt.js — the "add Buddy to your home screen" modal.
 //
 // A centred card over the app's shared modal chrome, shown once a phone-browser
-// session has settled onto the feed. It used to be a strip docked above the tab
-// bar, which read as one more row of the feed and was missed accordingly — the
-// whole point is that it is NOT part of the page behind it.
+// session has settled onto the feed. A card, not a strip docked above the tab
+// bar, which would read as one more row of the feed and be missed accordingly
+// — the whole point is that it is NOT part of the page behind it.
 //
 // The point isn't the home-screen icon: per STRUCTURE.md the Gather → Play →
 // Settle host cascade runs with no connectivity at all off the sw.js app-shell
@@ -38,7 +38,7 @@
   const MAX_ASKS = 3;
 
   // Let first paint, auth and the splash→feed handoff finish before we put a
-  // card over the UI. Shorter than the banner's dwell was: a modal that lands
+  // card over the UI. Short on purpose: a modal that lands
   // while someone is already reading the feed interrupts, whereas one that
   // lands as the feed settles reads as part of opening the app.
   const SETTLE_MS = 1200;
@@ -104,8 +104,8 @@
   // the device, never about a frame the layout has not caught up with yet.
   //
   // `land` counts too, and this is the question that tier exists to answer. A
-  // phone held sideways is 852px wide, so before there was a `land` tier it
-  // came back "tablet" and this gate said no — rotating the device was enough
+  // phone held sideways is 852px wide, so a width test alone would call it
+  // "tablet" and this gate would say no — rotating the device would be enough
   // to make Add to Home Screen disappear. Turning a phone on its side does not
   // make it a tablet, and both widths below are the same device.
   function _isPhone() {
@@ -345,7 +345,7 @@
       // an installed copy flips display-mode without a reload. Re-run the
       // gates on both rather than waiting for the next navigation. The land
       // query is watched too: a rotation crosses it and the 767px gate at the
-      // same moment, and _isPhone() now reads both sides of that.
+      // same moment, and _isPhone() reads both sides of that.
       _watch("(max-width: " + ((window.BgbLayout ? window.BgbLayout.BREAKPOINTS.tablet : 768) - 1) + "px)");
       if (window.BgbLayout && window.BgbLayout.LAND_QUERY) _watch(window.BgbLayout.LAND_QUERY);
       _watch("(display-mode: standalone)");

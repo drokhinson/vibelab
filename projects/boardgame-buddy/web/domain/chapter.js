@@ -37,10 +37,10 @@
   // Which scoring-grid chapter ids this viewer has already turned down, per
   // game: { "<gameId>": ["<chapterId>", …] }.
   //
-  // ONE store, two surfaces. The reference-guide scroll's "templates
-  // available" notice owned this privately until the play cascade grew an
-  // offer of its own (views/play-flow-view.js#_maybeOfferTemplates) — and two
-  // stores would have meant answering the same question twice: dismiss the
+  // ONE store, two surfaces: the reference-guide scroll's "templates
+  // available" notice and the play cascade's own offer
+  // (views/play-flow-view.js#_maybeOfferTemplates). Two stores would mean
+  // answering the same question twice: dismiss the
   // notice in the guide, then get asked again at the table two taps later.
   // Turning a grid down is turning it down, wherever the viewer was standing.
   //
@@ -92,9 +92,9 @@
      * stale entry would look like a reason to skip the refresh that would
      * replace it.
      *
-     * This used to branch on connectivity, which conflated the two: it made
-     * the freshness check stricter online than off for no reason, and tied a
-     * caching policy to a latch that could be stale.
+     * It does not branch on connectivity, which would conflate the two: it
+     * would make the freshness check stricter online than off for no reason,
+     * and tie a caching policy to a latch that could be stale.
      *
      * @param {string} baseGameId
      * @param {string[]} [expansionIds]

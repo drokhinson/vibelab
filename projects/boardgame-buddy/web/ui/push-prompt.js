@@ -4,8 +4,8 @@
 // 'none' (migration 017) and nothing is ever sent to an account that has not
 // asked for it. This file is the other half of an opt-in that actually works —
 // because an opt-in nobody is told about is not a choice, it is a feature that
-// quietly does not exist. Defaulting the column on was considered and rejected
-// for the reason this card is built around: an account nobody asked should read
+// quietly does not exist. The column does not default on, for the reason this
+// card is built around: an account nobody asked should read
 // as off wherever it is shown. So the app makes the offer once, plainly, and
 // takes no for an answer.
 //
@@ -241,8 +241,8 @@
    * this runs from also fires on store.reset(), which is a step of logging out
    * and of deleting an account. BgbPush.state() reads /push/config through the
    * API client, and by that point window.session is already null — so the
-   * request went out with no Authorization header and came back 401, in the
-   * console, on every sign-out. _shouldShow() does test _authed(), but it runs
+   * request would go out with no Authorization header and come back 401, in
+   * the console, on every sign-out. _shouldShow() does test _authed(), but it runs
    * AFTER this fetch resolves, which is too late to not have made it.
    *
    * The last read is dropped with it rather than left standing: whoever signs

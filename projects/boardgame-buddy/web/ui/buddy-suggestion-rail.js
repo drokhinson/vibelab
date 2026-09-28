@@ -2,7 +2,7 @@
 // "Buddies you may know" rail built out of it.
 //
 // One tile, rendered identically wherever a suggested person appears. Three
-// surfaces use it today:
+// surfaces use it:
 //   • the Feed, as a `suggested_buddies` card the backend interleaves into
 //     the page (rail, Add button)
 //   • the Buddies screen, as a standalone section between the Buddies and
@@ -18,10 +18,9 @@
 // selection — are `opts` fields on ONE tile, not a second copy of the markup.
 //
 // An "add" tile also carries a dismiss ×: "stop suggesting this person"
-// (migration `014_buddy_suggestion_dismissals`). It is the answer to the one
-// thing this rail could not do —
-// a suggestion the viewer had already decided against came back every single
-// visit, which is the failure ui/ghost-claim-suggestions.js argues against and
+// (migration `014_buddy_suggestion_dismissals`). Without it, a suggestion the
+// viewer had already decided against would come back every single visit,
+// which is the failure ui/ghost-claim-suggestions.js argues against and
 // the reason "Not me" exists on the list beside it. The × is deliberately NOT
 // offered on a "select" tile: that tile IS a <button>, so a second button
 // inside it is invalid markup, and a grid the user is ticking through has no
@@ -40,7 +39,7 @@
   // zero. Reading the counts alone would label them "Mutual buddy", which is
   // false, so the backend sends the tier and it wins when present.
   //
-  // Migration 072 adds a third kind: someone reached through a request the
+  // A third kind (migration 072) is someone reached through a request the
   // viewer SENT and nobody has answered. "Mutual buddy" would be false about
   // them too — the link is one-sided until it is accepted — so they name the
   // person they came through instead. That name is another user's display

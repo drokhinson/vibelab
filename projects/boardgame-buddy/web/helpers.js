@@ -1,6 +1,6 @@
 // helpers.js — small utilities shared across the OOP frontend.
-// The legacy apiFetch / showView / trackEvent / state-coupled helpers have
-// moved to the domain layer (api.js, view.js) and to the individual views.
+// API, routing and analytics helpers live in the domain layer (api.js,
+// view.js), and view-specific ones in the individual views.
 
 // Warm the TLS connections to the two origins every boot hits: the API
 // (Railway) and Supabase auth. This file is the second script in the document,
@@ -63,8 +63,8 @@ function stripBaseGameName(name, baseName) {
 // the full-size art would be pure wasted bandwidth.
 //
 // Either size falls back to the other: `image_url` is null for games whose
-// Storage upload failed, and payloads cached before the API started sending it
-// have no such key at all.
+// Storage upload failed, and an older cached payload may have no such key at
+// all.
 function gameArtSrc(game, size) {
   const g = game || {};
   const full = g.image_url || "";
@@ -307,7 +307,7 @@ function isOfflineError(err) {
 /**
  * The one place a failed request becomes a sentence.
  *
- * Offline is no longer a mode this app renders — there is no banner and no
+ * Offline is not a mode this app renders — there is no banner and no
  * disabled control that says "not while you're offline". Instead every action
  * is attempted and the ones that need the network say so HERE, naming the
  * thing the user was trying to do. Recording a play is the single exception,
@@ -324,8 +324,8 @@ function notifyRequestError(err, action) {
   let message;
   if (err && err.timeout) {
     // Tested BEFORE `offline`, because a deadline abort sets both (see
-    // domain/api.js). Getting this order wrong is not hypothetical: it told
-    // somebody whose data export ran long that they were offline.
+    // domain/api.js). The other order would tell somebody whose data export
+    // ran long that they were offline.
     message = "The server took too long — try that again.";
   } else if (isOfflineError(err)) {
     message = `You're offline — ${action} needs a connection.`;
@@ -404,8 +404,7 @@ function _loadImageViaTag(file) {
  *
  * `opts` exists because the three callers are photographing different things
  * for different lifetimes — see IMPORT_PHOTO_OPTS and PHOTO_IMPORT_OPTS.
- * Omitted, the defaults are the play-photo ones this function was written for,
- * so its original call site reads exactly as it did.
+ * Omitted, the defaults are the play-photo ones.
  * @param {File} file
  * @param {{maxEdge?: number, quality?: number, maxBytes?: number,
  *          allowedTypes?: string[], alwaysReencode?: boolean}} [opts]

@@ -15,10 +15,10 @@
   const LAST_FRESH_TTL_MS = 24 * 60 * 60 * 1000;
   const LAST_STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-  // Paged /plays reads. This was the only domain call with no cache wrapper at
-  // all, so every Plays mount, every debounced search keystroke and every
-  // return visit re-fetched pages the client had already seen — backspacing
-  // through a search re-issued queries that were already answered.
+  // Paged /plays reads are cached: otherwise every Plays mount, every
+  // debounced search keystroke and every return visit re-fetches pages the
+  // client has already seen — backspacing through a search re-issues queries
+  // that were already answered.
   // play_id -> a PlayResponse-shaped object projected from a feed card. Module
   // scope, not bgbCache: it holds no TTL, is never persisted, and never answers
   // a fetch — see the note on the seed methods below.
@@ -83,8 +83,8 @@
    *    the fallback lives here rather than at the call sites: plays-view falls
    *    back to the profile bundle's `recent_plays` (003_rpcs.sql), whose players
    *    carry no round_scores and which has no template at all, and preview-card
-   *    renders from the same rows. Seeding off those would recreate the exact
-   *    bug this fallback exists to fix, from a second source.
+   *    renders from the same rows. Seeding off those would paint a popup with
+   *    no grid and no template — from a second source.
    * 3. `is_own` is RECOMPUTED. bgb_plays_page computes it as
    *    `pg.user_id = p_target` — relative to whose log you are browsing, not to
    *    the viewer — so a buddy's play read off their own log claims is_own and
@@ -160,7 +160,7 @@
      * players in two different orders, and the surface repaints for no reason.
      * Every co-op play (all scores null) and every tie hits this.
      *
-     * `score` stays the primary key, so nothing about today's ranking moves;
+     * `score` stays the primary key, so nothing about the ranking moves;
      * the rest of the chain exists only to break ties the same way twice.
      *
      * Presentation only. It does NOT normalise the stored row: an edit draft,
@@ -192,14 +192,14 @@
 
     // ── Seeds from the feed (migration 015) ────────────────────────────────
     //
-    // The feed card now carries the whole play — the full roster with scores
+    // The feed card carries the whole play — the full roster with scores
     // and round_scores, the expansions, the country. That is everything the
     // card's BACK and the detail popup render, so both can paint from a card
     // the client already has instead of each calling GET /plays/{id} on open.
-    // Before this, flipping a card showed "Loading play…" for a network hop,
-    // and flipping then maximising fetched the same row twice, because the
-    // card and the popup keep separate state and Play.get is the one domain
-    // read with no cache wrapper.
+    // Without a seed, flipping a card shows "Loading play…" for a network hop,
+    // and flipping then maximising fetches the same row twice, because the
+    // card and the popup keep separate state and Play.get has no cache
+    // wrapper.
     //
     // A seed is deliberately NOT a cache with a TTL. It is a projection of a
     // feed page the user is looking at right now, it never satisfies a fetch
@@ -225,9 +225,9 @@
         game_name: g.name || "",
         // thumbnail_url ONLY. `game_thumbnail` on a PlayResponse is
         // games.thumbnail_url (play_routes.py _build_play_response), so falling
-        // back to the full-size image_url here made the seed disagree with the
-        // row it is a projection of: a game with art but no thumbnail painted
-        // one on the first frame that vanished when the fetch landed.
+        // back to the full-size image_url here would make the seed disagree with
+        // the row it is a projection of: a game with art but no thumbnail would
+        // paint one on the first frame that vanishes when the fetch lands.
         game_thumbnail: g.thumbnail_url || null,
         played_at: card.played_at,
         created_at: card.created_at,
@@ -243,10 +243,10 @@
         group_count: card.group_count || 1,
         // Migration 031. The popup gates its Rounds section on
         // hasRoundGrid(players, key, template), which needs only ONE round when
-        // a template exists and two without one — so a seed missing this
-        // rendered no grid at all on a single-round play and generic R1..Rn
-        // labels on a multi-round one, and the confirming fetch then repainted
-        // the whole card. `undefined` (a card from a pre-031 payload) is left
+        // a template exists and two without one — so a seed missing this would
+        // render no grid at all on a single-round play and generic R1..Rn
+        // labels on a multi-round one, and the confirming fetch would then
+        // repaint the whole card. `undefined` (a card from a pre-031 payload) is left
         // as undefined rather than nulled; seedFromFeedCard reads that
         // distinction.
         scoring_template: card.scoring_template,
@@ -259,15 +259,15 @@
      * construction and no view has to remember to.
      *
      * An empty `players` means the RPC predates 015 — the seed is skipped and
-     * every consumer falls back to fetching, exactly as before.
+     * every consumer falls back to fetching.
      */
     static seedFromFeedCard(card) {
       if (!card || !card.play_id) return null;
       if (!Array.isArray(card.players) || card.players.length === 0) return null;
       const play = Play.fromFeedCard(card);
       // Never let a card that predates 031 downgrade a seed that has the
-      // template. The feed cache holds a 24h stale window, so for a day after
-      // deploy some cards arrive with no such key at all — and the seed this
+      // template. The feed cache holds a 24h stale window, so a card from an
+      // older payload can arrive with no such key at all — and the seed this
       // would overwrite may have come from a /plays page or from the row a PUT
       // echoed back, both of which carry it.
       //
@@ -300,9 +300,8 @@
      *
      * Falls back to a cached /plays page, so the surfaces that do NOT draw feed
      * cards — the plays log, the profile preview, notifications, the session
-     * viewer — open on content rather than a spinner. Those pages have carried
-     * the full row, scoring_template included, since migration 018; nothing had
-     * ever wired them to the seed.
+     * viewer — open on content rather than a spinner. Those pages carry the
+     * full row, scoring_template included (migration 018).
      */
     static seeded(id) {
       if (!id) return null;
@@ -362,10 +361,10 @@
       card.players = play.players || [];
       // The two aggregates the feed RPC computes BESIDE the roster. They are
       // derived data, so an edit that changes who won has to move them too —
-      // without this the card kept the winner line the last feed fetch
-      // produced, and a play crowned after the fact went on rendering "We
+      // without this the card keeps the winner line the last feed fetch
+      // produced, and a play crowned after the fact goes on rendering "We
       // lost" over a roster that says otherwise. play-card.js prefers the
-      // roster now, but the run sheet still reads these, and a card holding
+      // roster, but the run sheet reads these, and a card holding
       // two contradictory answers is a bug waiting for its next reader.
       //
       // Same shape bgb_feed_page emits: winners by display name, sorted,
@@ -390,8 +389,8 @@
      * Fold an accepted edit into everything holding the old row.
      *
      * Order is load-bearing. The play-card patch re-renders the card, and
-     * rendering a card re-seeds `_seeds` from its PROJECTION. Since 031 that
-     * projection carries the scoring_template, and seedFromFeedCard holds the
+     * rendering a card re-seeds `_seeds` from its PROJECTION. That projection
+     * carries the scoring_template (migration 031), and seedFromFeedCard holds the
      * previous one when a stale card has no such key — but the full row still
      * goes into the seed last, because it is the authoritative copy and the
      * card is a lossy view of it.
@@ -406,12 +405,11 @@
         window.BgbPlayCard.applyPlayUpdate(play);
       }
       Play.remember(play);
-      // The Another Round card seeds off the viewer's most recent play. Before
-      // this it was cleared outright on every edit — including an edit to that
-      // very play, which is the one case where we now know exactly what it
-      // should say. An edit to some OTHER play can still have moved which play
-      // is most recent (the date is editable), and that we cannot answer from
-      // here, so it keeps the clear.
+      // The Another Round card seeds off the viewer's most recent play. An edit
+      // to that very play is the one case where we know exactly what it should
+      // say, so the seed is rewritten. An edit to some OTHER play can have
+      // moved which play is most recent (the date is editable), and that we
+      // cannot answer from here, so it clears the seed.
       const last = Play.cachedLastPlay();
       if (last && last.id === play.id) Play.rememberLastPlay(play);
       else Play.rememberLastPlay(null);
@@ -539,8 +537,8 @@
     }
     // Write just the photo column. PUT /plays/{id} is a FULL replacement —
     // it deletes and re-inserts every player and expansion row — so routing
-    // a photo attach through it cost twelve round trips and churned rows
-    // that hadn't changed. This is one.
+    // a photo attach through it would cost twelve round trips and churn rows
+    // that haven't changed. This is one.
     static attachPhoto(id, photoUrl) {
       return window.api.patch(`/plays/${id}/photo`, { photo_url: photoUrl })
         .then((r) => { _invalidatePlayDeps(); return r; });
@@ -591,8 +589,8 @@
     // Public handle on the same invalidation the mutations above run. Exists
     // for writes that create a play without going through this class —
     // PlaySession.finalizeLobby() posts to /sessions/{code}/finalize, which is
-    // a play create in everything but the URL and left every one of these
-    // caches stale.
+    // a play create in everything but the URL and would otherwise leave every
+    // one of these caches stale.
     static invalidateDeps() { _invalidatePlayDeps(); }
 
     // ── Imported plays (migrations 005/007) ─────────────────────────────────
@@ -658,8 +656,8 @@
    *   the fresh row and is folding it in itself (Play.applyUpdate), so the
    *   three things that row can be patched INTO are left alone: the cached
    *   feed first page, the cached /plays pages, and the feed store slot whose
-   *   subscriber re-renders the whole Feed view. Everything else is dropped
-   *   exactly as before, because nothing here can derive it from one play.
+   *   subscriber re-renders the whole Feed view. Everything else is dropped,
+   *   because nothing here can derive it from one play.
    */
   function _invalidatePlayDeps(opts) {
     const patched = !!(opts && opts.patched);
@@ -676,7 +674,7 @@
     // Four badges move on a play: plays logged, wins, the biggest table you
     // have sat at, and whether you wrote the night down.
     if (window.Achievements && window.Achievements.invalidate) window.Achievements.invalidate();
-    // Stats live in their own cache namespace now — clear so the next
+    // Stats live in their own cache namespace — clear so the next
     // Profile mount re-pulls accurate plays/wins counts.
     if (window.Stats && window.Stats.invalidate) window.Stats.invalidate();
     // Drop the cached feed first page; the next Feed mount triggers a fresh
@@ -704,7 +702,7 @@
     // Profile.invalidate() above drops the cached bundle; this is the SAME
     // payload published to the store by views/profile-self-view.js, and the
     // Plays and Collection spokes fall back to it when the cache misses. Left
-    // behind, it re-seeded the pre-edit play the cache drop had just removed.
+    // behind, it would re-seed the pre-edit play the cache drop just removed.
     if (window.store && window.store.set) window.store.set("profileBundle", null);
     // A create or a delete changes which cards the feed HAS, so the view has
     // to rebuild. An edit changes one card's contents, and ui/play-card.js

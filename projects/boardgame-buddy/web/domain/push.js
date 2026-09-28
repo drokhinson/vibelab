@@ -267,7 +267,7 @@
     /**
      * Re-post this device's subscription once the account is known.
      *
-     * THIS IS THE AUTHORITATIVE HALF OF THE ROTATION FIX. A browser can rotate
+     * THIS IS THE AUTHORITATIVE HALF OF HANDLING ROTATION. A browser can rotate
      * an endpoint whenever it likes; sw.js's pushsubscriptionchange handler
      * re-subscribes at the OS level but cannot tell the API, because it has no
      * bearer token — the Supabase session lives in the page's localStorage.

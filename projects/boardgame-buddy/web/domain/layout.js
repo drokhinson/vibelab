@@ -12,7 +12,7 @@
 // `store("layout")` — set here on every change — through View#listen.
 //
 // Tiers:
-//   phone   < 768px    today's layout, untouched
+//   phone   < 768px    the base layout, no overrides
 //   tablet  768–1023   720px column, bottom bar stays
 //   wide    ≥ 1024     left rail, header folded into it, 1040px column
 //   land    sideways   a phone on its side: the same rail, compact
@@ -23,14 +23,11 @@
 // Width cannot tell an iPad standing up (768×1024) from a phone lying down;
 // height can, which is why LAND_QUERY leads with it and is asked first.
 //
-// There is no pin. Settings used to offer Auto / Phone / Tablet, which stored
-// `bgb.layout` and let that outrank the viewport; the card is gone and so is
-// every reader of that key. Nothing removes it on the way past on purpose —
-// once nothing reads it, a leftover value is inert, and anyone who had pinned a
-// tier is released by the next load rather than by a migration that would then
-// have to live here forever. Do not reintroduce a reader without also
-// reintroducing the control that clears it: a stored override with no UI to
-// undo it strands whoever set it.
+// There is no pin. A `bgb.layout` value may still sit in some device's
+// localStorage; nothing reads it, and nothing removes it on purpose — an
+// unread value is inert, and a cleanup would have to live here forever. Do not
+// add a reader without also adding a control that clears it: a stored
+// override with no UI to undo it strands whoever set it.
 
 (function () {
   const BREAKPOINTS = { tablet: 768, wide: 1024 };

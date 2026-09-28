@@ -59,13 +59,13 @@
   }
 
   async function _fetch() {
-    // /collection/status-map is one bounded round trip. This used to read
-    // GET /collection, which costs three UNBOUNDED ones — the whole collection
-    // with a games join, play stats over the viewer's entire visible history
-    // (which grows with their buddies' logging, not just their own), then an
-    // IN-query to hydrate played-not-owned games — and then discarded
-    // everything except the two dicts below. At a 60s fresh window that read
-    // re-fired roughly once a minute of active navigation.
+    // /collection/status-map is one bounded round trip. GET /collection costs
+    // three UNBOUNDED ones — the whole collection with a games join, play
+    // stats over the viewer's entire visible history (which grows with their
+    // buddies' logging, not just their own), then an IN-query to hydrate
+    // played-not-owned games — only for this to discard everything except
+    // the two dicts below, and at a 60s fresh window it would re-fire roughly
+    // once a minute of active navigation.
     let data;
     try {
       data = await window.api.get("/collection/status-map");
@@ -91,9 +91,9 @@
       { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS },
     ).then((r) => {
       // Publish on every resolve, cache hits included. _fetch only runs on a
-      // miss or a background revalidate, so without this a warm cache left the
-      // store's map null and every play card rendered as "status unknown"
-      // until the next network read landed. store.set no-ops when the object
+      // miss or a background revalidate, so without this a warm cache leaves
+      // the store's map null and every play card renders as "status unknown"
+      // until the next network read lands. store.set no-ops when the object
       // identity is unchanged, so a cache hit costs one comparison.
       if (r && r.status) window.store.set("myCollectionMap", r.status);
       return r;
@@ -125,9 +125,9 @@
      * value if that write fails. It is deliberately state-only: the error
      * surface belongs to the screen the user is looking at, not here.
      *
-     * Three call sites had spelled this out by hand — the status sheet, the
-     * add-game modal and the Add Games page — which is exactly the drift
-     * .claude/rules/ui-object-design.md §4 says to extract at instance #2.
+     * Shared by the status sheet, the add-game modal and the Add Games page
+     * — the drift .claude/rules/ui-object-design.md §4 says to extract at
+     * instance #2.
      *
      * @param {string} gameId
      * @param {("owned"|"prev_owned"|"wishlist"|"played"|null)} status
