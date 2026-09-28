@@ -23,8 +23,9 @@
       this._failed = false;
       this._mode = "list";   // "list" | "active" | "done"
       this._idx = 0;
-      this._ranked = 0;
+      this._rankedIds = new Set();  // Undo + re-place is one game, not two
       this._skipped = 0;
+      this._lastWrite = Promise.resolve();
       this._seq = 0;
     }
 
@@ -101,7 +102,7 @@
       }
       if (this._mode === "done") {
         return `
-          <p class="rank-queue__done">You ranked ${this._ranked} ${this._ranked === 1 ? "game" : "games"}.${
+          <p class="rank-queue__done">You ranked ${this._rankedIds.size} ${this._rankedIds.size === 1 ? "game" : "games"}.${
             this._skipped ? ` ${this._skipped} skipped ${this._skipped === 1 ? "game stays" : "games stay"} in your queue for next time.` : ""}</p>
           <button class="btn btn-primary rank-queue__cta" type="button"
                   onclick="window.router.up('collection')">Back to your collection</button>`;
@@ -153,12 +154,23 @@
       const item = this._items[this._idx];
       host.innerHTML = window.buddyLoader({ size: 64, label: "Opening…" });
       try {
+        // The previous game saves in the background; in the same category it
+        // has to be in this game's list, or the questions would skip it.
+        await this._lastWrite;
         const ctx = await window.Rank.context(item.game.id);
         if (seq !== this._seq || !this._mounted) return;
+        const next = this._items[this._idx + 1];
         this._flow = new window.RankFlow({
           host,
           context: { ...ctx, rank: null },
-          onDone: () => this._onRanked(),
+          continueLabel: next ? `Next: ${next.game.name}` : "Finish",
+          onContinue: () => this._next(),
+          // Counted when the place is shown, not when its save lands: Continue
+          // can leave before the background write finishes.
+          onStep: (step) => {
+            if (step === "result") this._rankedIds.add(item.game.id);
+            this._paintFoot(step);
+          },
         });
       } catch (_) {
         if (seq !== this._seq || !this._mounted) return;
@@ -170,16 +182,18 @@
       }
     }
 
-    _onRanked() {
-      this._ranked++;
+    // Under the questions: skip THIS game. Under the result (whose Continue
+    // is the Next button): skip the suggested next one.
+    _paintFoot(step) {
       const foot = this.container.querySelector("#rank-queue-foot");
       if (!foot) return;
+      const key = step === "result" ? "next" : "this";
+      if (foot.__skipFor === key) return;
+      foot.__skipFor = key;
       const next = this._items[this._idx + 1];
-      foot.innerHTML = `
-        <button class="btn btn-primary rank-queue__cta" type="button" onclick="window.rankQueueView._next()">
-          ${next ? `Next: ${escapeHtml(next.game.name)}` : "Finish"}
-        </button>
-        ${next ? this._skipHtml(next, 2) : ""}`;
+      foot.innerHTML = key === "this"
+        ? this._skipHtml(this._items[this._idx], 1)
+        : (next ? this._skipHtml(next, 2) : "");
       this.refreshIcons(foot);
     }
 
@@ -200,6 +214,7 @@
     }
 
     _next(step = 1) {
+      if (this._flow) this._lastWrite = this._flow.settled();
       this._idx += step;
       if (this._idx >= this._items.length) this._mode = "done";
       this.render();

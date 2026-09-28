@@ -6,6 +6,7 @@ stacked love → good → not. The writes go through two RPCs so the dense
 positions inside a tier never gain a hole or a collision.
 """
 
+import math
 from typing import Any
 
 from fastapi import HTTPException
@@ -66,7 +67,9 @@ def _score(tier: str, index: int, count: int) -> float:
     hi, lo = _SCORE_BANDS[tier]
     if count <= 1:
         return hi
-    return round(hi - (hi - lo) * index / (count - 1), 1)
+    # Half-up, as Rank.scoreFor rounds in the browser (Python's round() is
+    # half-even), so the result screen never flickers when the save lands.
+    return math.floor((hi - (hi - lo) * index / (count - 1)) * 10 + 0.5) / 10
 
 
 def _entries(rows: list[dict[str, Any]]) -> list[RankEntry]:

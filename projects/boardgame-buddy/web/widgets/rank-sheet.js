@@ -97,8 +97,13 @@
         host,
         tier,
         context: { ...this._ctx, rank: null },
-        onDone: () => this._patch("Ranked", null,
-          `<button class="bgb-sheet__cancel" type="button" data-action="close">Done</button>`),
+        continueLabel: "Done",
+        onContinue: () => this._sheet.close(),
+        onStep: (step) => {
+          const title = step === "result" ? "Ranked" : `${verb} ${escapeHtml(this._game.name)}`;
+          const el = this._sheet.el && this._sheet.el.querySelector("[data-rank-title]");
+          if (el && el.innerHTML !== title) el.innerHTML = title;
+        },
       });
     }
 

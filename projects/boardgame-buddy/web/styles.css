@@ -22098,10 +22098,25 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .rank-flow__error { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 0; text-align: center; color: var(--polaroid-muted); }
 
 .rank-flow__badge {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
   margin: 4px 0 0;
   font-family: var(--font-polaroid); font-weight: 700; font-size: 1.35rem;
   color: var(--polaroid-ink);
 }
+.rank-flow__score { font-size: 1rem; color: var(--polaroid-muted); white-space: nowrap; }
+.rank-flow__score b { font-family: var(--font-score); font-size: 1.35rem; color: var(--accent-ink); }
+/* Only ever holds the failed-save line; empty (and so no gap) otherwise. */
+.rank-flow__save { margin: 0; font-size: 0.85rem; color: var(--rust); text-align: center; }
+.rank-flow__save:empty { display: none; }
+.rank-flow__retry {
+  position: relative; border: 0; background: none; padding: 0 4px;
+  font: inherit; font-weight: 600; color: var(--accent-ink); text-decoration: underline; cursor: pointer;
+}
+.rank-flow__retry::before { content: ""; position: absolute; inset: -14px -8px; }
+.rank-flow__done-actions { display: flex; gap: 8px; }
+.rank-flow__done-actions .btn { min-height: 52px; }
+.rank-flow__undo { flex: none; color: var(--polaroid-ink); }
+.rank-flow__continue { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank-flow__num { font-family: var(--font-score); color: var(--accent-ink); }
 .rank-flow__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .rank-flow__row {

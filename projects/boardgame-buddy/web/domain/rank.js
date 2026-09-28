@@ -39,6 +39,9 @@
     document.dispatchEvent(new CustomEvent("ranks-changed", { detail: { gameId } }));
   }
 
+  // Mirrors rank_service._SCORE_BANDS.
+  const SCORE_BANDS = { love: [10.0, 7.0], good: [6.9, 4.0], not: [3.9, 1.0] };
+
   // A game this high in its category is named by its place; below it, by its
   // rating out of 10 (the server's `score`), since "#14 Family" says little.
   const TOP_PLACES = 3;
@@ -74,6 +77,17 @@
         () => window.api.get("/ranks"),
         { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS });
       return _byGame(data);
+    }
+
+    /**
+     * The rating the server will give the game at `index` of `count` in its
+     * tier — MUST match rank_service._score (api/routes/services), so the
+     * result screen can show it before the save lands.
+     */
+    static scoreFor(tier, index, count) {
+      const [hi, lo] = SCORE_BANDS[tier] || SCORE_BANDS.good;
+      if (count <= 1) return hi;
+      return Math.round((hi - (hi - lo) * index / (count - 1)) * 10) / 10;
     }
 
     /** Synchronous peek for a first-frame paint; null when nothing is cached.
