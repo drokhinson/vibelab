@@ -18,26 +18,25 @@ Flow:
   5. The FE polls GET /bgg/sync/status until pending_count hits zero, and uses
      auth_state to decide between "Link", "Re-link required", and "Linked".
 
-THE PLAYS HALF IS A COUNT, NOT A WRITE. This module used to insert BGG plays
-into boardgamebuddy_plays directly — the one importer in the app that wrote
-plays nobody had reviewed, with the migration-023 roster rules re-implemented
-in _player_rows rather than enforced by bgb_log_play. Plays come in through the
-play importer now (POST /bgg/plays/pending → the wizard → POST /plays/import).
-What survives here is the read: the sync counts what BgB is missing so its done
+THE PLAYS HALF IS A COUNT, NOT A WRITE. This module does not insert BGG plays:
+plays come in through the play importer (POST /bgg/plays/pending → the wizard →
+POST /plays/import), reviewed, with the migration-023 roster rules enforced by
+bgb_log_play. What lives here is the read: the sync counts what BgB is missing so its done
 screen can offer "Import N plays", and parks the read it took
 (services/bgg_plays_cache.py) so the importer does not repeat it.
 
 Two consequences worth knowing:
 
-  * NOTHING QUEUES A kind='play' PENDING ROW ANY MORE. _materialize_plays,
-    _materialize_play, _play_row and _player_rows are kept as DRAIN-ONLY, for
-    the rows queued before this change — see the comment on _materialize_plays.
-  * A game that exists only to carry a play is no longer resolved or queued
+  * NOTHING QUEUES A kind='play' PENDING ROW. _materialize_plays,
+    _materialize_play, _play_row and _player_rows are DRAIN-ONLY, for the
+    legacy kind='play' rows still in the queue — see the comment on
+    _materialize_plays.
+  * A game that exists only to carry a play is not resolved or queued
     here. The importer's Games step fetches those on demand, so nobody spends a
     BGG /thing call on a game whose plays they never bring over.
 
 Idempotent: collection rows upsert on (user_id, game_id); plays dedup on
-(user_id, bgg_play_id), now enforced inside bgb_log_play (migration 044).
+(user_id, bgg_play_id), enforced inside bgb_log_play (migration 044).
 Re-running sync is always safe.
 """
 
@@ -63,7 +62,7 @@ from .bgg_client import (
     linked_bgg_username,
     store_user_credentials,
 )
-# The collection read layer lives in its own module now — the BgB->BGG
+# The collection read layer lives in its own module because the BgB->BGG
 # comparison needs the same sweep. See bgg_collection_read for why the
 # (bgg_id, status, private) contract this module keeps is an adapter over a
 # fuller one rather than a widened tuple.
@@ -73,8 +72,8 @@ from .bgg_collection_read import (
     _fetch_collection_batched,
     collection_rows_from_items,
 )
-# The plays read moved out for the same reason the collection read did: a
-# second consumer. POST /bgg/plays/pending shows the plays this counts, and a
+# The plays read lives in its own module for the same reason the collection
+# read does: a second consumer. POST /bgg/plays/pending shows the plays this counts, and a
 # parser with a cheap mode is two parsers that drift.
 from .bgg_plays_read import existing_bgg_play_ids, fetch_all_plays
 from .bgg_credentials import login_to_bgg
@@ -313,7 +312,7 @@ def _player_rows(
     through — it writes the tables directly, in bulk):
 
       • BGG's <players> element is optional and most plays don't carry one, so
-        a straight read of it imported plays with nobody at the table: an empty
+        a straight read of it would import plays with nobody at the table: an empty
         scoreboard on the card, and a play no ghost could ever be claimed off.
         Those get ONE seat, the syncing account — which is not an invention,
         because boardgamebuddy_plays.user_id already says whose play it is and
@@ -372,16 +371,15 @@ def _pending_payload(user_id: str, bgg_id: int, kind: str, payload: dict) -> dic
 
 
 # ── Batched sync writers ─────────────────────────────────────────────────────
-# A first sync used to write one row at a time: one upsert per collection game,
-# and per play a dedup SELECT, an INSERT, then one INSERT per player. A
-# 300-game / 800-play / 4-player account came to roughly 5,100 sequential
-# PostgREST calls in a single request — and because the Supabase client is
-# synchronous, every one of them blocked the worker's event loop for every
-# other user of the backend, not just for the syncing one.
+# Row-at-a-time writes — one upsert per collection game, and per play a dedup
+# SELECT, an INSERT, then one INSERT per player — bring a 300-game / 800-play /
+# 4-player account to roughly 5,100 sequential PostgREST calls in a single
+# request, and because the Supabase client is synchronous, every one of them
+# blocks the worker's event loop for every other user of the backend, not just
+# for the syncing one.
 #
-# These write the same rows in a handful of statements. play_routes'
-# _write_play_players already did exactly this for the log-a-play path; the
-# BGG path simply never got the same treatment.
+# These write the same rows in a handful of statements, the way play_routes'
+# _write_play_players does for the log-a-play path.
 
 # Chunk size for bulk writes and for `in_` filters. PostgREST puts filters in
 # the query string, so an unchunked `in_` over a few thousand ids is a
@@ -425,10 +423,10 @@ def _queue_pending_rows(sb: Client, user_id: str, items: list[tuple]) -> int:
 def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
     """Bulk-insert plays + their players. `items` is [(game_row, play_payload)].
 
-    DRAIN-ONLY SINCE MIGRATION 044. Nothing queues a kind='play' row any more —
+    DRAIN-ONLY (MIGRATION 044). Nothing queues a kind='play' row —
     BoardGameGeek plays come in through the importer, reviewed, via
-    POST /plays/import. This still runs because _process_pending_imports has to
-    finish draining the rows queued before that change, and a queued play the
+    POST /plays/import. This runs because _process_pending_imports has to
+    drain the legacy kind='play' rows still in the queue, and a queued play the
     user was already promised must not be dropped on the floor. Do not delete
     it as dead code; when
 
@@ -442,7 +440,7 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
     play — shared with the importer's preview as
     bgg_plays_read.existing_bgg_play_ids, so the two cannot disagree about what
     "already here" means. Rows the account already has are skipped without
-    touching their players, exactly as the per-play path did.
+    touching their players, exactly as the single-row path does.
 
     Plays with no bgg_play_id can't be matched back to their inserted id by
     key, so they fall through to the single-row path. BGG always supplies one,
@@ -553,8 +551,7 @@ async def _process_pending_imports(user_id: str) -> None:
 
             # Materialize the whole group in bulk first. A single unimported
             # game can carry dozens of pending play rows — one per logged play
-            # — and writing those one at a time is the same N+1 the first-sync
-            # path had. On any failure we fall back to the per-row loop below,
+            # — and writing those one at a time is an N+1. On any failure we fall back to the per-row loop below,
             # so one bad row still fails alone instead of failing its group.
             group_done = False
             try:
@@ -688,7 +685,7 @@ async def _run_sync(
         bgg_plays_cache.store(user_id, fetched_at=plays_read_at, plays=play_rows)
 
     # Resolve known bgg_ids for the COLLECTION only. A game that exists solely
-    # to carry a play is no longer this sync's problem: the importer's Games
+    # to carry a play is not this sync's problem: the importer's Games
     # step fetches those on demand, so nobody pays for a /thing call on a game
     # whose plays they never bring over.
     known = await asyncio.to_thread(
@@ -696,8 +693,7 @@ async def _run_sync(
     )
 
     # Sort each row into "we know this game" or "queue it for the worker",
-    # then write each bucket in bulk. The per-row loop this replaces cost one
-    # round trip per collection game.
+    # then write each bucket in bulk.
     coll_known: list[tuple] = []
     pending: list[tuple] = []
     for bgg_id, status, private in collection_rows:
@@ -707,8 +703,8 @@ async def _run_sync(
         else:
             pending.append((bgg_id, "collection", {"status": status, "private": private}))
 
-    # Counts stay row-based, not statement-based, so the summary the FE renders
-    # means the same thing it did before.
+    # Counts are row-based, not statement-based: the summary the FE renders
+    # counts games, not writes.
     coll_imported = len(coll_known)
     coll_pending = len(pending)
 
@@ -720,7 +716,7 @@ async def _run_sync(
 
     # The plays half is a COUNT. One batched read against the partial UNIQUE on
     # (user_id, bgg_play_id), which is the only column that can see every
-    # writer at once — the retired sync path, the pending-imports worker still
+    # writer at once — legacy sync-written plays, the pending-imports worker
     # draining kind='play' rows, and the importer.
     if play_rows:
         already = await asyncio.to_thread(
@@ -852,10 +848,9 @@ async def get_sync_status(
     sb = get_supabase()
 
     # Single RPC (migration 039) — this endpoint is POLLED by the FE for the
-    # whole duration of an import and previously cost up to 7 round trips
-    # per poll (profile + two counts + last-done + session roll-up + name
-    # resolution). The SQL mirrors the old per-bgg_id precedence exactly
-    # (pending wins over error wins over done).
+    # whole duration of an import, so the profile, two counts, last-done,
+    # session roll-up and name resolution are one round trip per poll.
+    # Per-bgg_id precedence: pending wins over error wins over done.
     data = (
         sb.rpc("bgb_bgg_sync_status", {"p_user": user.user_id})
         .execute()

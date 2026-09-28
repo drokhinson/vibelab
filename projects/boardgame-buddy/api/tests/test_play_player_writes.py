@@ -6,19 +6,19 @@ timestamp it was first seated at, or a typo fix in the notes would notify all
 five players that they had just been added to a play they have been in for two
 years.
 
-That carry-over is per seat, which used to mean the key was PRESENT on the rows
-that had one and ABSENT on the rows that didn't — a ghost, or a player just
-added. PostgREST writes a bulk insert as one statement over the union of the
-keys it was handed, so the absent ones were sent an explicit NULL instead of
-falling through to the column default, and `linked_at` is `DEFAULT now() NOT
-NULL` (migration 008):
+That carry-over is per seat, which tempts the key onto the rows that have one
+and off the rows that don't — a ghost, or a player just added. PostgREST
+writes a bulk insert as one statement over the union of the keys it was
+handed, so the absent ones are sent an explicit NULL instead of falling
+through to the column default, and `linked_at` is `DEFAULT now() NOT NULL`
+(migration 008):
 
     null value in column "linked_at" of relation "boardgamebuddy_play_players"
     violates not-null constraint
     Failing row contains (…, f, null, null, Sean D, [null, null, null], null).
 
 i.e. a 500 on every edit of a play that seats a ghost, once the host's own seat
-had a timestamp to carry. It is a class of bug no single-row test can see and
+has a timestamp to carry. It is a class of bug no single-row test can see and
 the type checker cannot see at all — the rows are plain dicts, and each one is
 individually valid. What makes it visible is asserting on the KEY SETS of the
 batch, which is what this file does.

@@ -11,13 +11,12 @@ light one dot is the wrong price, and having the frontend derive counts by
 fetching the list endpoints would be worse still — those return full
 GameSummary rows (hundreds of them, mid-backfill) to arrive at an integer.
 
-Three counts now, not five: the description, stats and publisher queues became
-one metadata queue in migration 045, and collapsing them fixed an over-count as
-well as a round trip — a game missing both its blurb and its year used to be
-counted twice, so the gear's dot reported more work than existed.
+Four counts. The description, stats and publisher gaps share one metadata
+queue (migration 045), which saves round trips and keeps the count honest — a
+game missing both its blurb and its year counts once, so the gear's dot never
+reports more work than exists.
 
-Four since migration 052, which added the rulebook-link queue. That one is
-worth reading differently from the other three: the catalog backfills are work
+The rulebook-link queue (migration 052) is worth reading differently from the other three: the catalog backfills are work
 that can wait, where a pending rulebook link is an unreviewed outbound link that
 readers can already follow.
 """
@@ -63,7 +62,7 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
     # NULL publishers, not '{}': a game BGG credits to nobody has been answered
     # and has nothing left for an admin to do.
     #
-    # ONE query where there were three, and deliberately NOT the backfill's
+    # ONE query, and deliberately NOT the backfill's
     # queue predicate. This counts rows that are still INCOMPLETE — including
     # ones BoardGameGeek has nothing more to give, which stay listed in the
     # panel on purpose — so it is not expected to reach zero. The queue that
@@ -93,7 +92,7 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
     # status filter alone would quietly start counting prose the day that
     # changes.
     #
-    # PENDING only, which since migration 053 is narrower than "unreviewed":
+    # PENDING only, which is narrower than "unreviewed" (migration 053):
     # an `unlisted` link is equally unreviewed and equally live for its
     # author's buddies, and is nobody's work — its author asked for nothing.
     # Counting those would put a number on this badge that no amount of

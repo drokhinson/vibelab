@@ -23,7 +23,7 @@ GET /bootstrap/game-bundles is the deferred one — one bgb_game_detail_bundle
 per owned game. That's an N+1 in SQL (up to 250 invocations, ~5 statements
 each) and nothing on the first screen reads it, so the FE pulls it from an idle
 callback after the user has already landed. Game Detail falls back to its own
-fetch on a miss, so a slow or failed warm-up degrades to the old behavior.
+fetch on a miss, so a slow or failed warm-up degrades to a per-page fetch.
 
 The FE writes each block straight into the appropriate cache namespace and runs
 the entire app off that cache until SWR background-refresh kicks in.
@@ -93,9 +93,9 @@ async def get_bootstrap(
     # so calling them inline would serialize the round trips *and* block the
     # event loop for every other in-flight request. to_thread + gather makes
     # the wall time the slowest single block instead of the sum — which is why
-    # the buddies / ghosts / played-with trio was worth folding into one RPC
-    # (migration 047): at five sequential queries it WAS the slowest block, so
-    # it alone set this endpoint's floor.
+    # the buddies / ghosts / played-with trio is one RPC (migration 047): as
+    # five sequential queries it would be the slowest block, and alone set this
+    # endpoint's floor.
     #
     # max_game_bundles=0 tells bgb_bootstrap to skip the per-owned-game N+1;
     # /bootstrap/game-bundles below serves that separately.
@@ -105,14 +105,14 @@ async def get_bootstrap(
     # keeping a second copy of the body from drifting. Here it costs one more
     # parallel call, and the gather's wall time is its slowest member.
     #
-    # It fetches the whole first PAGE, not just the unread integer it used to.
-    # The count alone lit the bell's dot and then left the screen behind the dot
+    # It fetches the whole first PAGE, not just the unread integer. The count
+    # alone would light the bell's dot and then leave the screen behind the dot
     # to fetch itself from scratch on first open — a cold round trip on the one
     # screen the user was just told had something waiting. The page costs
     # nothing extra here: list_notifications runs its two reads concurrently and
     # the unread count is one of them, so this member's wall time is what the
-    # count alone already cost. `notifications_unread` is still emitted below,
-    # unchanged, because an older frontend reads that key and nothing else.
+    # count alone already cost. `notifications_unread` is still emitted below
+    # because an older frontend reads that key and nothing else.
     #
     # release_notices_unseen rides this gather for the same reason the
     # notifications block does — bgb_bootstrap is 542 lines and adding to it
@@ -139,9 +139,7 @@ async def get_bootstrap(
         ),
         # Already a coroutine that gathers its own three blocks in worker
         # threads, so it joins this gather directly rather than being wrapped —
-        # same shape as list_notifications below. It was the slowest member here
-        # precisely because those blocks used to run one after another inside
-        # this single to_thread.
+        # same shape as list_notifications below.
         feed_service.build_feed_page(sb, viewer, cursor=None, limit=20),
         asyncio.to_thread(game_service.recently_played, sb, viewer, limit=6),
         asyncio.to_thread(played_with_service.fetch_play_partners, sb, viewer),

@@ -18,9 +18,9 @@ sweep, and 409s while an import is in flight (and vice versa) because both
 workers drive the same BGG session.
 
 A push whose comparison the server no longer holds falls back to sweeping
-again, which is what both syncs used to do unconditionally: the same forty
-seconds of BoardGameGeek reads the check had just finished, charged to the user
-a second time for pressing a button on the answer.
+again. Only then: otherwise it is the same forty seconds of BoardGameGeek reads
+the check had just finished, charged to the user a second time for pressing a
+button on the answer.
 """
 
 import asyncio
@@ -184,7 +184,7 @@ async def check_bgg(
         progress.finish()
 
         # Park it for whichever direction the user picks next. Everything the
-        # two syncs used to re-derive is in here — the plan for the push, the
+        # two syncs would otherwise re-derive is in here — the plan for the push, the
         # sweep it was built from for the import — and both are minutes-fresh
         # reads of an account that took forty seconds to read once.
         checked_at = datetime.now(timezone.utc)
@@ -243,9 +243,9 @@ async def push_bgg(
     # The plan the user reviewed, when the server still holds it and the client
     # can name it. NOT the client's list — the client sends a timestamp and
     # gets back the server's own stored plan or nothing, so it still cannot
-    # dictate a single write. That was always the property worth defending; the
-    # forty-second re-sweep was just the crudest way to get it, and it charged
-    # the user the entire comparison a second time for a comparison they were
+    # dictate a single write. That is the property worth defending; a
+    # forty-second re-sweep would be the crudest way to get it, charging the
+    # user the entire comparison a second time for a comparison they were
     # looking at when they pressed the button.
     plan = bgg_check_cache.pop_plan(user.user_id, checked_at=body.checked_at)
     reused = plan is not None
@@ -254,9 +254,9 @@ async def push_bgg(
         # No stored comparison, or not the one they reviewed. Sweep.
         #
         # Reported under kind="push_plan" so the progress screen can narrate
-        # this sweep too: it is the same 10-40 seconds as a check, and it used
-        # to be a completely blank wait between "Push" and the first queue
-        # count.
+        # this sweep too: it is the same 10-40 seconds as a check, and would
+        # otherwise be a completely blank wait between "Push" and the first
+        # queue count.
         progress = bgg_progress.BggCheckProgress(user.user_id, kind="push_plan")
         try:
             plan = await build_plan(sb, user.user_id, username, progress=progress)

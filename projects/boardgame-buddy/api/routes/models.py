@@ -101,16 +101,14 @@ CountryCode = Annotated[str, AfterValidator(_normalize_country)]
 class BackfillPassResponse(BaseModel):
     """Outcome of ONE PASS of an admin catalog backfill.
 
-    One model for both of them (images and metadata) because it was always one
-    shape: they had a `RefreshImagesResponse` and a `RefreshDescriptionsResponse`
-    with the same three fields, and the former's docstring said so.
+    One model for both of them (images and metadata) because they are one
+    shape: the same three fields.
 
     A pass is bounded server-side so it fits inside the platform's request
     timeout, so one call is usually NOT the whole catalog. `remaining` is how
     many rows the run still has work to do on, and the browser keeps asking
     until it reads 0 — a pass that cannot produce a falsy `remaining` is a
-    drain that never ends, which is the bug that left the image re-host running
-    exactly once.
+    drain that never ends.
 
     `failed` counts rows in batches that errored out. The loop swallows those
     so one bad chunk cannot abort a fifty-chunk run, which otherwise leaves an
@@ -136,9 +134,9 @@ class AdminReviewCounts(BaseModel):
     # Catalog games short of anything one /thing?stats=1 read would give them —
     # a description, BGG stats, publisher credits, or a year (migration 046).
     #
-    # ONE field where there were three. They were three counts of three
-    # overlapping queues, so a game missing both its blurb and its year was
-    # counted twice and the gear's dot over-reported. It is also deliberately
+    # ONE field, not one per gap: separate counts of overlapping queues would
+    # count a game missing both its blurb and its year twice and over-report
+    # the gear's dot. It is also deliberately
     # NOT the backfill's queue predicate: this counts rows that are still
     # incomplete, including ones BoardGameGeek has nothing more to give, so it
     # is not expected to reach zero. The queue that has to terminate is
@@ -183,7 +181,7 @@ class ScoringGrid(BaseModel):
 
     `v` is here from the start so the document is migratable later (a subtotal
     row kind, a per-row cap): free to add now, impossible to retrofit. `mode`
-    (migration 032) is that extension point being used for the first time.
+    (migration 032) is that extension point in use.
     """
 
     v: int = 1
@@ -264,8 +262,8 @@ class PlayScoringTemplate(ScoringGrid):
     the part that supplied the leading rows — the base game's grid, or the
     replace-mode expansion grid standing in for it — and `parts` lists every
     contributor in row order. A single-grid template leaves `parts` None rather
-    than writing a one-element list, so the common case reads exactly as it did
-    before migration 032.
+    than writing a one-element list, so the common case reads as a plain
+    single-grid snapshot.
 
     The inherited MAX_SCORING_TEMPLATE_ROWS ceiling still applies to a
     composed template: composition is capped at the same number where it
@@ -365,13 +363,9 @@ class BggSyncSummary(BaseModel):
     pending count the background worker will drain after importing the missing
     games from BGG.
 
-    Plays are DETECTED here and imported elsewhere. This endpoint used to write
-    them too; they go through the play importer now (POST /bgg/plays/pending →
-    the wizard → POST /plays/import), so that nothing reaches
-    boardgamebuddy_plays the user has not reviewed. The fields below were
-    `plays_imported` / `plays_pending` and were RENAMED rather than left at
-    zero: a count that silently means something else is the quietly-wrong
-    number this whole change is about.
+    Plays are DETECTED here and imported elsewhere: they go through the play
+    importer (POST /bgg/plays/pending → the wizard → POST /plays/import), so
+    that nothing reaches boardgamebuddy_plays the user has not reviewed.
     """
     bgg_username: str
     collection_imported: int
@@ -386,8 +380,8 @@ class BggSyncSummary(BaseModel):
     # would hide the importer hand-off from an account with hundreds waiting.
     plays_read_failed: bool = False
     # Count of distinct BGG game ids queued by this sync (one BGG /thing call
-    # per id). Drives the "Importing X of Y" progress bar. Collection-only
-    # since plays stopped being written here — a game that exists solely to
+    # per id). Drives the "Importing X of Y" progress bar. Collection-only:
+    # a game that exists solely to
     # carry a play is the importer's to fetch, on demand, in its Games step.
     unique_games_to_import: int = 0
     # True when BGG kept returning "still preparing" for every batch and the
@@ -400,8 +394,8 @@ class BggSyncStatus(BaseModel):
     """Result of GET /bgg/sync/status. Used by the FE to poll progress."""
     bgg_username: str | None = None
     auth_state: BggAuthState = BggAuthState.UNLINKED
-    # Lifetime row counters in boardgamebuddy_bgg_pending_imports. Kept for
-    # back-compat with the existing settings header copy.
+    # Lifetime row counters in boardgamebuddy_bgg_pending_imports, read by the
+    # settings header copy.
     pending_count: int = 0
     errored_count: int = 0
     last_completed_at: datetime | None = None
@@ -421,8 +415,8 @@ class BggSyncStatus(BaseModel):
     # The catalog fill a POST /bgg/check kicked off, anchored separately on
     # profiles.bgg_last_check_started_at (migration 006). A check queues
     # kind='catalog' rows into the same table an import uses, so without their
-    # own window they were counted as part of the last import — which made a
-    # finished import read as unfinished, and made this poll exit instantly for
+    # own window they would count as part of the last import — making a
+    # finished import read as unfinished, and this poll exit instantly for
     # anyone who had never synced.
     catalog_session_started_at: datetime | None = None
     catalog_session_total: int = 0
@@ -926,8 +920,8 @@ class CollectionPageResponse(BaseModel):
 class CollectionStatusMapResponse(BaseModel):
     """The two small dicts the web client actually needs from a collection read.
 
-    A flat collection read used to cost three unbounded round trips to produce
-    these; the only consumer read four fields off it and discarded the rest.
+    A flat collection read would cost three unbounded round trips to produce
+    these, and the only consumer reads four fields off it.
     """
 
     # game_id (UUID string) -> "owned" | "wishlist" | "played" | "prev_owned"
@@ -973,7 +967,7 @@ class PlayerEntry(BaseModel):
     # Real-account player id. Populated when the FE picks this player from
     # the user's accepted-buddy list; None for free-text ghost players.
     # Backend uses it to populate play_players.player_user_id (migration 009)
-    # so the new feed RPC can resolve the winner's display name.
+    # so the feed RPC can resolve the winner's display name.
     user_id: str | None = None
     # Per-round score breakdown (migration 028). Only sent when more than
     # one round was tracked — the FE drops it for ≤1-round plays so the
@@ -1006,8 +1000,8 @@ class PlayerEntry(BaseModel):
         A play whose total disagrees with the rounds printed underneath it is
         the single most confidence-destroying thing this app can show, and the
         client is not the place to guarantee it: a dropped realtime write, a
-        column left at a stale length, or an older build all used to land a
-        total that its own round_scores didn't add up to. Every write path
+        column left at a stale length, or an older build can each land a
+        total that its own round_scores don't add up to. Every write path
         (POST /plays, PATCH /plays/{id} and the lobby finalize, which dumps
         this model into the RPC payload) goes through here, so the invariant
         holds for all of them. Rounds that came in NULL count as zero — that's
@@ -1015,8 +1009,8 @@ class PlayerEntry(BaseModel):
 
         A breakdown of nothing but NULLs is the exception, and it is not a
         zero: it means rounds were added and never filled in. Summing it to 0
-        stored a scoreline for a play that recorded no result, which then read
-        as a loss in the feed caption and in every win-rate denominator. Leave
+        would store a scoreline for a play that recorded no result, which then
+        reads as a loss in the feed caption and in every win-rate denominator. Leave
         `score` alone there — the client sends NULL for exactly this case.
         """
         if self.round_scores and any(v is not None for v in self.round_scores):
@@ -1080,8 +1074,8 @@ class PlayCreate(BaseModel):
     bga_table_id: int | None = None
     # Migration 044. The BoardGameGeek play this row came from, set ONLY by the
     # importer's BoardGameGeek source. It is a second idempotency key beside
-    # client_key, and the only one that can recognise a play the retired
-    # POST /bgg/sync write path already landed — those rows carry a
+    # client_key, and the only one that can recognise a play written by
+    # POST /bgg/sync's legacy write path — those rows carry a
     # bgg_play_id and no client_key, so nothing derived from the wizard's own
     # draft ids could ever match them. bgb_log_play pre-checks it and the
     # partial UNIQUE on (user_id, bgg_play_id) backs the check up.
@@ -1100,18 +1094,17 @@ def validated_roster(players: list[PlayerEntry]) -> list[PlayerEntry]:
     anonymous row on the scoreboard; those are dropped rather than rejected,
     matching bgb_log_play, because a trailing empty row is a form artifact and
     not something the user did. What IS rejected is a roster with nothing left
-    in it — every play has somebody at the table, and the three importers each
-    wrote plays that had nobody until 023.
+    in it — every play has somebody at the table.
 
     ONE ACCOUNT, ONE SEAT. Two spellings of one buddy is the thing the notes
     importer's Players step exists to resolve; if it resolves them to the same
-    account they are one seat, not two, and a play seating Jasmine twice — once
-    winning — is what shipped before. The unique index added by 023 is the
-    backstop; this is the readable error.
+    account they are one seat, not two — never a play seating Jasmine twice,
+    once winning. The unique index from 023 is the backstop; this is the
+    readable error.
 
     Ghost seats are deliberately not deduped: two Daves at one table is a real
     roster, and the place to notice that two spellings meant one person is the
-    mapping step, which now collapses them before the write.
+    mapping step, which collapses them before the write.
     """
     seated = [p for p in players if (p.user_id or (p.name or "").strip())]
     if not seated:
@@ -1130,8 +1123,8 @@ class PlayUpdate(BaseModel):
     # not be able to move a play by leaving the field out.
     #
     # Supplying a DIFFERENT id pivots the play: the commonest edit on this
-    # surface is "I logged the wrong game", and before this the only way to say
-    # it was to delete the play and re-enter the table, the scores and the
+    # surface is "I logged the wrong game", and without it the only way to say
+    # it would be to delete the play and re-enter the table, the scores and the
     # photo. The per-player scores come with it — a score is a number somebody
     # got at a table, not a property of the box — while the two things that
     # genuinely belonged to the old game do not. See _update_play_sync.
@@ -1161,7 +1154,7 @@ class PlayUpdate(BaseModel):
         seat and re-inserts the body's — so bgb_log_play never sees it. Raising
         here rejects the request BEFORE the delete, which is the whole point: a
         roster refused halfway through would leave the play with no seats at
-        all, which is the bug this is here to prevent.
+        all, which is what this is here to prevent.
 
         PlayCreate deliberately has no such validator. Every path that builds
         one ends at bgb_log_play, which checks the same two things and answers
@@ -1179,9 +1172,8 @@ class PlayPhotoResponse(BaseModel):
 class PlayPhotoAttach(BaseModel):
     """Body for PATCH /plays/{id}/photo — the one field, on its own.
 
-    Attaching a photo used to go through PlayUpdate, which is a *full
-    replacement*: it deletes and re-inserts every player and expansion row
-    to write one column. PlayUpdate can't express a partial edit (played_at
+    Attaching a photo through PlayUpdate, which is a *full replacement*, would
+    delete and re-insert every player and expansion row to write one column. PlayUpdate can't express a partial edit (played_at
     is required and players defaults to []), hence this dedicated model.
     """
     photo_url: str = Field(..., min_length=1)
@@ -1487,7 +1479,7 @@ class ChapterPoolCountResponse(BaseModel):
     # button; pulling /chapter-pool for it would carry every chapter's full
     # markdown body to render one integer.
     #
-    # Viewer-scoped since migration 033: the caller's own disliked chapters
+    # Viewer-scoped (migration 033): the caller's own disliked chapters
     # are subtracted, because a chapter they have turned down is not one their
     # guide is missing. An anonymous caller gets the unfiltered total.
     total: int = 0
@@ -2117,8 +2109,8 @@ class SessionParticipantResponse(BaseModel):
     # were never named — which is also every row written before that migration,
     # so the default is what keeps an old session valid. This is the only way a
     # spectator learns the pairings: their mirror holds no local draft, and
-    # until it existed a team night looked like six identical columns to
-    # everyone but the host.
+    # without it a team night looks like six identical columns to everyone
+    # but the host.
     team: str | None = None
 
 
@@ -2387,9 +2379,8 @@ class FeedPlayCard(BaseModel):
     # ui/play-card.js renders as a stack rather than a polaroid.
     group_count: int = 1
     # The run's id (migration 007), so the card can act on what it represents —
-    # the run sheet deletes by this. None for every ordinary play; 005 returned
-    # the count without it, which let the feed say "58 plays" and do nothing
-    # about them.
+    # the run sheet deletes by this. None for every ordinary play; the count
+    # without it would let the feed say "58 plays" and do nothing about them.
     import_group_id: str | None = None
     # The paste this play came from (migration 007, on the feed payload since
     # 022), or None for a live log. The feed groups imported plays by
@@ -2401,9 +2392,10 @@ class FeedPlayCard(BaseModel):
     import_batch_id: str | None = None
     # ── Migration 015 — the whole play, so the card's other two faces are free.
     #
-    # The front paints from the fields above; the back and the detail popup each
-    # used to call GET /plays/{id} on open, which cost a spinner on every first
-    # flip and fetched the same row twice when a user flipped and then maximised.
+    # The front paints from the fields above; the back and the detail popup
+    # paint from these rather than calling GET /plays/{id} on open, which would
+    # cost a spinner on every first flip and fetch the same row twice when a
+    # user flipped and then maximised.
     #
     # `players` is the full, UNFILTERED scorecard — every seat including ghosts,
     # with score and round_scores — and is deliberately NOT a replacement for
@@ -2424,10 +2416,10 @@ class FeedPlayCard(BaseModel):
     # off this card, and without the template that first paint gets the round
     # grid wrong — no Rounds section at all on a single-round play, generic
     # R1..Rn labels on a multi-round one — so the confirming render after
-    # GET /plays/{id} had to repaint the whole card.
+    # GET /plays/{id} would have to repaint the whole card.
     #
     # Defaults to None so a database still on the pre-031 RPC serves cards
-    # without it, exactly as today, rather than erroring.
+    # without it rather than erroring.
     scoring_template: PlayScoringTemplate | None = None
     # ── Migration 016 — the "Good game" reaction.
     #
@@ -2673,7 +2665,7 @@ class OnboardingSuggestionsResponse(SuggestedBuddiesResponse):
 class GameBundlesResponse(BaseModel):
     """Deferred second stage of the boot warm-up.
 
-    Split out of /bootstrap because building these is an N+1 in SQL (one
+    Separate from /bootstrap because building these is an N+1 in SQL (one
     bgb_game_detail_bundle per owned game) and nothing on the first screen
     reads them — only Game Detail does, and it falls back to its own fetch.
     """

@@ -169,8 +169,8 @@ def _load_base_game(base_id: str) -> dict:
 
 
 # Whole-request ceiling on the popularity lookup. fetch_owner_counts issues up
-# to six sequential 20s batches; without a budget a slow BGG turns a popup that
-# used to open instantly into a two-minute stall. On timeout the candidates keep
+# to six sequential 20s batches; without a budget a slow BGG turns the popup
+# into a two-minute stall. On timeout the candidates keep
 # whatever counts arrived and the rest sort alphabetically.
 _OWNER_COUNT_BUDGET_S = 12.0
 
@@ -270,7 +270,7 @@ async def list_available_expansions(
     # Known counts first, most-owned down; unknown counts alphabetically after
     # them. `bgg_owned is None` sorts False(0) before True(1), so a partial
     # lookup still ranks what it knows instead of discarding it, and a total
-    # failure degrades to exactly the old alphabetical order.
+    # failure degrades to plain alphabetical order.
     results.sort(key=lambda c: (c.bgg_owned is None, -(c.bgg_owned or 0), c.name.lower()))
     return results
 

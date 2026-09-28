@@ -99,9 +99,9 @@ class BggRefusedError(HTTPException):
     by logging in again and retrying once. `login_to_bgg` only returns when BGG
     hands back a SessionID — a wrong password is a 400 raised in there, never
     here — so by the time the retry also comes back 401/403, the stored
-    password has just been PROVEN correct. This used to raise "BoardGameGeek
-    rejected the stored password" at that exact point and send the user off to
-    re-link credentials that were never the problem.
+    password has just been PROVEN correct. Reporting a rejected password at
+    that point would send the user off to re-link credentials that were never
+    the problem.
 
     What is actually happening is the layer in front of the app: BGG's web
     endpoints are behind Cloudflare, which screens POSTs and answers a request
@@ -649,7 +649,7 @@ def _load_profile_session(sb: Client, user_id: str) -> dict:
     """Read the linked username + stored session cookies + encrypted password.
 
     Raises 409 ("BGG re-link required") for users with no encrypted password
-    (legacy public-only links from before per-user auth was added).
+    (legacy public-only links, made without a password).
     """
     res = (
         sb.table("boardgamebuddy_profiles")
@@ -742,8 +742,8 @@ async def _run_as_user(
 
     `signed_out` is how a caller says "this 200 is a logged-out response".
     xmlapi2 answers a dead session with a 401; the web app answers one with a
-    200 carrying its login form, and without this hook that reached the user as
-    a re-link prompt for a password that only needed re-using.
+    200 carrying its login form, and without this hook that would reach the
+    user as a re-link prompt for a password that only needed re-using.
 
     Only httpx.HTTPError is caught. BggWarmUpError is an HTTPException and must
     keep escaping to _fetch_collection_batched, which handles it per batch.
@@ -799,8 +799,8 @@ async def _run_as_user(
             detail="BoardGameGeek is temporarily unreachable. Try again in a moment.",
         )
     if _rejected(resp):
-        # NOT a credential problem, and saying it was is how eighteen games got
-        # told to re-link a password that had just worked. `login_to_bgg`
+        # NOT a credential problem, and saying it was would tell the user to
+        # re-link a password that had just worked. `login_to_bgg`
         # returns only when BGG issues a SessionID; a wrong password raises a
         # 400 in there and never reaches this line. Getting here means the
         # password authenticated and the request was refused anyway.
@@ -867,8 +867,7 @@ async def fetch_bgg_as_user(
                     record.attach_response(resp)
                     return resp
 
-            # Warm-up retries sit INSIDE the auth retry, preserving the original
-            # nesting: a placeholder response is retried before we ever consider
+            # Warm-up retries sit INSIDE the auth retry: a placeholder response is retried before we ever consider
             # the session dead, and the post-re-login attempt gets the same
             # treatment.
             return await _fetch_with_warmup_retry(
@@ -906,8 +905,7 @@ def _web_headers(username: str) -> dict[str, str]:
     something calling itself "vibelab-boardgame-buddy/1.0", with no Origin and
     no fetch metadata, is the exact shape their POST screening answers with a
     403 the app never sees. That 403 is indistinguishable from a dead session
-    at the HTTP layer, which is what used to get reported as a rejected
-    password.
+    at the HTTP layer, so it must not be reported as a rejected password.
 
     Nothing here is a claim about who the user is — the cookies do that, and
     they are the user's own, minted from credentials they linked. This is only
@@ -971,7 +969,7 @@ async def post_bgg_form_as_user(
     `signed_out` is that same division applied to auth: the web app answers a
     dead session with a 200 and its login form, and only the caller knows what
     a logged-out body looks like for its endpoint. Passing it buys the one free
-    re-login the GET path has always had.
+    re-login the GET path has.
 
     Logged under api_name="bgg-write", distinct from "bgg" and "bgg-login", so
     writes are isolable in api_logs. The form carries only ids and status

@@ -212,7 +212,7 @@ async def get_profile_bundle(
     Visibility (migration 064): a viewer who is neither the target nor an
     accepted buddy gets `recent_plays`, `together` and `top_games` as null.
     They still get the collection shelves and the stats block — the four
-    headline numbers a public profile has always shown — plus
+    headline numbers a public profile shows — plus
     `recent_plays_total`, which is one of them.
     """
     sb = get_supabase()
@@ -251,10 +251,10 @@ async def delete_profile(
     `created_by`), and the Identity Platform credential last, so a failure
     always leaves a signed-in caller able to retry.
 
-    THE CREDENTIAL IS THE POINT. Deleting only the rows left the account alive
-    at the provider, so signing back in with Google re-created an empty
-    profile and signing up again with the same address answered
-    `auth/email-already-in-use` — a deletion that told the user it had not
+    THE CREDENTIAL IS THE POINT. Deleting only the rows would leave the account
+    alive at the provider, so signing back in with Google would re-create an
+    empty profile and signing up again with the same address would answer
+    `auth/email-already-in-use` — a deletion that tells the user it has not
     happened.
 
     Depends on `get_current_supabase_user` rather than `get_current_user`, and

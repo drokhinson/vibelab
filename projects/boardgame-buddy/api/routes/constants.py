@@ -45,10 +45,9 @@ class FeedbackStatus(StrEnum):
 
 class CollectionStatus(StrEnum):
     OWNED = "owned"
-    # Legacy synthetic shelf — derived from boardgamebuddy_plays, never written
-    # to boardgamebuddy_collections after migration 010. Kept on the enum so
-    # existing /collection endpoints can still serve the "Played" filter while
-    # the new Feed/Profile views replace them.
+    # Synthetic shelf — derived from boardgamebuddy_plays, never written to
+    # boardgamebuddy_collections (migration 010). On the enum so /collection
+    # endpoints can serve the "Played" filter.
     PLAYED = "played"
     WISHLIST = "wishlist"
     # A game the user sold, gifted or donated (migration 069). Persisted, and
@@ -368,8 +367,8 @@ class DiscoverReasonKind(StrEnum):
 class CatalogSort(StrEnum):
     """Row order for GET /games.
 
-    NEWEST is the historical default and stays the default: the Game Explorer
-    and every other paginated catalog caller was built against created_at DESC.
+    NEWEST is the default: the Game Explorer and every other paginated catalog
+    caller expects created_at DESC.
     ALPHABETICAL is what a browse-the-whole-library screen wants — the Add
     Games page scrolls the entire catalog, where import order is noise.
     """
@@ -477,11 +476,10 @@ class RunStepState(StrEnum):
     SKIPPED = "skipped"
 
 
-# The BGG check named these two first and forty-odd call sites plus two
-# response models import them under those names. They were always generic —
-# services/step_progress.py now shares them with the BGA sweep and the admin
-# runs — so they are aliases rather than a rename, which would have been a
-# sweep with no behaviour change at the end of it.
+# Forty-odd call sites plus two response models import these two under the BGG
+# check's names. The types are generic — services/step_progress.py shares them
+# with the BGA sweep and the admin runs — so these are aliases rather than a
+# rename, which would be a sweep with no behaviour change at the end of it.
 BggCheckState = RunState
 BggCheckStepState = RunStepState
 
@@ -528,8 +526,8 @@ class BgaFetchPhase(StrEnum):
 
 # The BGA sweep's own names for the same two vocabularies, kept as aliases for
 # the same reason as BggCheckState above: the sweep's modules and its response
-# model import them by these names, and the values were already identical
-# member for member. A sweep with UNKNOWN still reads as "still working" — see
+# model import them by these names, and the values are identical member for
+# member. A sweep with UNKNOWN still reads as "still working" — see
 # RunState's docstring for why that is the sweep's reading and not the admin
 # runs'.
 BgaFetchState = RunState
@@ -544,18 +542,18 @@ class AdminRunTool(StrEnum):
     a single request, and the two BGG_* are drained in passes by the browser
     (see AdminBackfillPhase).
 
-    BGG_METADATA was three tools — descriptions, stats and publishers — until
-    they became one. They asked BoardGameGeek the SAME question: one
-    /thing?stats=1 response carries the blurb, the four stats, the publisher
-    links and the year, which is what import_game_from_bgg has always done with
-    it. Three tools meant walking the catalog three times to read one document,
-    and a game short of two fields being counted twice by the admin badge.
+    BGG_METADATA is one tool for descriptions, stats and publishers because
+    they ask BoardGameGeek the SAME question: one /thing?stats=1 response
+    carries the blurb, the four stats, the publisher links and the year, which
+    is what import_game_from_bgg does with it. Three tools would walk the
+    catalog three times to read one document, and count a game short of two
+    fields twice on the admin badge.
     Images stays its own tool because it is genuinely different work: one BGG
     call plus two downloads and two uploads per game, which is why its pass is
     a tenth the size.
 
     BGG_IMAGE_LINKS only RECORDS BoardGameGeek's own image URLs (migration 054)
-    for games imported before import started keeping them — one /thing per 20
+    for games whose rows do not hold them yet — one /thing per 20
     games, no downloads — so it is not folded into BGG_IMAGES either.
     """
 
@@ -640,8 +638,8 @@ class PlayMode(StrEnum):
 # game's mechanics array; the first match wins, so COOP entries come before
 # TEAM (a game tagged both Cooperative and Team-Based should play as coop).
 # BGG's XML returns the mechanic as just "Cooperative" / "Team-Based" in
-# practice; the " Game" forms are kept as a defensive fallback in case a
-# historical sync path used the longer wording.
+# practice; the " Game" forms are a defensive fallback in case a stored row
+# carries the longer wording.
 BGG_MECHANIC_TO_MODE: list[tuple[str, PlayMode]] = [
     ("Cooperative", PlayMode.COOP),
     ("Cooperative Game", PlayMode.COOP),
@@ -795,14 +793,12 @@ class ExportDataset(StrEnum):
     they name the CSVs inside the zip, so renaming one is a breaking change to
     a file somebody has already downloaded.
 
-    `profile`, `expansions`, `buddies` and `achievements` were members and are
-    deliberately gone: the profile row is one line the README's own header
-    already states, owned expansions now ride in `collection.csv`, and the
-    other two were checkboxes nobody opens this sheet for. Removing the members
-    rather than leaving them as no-ops is the point — FastAPI validates the
-    query against this enum before the route body reaches the registry, so a
-    stale `?dataset=profile` from an old tab answers 422 instead of blowing up
-    on a missing key. Do not re-add one without a builder behind it.
+    Every member has a builder behind it, and nothing is a member as a no-op:
+    FastAPI validates the query against this enum before the route body
+    reaches the registry, so a stale `?dataset=profile` from an old tab answers
+    422 instead of blowing up on a missing key. Owned expansions ride in
+    `collection.csv`, and the profile row is one line the README's own header
+    already states. Do not add a member without a builder behind it.
     """
 
     COLLECTION = "collection"
@@ -879,8 +875,8 @@ class RulebookStatus(StrEnum):
     UNLISTED = "unlisted"
     # Submitted, waiting for a decision. Visible to exactly who UNLISTED is
     # visible to — its author and their ACCEPTED buddies — and in the queue.
-    # Reached by the author turning review on, whoever they are: as of
-    # migration 053 an admin's own link is not born approved.
+    # Reached by the author turning review on, whoever they are: an admin's
+    # own link is not born approved either (migration 053).
     PENDING = "pending"
     # An admin put their name to it. Visible to everyone, signed in or not.
     APPROVED = "approved"

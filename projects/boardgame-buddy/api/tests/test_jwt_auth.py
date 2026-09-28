@@ -1,9 +1,8 @@
 """The verifier accepts Identity Platform tokens for THIS project, and nothing else.
 
-Was `test_jwt_auth_dual_issuer.py`. The Supabase Auth verifier is gone, so the
-cases that asserted a Supabase token still worked are inverted here: a Supabase
-token is now exactly as unwelcome as a stranger's, and the test that proves it
-is the one that would catch the verifier being quietly re-added.
+There is no Supabase Auth verifier: a Supabase token is exactly as unwelcome
+as a stranger's, and the test that proves it is the one that would catch a
+second verifier being quietly added.
 
 The interesting cases are not "does a good token work":
 
@@ -14,7 +13,7 @@ The interesting cases are not "does a good token work":
     exactly that token and require a 401.
 
   * The accepted algorithm list is RS256 alone. Identity Platform signs with
-    RS256; Supabase signed with ES256. Leaving ES256 in would keep a second
+    RS256; Supabase signs with ES256. Allowing ES256 would keep a second
     algorithm alive for no issuer, which is how algorithm-confusion bugs get
     their foothold.
 
@@ -118,11 +117,11 @@ def test_token_has_no_role_and_that_is_fine():
     assert _verify(_sign(_firebase_claims())).role == ""
 
 
-# --- the issuer that used to work --------------------------------------------
+# --- the Supabase issuer -----------------------------------------------------
 
 def test_a_supabase_token_is_now_rejected():
-    """The removal, asserted. This is the test that fails if the second
-    verifier is ever quietly re-added."""
+    """This is the test that fails if a second verifier is ever quietly
+    added."""
     with pytest.raises(HTTPException) as e:
         _verify(_sign(_supabase_claims()))
     assert e.value.status_code == 401
@@ -159,7 +158,7 @@ def test_token_claiming_another_projects_issuer_is_rejected():
 
 
 def test_an_es256_token_is_rejected():
-    """Supabase signed ES256 and Identity Platform does not. One issuer, one
+    """Supabase signs ES256 and Identity Platform does not. One issuer, one
     algorithm — a spare algorithm is attack surface with no user."""
     token = _sign(_firebase_claims(), key=_EC_KEY, algorithm="ES256")
     with pytest.raises(HTTPException) as e:

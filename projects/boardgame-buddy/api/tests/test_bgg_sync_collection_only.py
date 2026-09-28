@@ -1,19 +1,19 @@
 """POST /bgg/sync writes a collection and counts plays. It writes no plays.
 
-That sentence is the whole change, and it is the kind that rots silently: the
-sync would still look healthy with the play writes back in, and the only
+That sentence is the kind that rots silently: the sync would still look healthy
+with play writes in it, and the only
 symptom would be plays appearing in somebody's log that they were never shown.
 So these tests watch the WRITES rather than the summary — every table the sync
 touches is recorded, and a `boardgamebuddy_plays` insert fails the test.
 
-The rest is the arithmetic that moved with it:
+The rest is the arithmetic that goes with it:
 
-  * `plays_new` counts against bgg_play_id, so a play the retired write path
-    landed is not offered back to the importer.
+  * `plays_new` counts against bgg_play_id, so a play the legacy sync write
+    path landed is not offered back to the importer.
   * A warm-up exhaustion reports `plays_read_failed`, never `plays_new = 0` —
     a done screen that hides the importer hand-off because it could not read
     the history is worse than one that says so.
-  * `unique_games_to_import` is collection-only now. A game that exists purely
+  * `unique_games_to_import` is collection-only. A game that exists purely
     to carry a play is the importer's to fetch on demand, and counting it here
     would promise a worker queue nobody is filling.
   * A successful read is parked for the importer; a failed one never is.
@@ -133,8 +133,8 @@ def test_the_sync_writes_no_plays_and_no_play_players():
 
 
 def test_the_sync_queues_no_kind_play_pending_rows():
-    """Plays for a game the catalog lacks used to become pending imports. The
-    importer's Games step fetches those on demand now."""
+    """Plays for a game the catalog lacks do not become pending imports. The
+    importer's Games step fetches those on demand."""
     store = {"boardgamebuddy_games": []}   # nothing resolves
 
     with pytest.MonkeyPatch.context() as mp:
@@ -158,7 +158,7 @@ def test_the_sync_queues_no_kind_play_pending_rows():
 def test_plays_new_excludes_what_is_already_here():
     store = {
         "boardgamebuddy_games": [{"id": "g-13", "bgg_id": 13, "name": "Catan"}],
-        # No client_key — this is what the retired write path left behind.
+        # No client_key — the shape the legacy sync write path left behind.
         "boardgamebuddy_plays": [{"bgg_play_id": 2, "client_key": None}],
     }
 
