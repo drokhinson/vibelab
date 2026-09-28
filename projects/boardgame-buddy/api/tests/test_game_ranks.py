@@ -168,7 +168,7 @@ def run(coro):
     (_game("1", "up to 4", min_p=2, max_p=4, weight=3), "strategy"),
     (_game("1", "gin rummy", cats=["Card Game"], pubs=["(Public Domain)"],
            min_p=2, max_p=2), "card"),                                       # Card comes first
-    # Co-op, after Card and 2-player.
+    # Co-op, after Card and Dueling.
     (_game("1", "pandemic", family="strategygames", mode="coop", min_p=2, max_p=4), "coop"),
     (_game("1", "duet", mode="coop", min_p=2, max_p=2), "two_player"),
     (_game("1", "coop cards", cats=["Card Game"], pubs=["(Public Domain)"], mode="coop"), "card"),

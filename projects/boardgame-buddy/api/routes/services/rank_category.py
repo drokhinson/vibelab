@@ -15,7 +15,7 @@ played with an ordinary deck, and they group together even where BGG also
 ranks one under Family or Strategy.
 
 Next, a game made for exactly two players (7 Wonders Duel, Patchwork, Jaipur)
-is ranked in 2-player: min and max players both 2. A game that also plays solo
+is ranked in Dueling: min and max players both 2. A game that also plays solo
 or with more is not. It too comes before BGG's families, which would otherwise
 scatter these across Strategy, Family and War; a two-player-only classic card
 game (Gin Rummy) stays in Card.
@@ -23,7 +23,7 @@ game (Gin Rummy) stays in Card.
 Then co-op games (play_mode "coop", derived from BGG's Cooperative mechanic)
 are ranked in Co-op, playing together being a different thing to enjoy from
 playing against each other. A co-op game made for exactly two players stays in
-2-player.
+Dueling.
 """
 
 from typing import Any
@@ -39,7 +39,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "children": "Children's",
     "customizable": "Customizable",
     "card": "Card",
-    "two_player": "2-player",
+    "two_player": "Dueling",
     "coop": "Co-op",
 }
 
