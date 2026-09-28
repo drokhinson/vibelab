@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Travel Scrapbook — current schema snapshot
--- Last updated: 2026-07-17 (through db/migrations/travelscrapbook/016_skipped_outcome.sql)
+-- Last updated: 2026-09-28 (through db/migrations/travelscrapbook/027_fix_function_search_path.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -64,9 +64,10 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_trips (
 -- idx_ts_trips_user (user_id)
 
 -- ⚠ FROZEN (020): checkpoints live in place + scrap + role-bearing
--- scrap_trips membership, and every row here has a membership twin (see
--- migrated_membership_id). NO code reads or writes this table; it is a
--- rollback backup only.
+-- scrap_trips membership. NO code reads or writes this table; it is a
+-- rollback backup only. migrated_membership_id is the scrap_trips row the 020
+-- backfill created (no FK; 026 folded start/end memberships into plans, so for
+-- start/end anchors the id can point at a merged-away row).
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_anchors (
   id                     UUID             PRIMARY KEY DEFAULT gen_random_uuid(),
   trip_id                UUID             NOT NULL REFERENCES public.travelscrapbook_trips(id) ON DELETE CASCADE,
@@ -145,6 +146,8 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_places (
   updated_at           TIMESTAMPTZ      NOT NULL DEFAULT now()
 );
 -- idx_ts_places_user_name (user_id, name_normalized)
+-- idx_travelscrapbook_places_osm (osm_type, osm_id) WHERE osm_id IS NOT NULL  (011: community grouping)
+-- idx_travelscrapbook_places_name_norm (name_normalized)                      (011: community fallback grouping)
 
 -- N sources ↔ N places (one reel mentions many places; one place arrives from
 -- many URLs).
@@ -172,30 +175,19 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_capture_tokens (
 -- notes/rating/visited_at); its membership in each trip lives in
 -- travelscrapbook_scrap_trips (a place can be in many trips at once). It stays on
 -- the Wander List (GET /inbox = visited_at IS NULL) regardless of trips.
--- The five legacy single-trip columns below (trip_id/status/route_position/
--- plan_date/plan_time) are UNUSED (dropped in 014); trip_id's FK is
--- ON DELETE SET NULL so deleting a trip can't delete a place that lives in
--- other trips.
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_scraps (
   id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  trip_id        UUID        REFERENCES public.travelscrapbook_trips(id) ON DELETE SET NULL,  -- LEGACY (013→014)
   user_id        UUID        NOT NULL REFERENCES public.travelscrapbook_profiles(id) ON DELETE CASCADE,
   place_id       UUID        NOT NULL REFERENCES public.travelscrapbook_places(id) ON DELETE CASCADE,
-  status         TEXT        NOT NULL DEFAULT 'inbox'                             -- LEGACY (013→014)
-    CHECK (status IN ('inbox', 'staged', 'approved')),
   notes          TEXT,
   rating         TEXT                                -- owner's own priority (NULL = unrated)
     CHECK (rating IS NULL OR rating IN ('booked', 'must_do', 'interested', 'could_skip')),
   visited_at     TIMESTAMPTZ,                        -- NULL = on the Wander List; set = visited
   skipped_at     TIMESTAMPTZ,                        -- 016: timeline-only "Skipped" outcome (does NOT leave Wander List)
-  route_position INTEGER,                            -- LEGACY (013→014) → scrap_trips.route_position
-  plan_date      DATE,                               -- LEGACY (013→014) → scrap_trips.plan_date
-  plan_time      TIME,                               -- LEGACY (013→014) → scrap_trips.plan_time
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- idx_ts_scraps_trip (trip_id), idx_ts_scraps_user (user_id)
--- idx_ts_scraps_user_status (user_id, status), idx_ts_scraps_place (place_id)
+-- idx_ts_scraps_user (user_id), idx_ts_scraps_place (place_id)
 -- idx_ts_scraps_user_visited (user_id, visited_at)
 
 -- Scrap ↔ trip membership (013): a place's presence on one trip, carrying that
@@ -205,7 +197,7 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scraps (
 -- A membership is either a PLAN (role NULL) or a CHECKPOINT (role
 -- stay|travel). One trip element model: plan_date/plan_time[/plan_end_date] on
 -- both, with role selecting the timeline/route behavior. The trip bundle
--- synthesizes the legacy flat "anchors" array from role-bearing rows. Date
+-- synthesizes its flat "anchors" array from role-bearing (stay/travel) rows. Date
 -- mapping for checkpoints: stay → plan_date=check-in, plan_end_date=check-out;
 -- travel → plan_date(+plan_time)=the marker day/time. Arrival/departure are
 -- role-NULL plans flagged is_arrival/is_departure.
@@ -218,7 +210,7 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_trips (
   role           TEXT                              -- 020: NULL = plan; else checkpoint role
                                                    -- 026: arrival/departure are role-NULL plans
     CHECK (role IS NULL OR role IN ('stay', 'travel')),
-  route_position INTEGER,                          -- plans only (route writes filter role IS NULL)
+  route_position INTEGER,                          -- plans only; no RPC writes it (022: route order is client-side)
   plan_date      DATE,                             -- 026: arrival day for an is_arrival plan
   plan_time      TIME,
   plan_end_date  DATE,                             -- 020: stay check-out (>= plan_date)
@@ -243,7 +235,8 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_trips (
 -- candidates panel from re-suggesting the pair. Survives membership deletion (a
 -- scrap_trips row is hard-deleted on removal). Written on every membership
 -- removal (plan_routes.unassign_scrap / set_scrap_trips); excluded by the
--- candidates query in travelscrapbook_trip_bundle + list_trip_candidates.
+-- candidates query in travelscrapbook_trip_bundle + list_trip_candidates and by
+-- travelscrapbook_trip_suggestions (024/025).
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_trip_dismissals (
   id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   scrap_id   UUID        NOT NULL REFERENCES public.travelscrapbook_scraps(id) ON DELETE CASCADE,
@@ -273,17 +266,15 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_trip_members (
 -- Per-user "Vibe" on a saved place FOR A TRIP — the consensus input. One per
 -- person per membership; booked | must_do | interested | could_skip. It keys
 -- on the membership (scrap_trip_id) so a place in >1 trip has independent
--- consensus per trip. scrap_id is LEGACY (nullable; dropped in 014).
+-- consensus per trip.
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_vibes (
   id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  scrap_id      UUID        REFERENCES public.travelscrapbook_scraps(id) ON DELETE CASCADE,       -- LEGACY (013→014)
-  scrap_trip_id UUID        NOT NULL REFERENCES public.travelscrapbook_scrap_trips(id) ON DELETE CASCADE,
+  scrap_trip_id UUID        NOT NULL REFERENCES public.travelscrapbook_scrap_trips(id) ON DELETE CASCADE,  -- 013
   user_id       UUID        NOT NULL REFERENCES public.travelscrapbook_profiles(id) ON DELETE CASCADE,
   level         TEXT        NOT NULL
     CHECK (level IN ('booked', 'must_do', 'interested', 'could_skip')),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (scrap_trip_id, user_id)
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- idx_ts_scrap_vibes_membership_user (scrap_trip_id, user_id) UNIQUE
+-- idx_ts_scrap_vibes_membership_user UNIQUE (scrap_trip_id, user_id)  (013)
 -- idx_ts_scrap_vibes_membership (scrap_trip_id)
