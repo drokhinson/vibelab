@@ -46,10 +46,9 @@ class FeedbackStatus(StrEnum):
 class CollectionStatus(StrEnum):
     OWNED = "owned"
     # The Played shelf: every game with a play the user can see, derived from
-    # boardgamebuddy_plays, plus the games they marked played without logging
-    # one here — the only 'played' rows written to boardgamebuddy_collections
-    # (migration 057), each with played_before_at stamped. It is never a play:
-    # no play count or stat reads the mark.
+    # boardgamebuddy_plays, plus the games on no shelf that carry the played
+    # mark (migration 057). A 'played' collection row exists only to hold that
+    # mark; it is not a status anyone sets, and the mark is never a play.
     PLAYED = "played"
     WISHLIST = "wishlist"
     # A game the user sold, gifted or donated (migration 069). Persisted, and

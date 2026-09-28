@@ -322,6 +322,23 @@
         this.render();
       });
       this.listenDom("ranks-changed", () => this._loadRanks());
+      // The played mark rides on shelf rows (for Most played) without moving
+      // them between shelves, so it is patched into the held rows rather than
+      // spliced. A mark that does move a game arrives as status-changed too.
+      this.listenDom("played-mark-changed", (e) => {
+        const { gameId, on } = e.detail || {};
+        if (!gameId || this._isOther()) return;
+        for (const m of FLAT_MODES) {
+          const sh = this.ctl.shelf[m];
+          if (!sh || !Array.isArray(sh.items)) continue;
+          const idx = sh.items.findIndex((it) => it.game_id === gameId);
+          if (idx === -1 || !!sh.items[idx].played_before === !!on) continue;
+          const items = sh.items.slice();
+          items[idx] = { ...items[idx], played_before: !!on };
+          this.ctl.shelf[m] = { ...sh, items };
+        }
+        if (this._isPlayedView()) this.render();
+      });
       await this._initFromParams();
       // After the shelf, never before it: ranks decorate the page (a card and
       // a few chips) and are painted from cache in the first frame anyway.
@@ -1074,7 +1091,7 @@
       // it would be YOUR rank on THEIR game. Reads as the game page pill does
       // (Rank.badge): "#2 Family" in the top 3, then "8.6/10".
       const rankChip = other ? ""
-        : plays ? this._playsChipHtml(item.play_count || 0)
+        : plays ? this._playsChipHtml(item)
         : this._rankChipHtml(g.id, rankEntry);
       const stamp = parted
         ? `<div class="collection-tile__stamp" aria-hidden="true">Prev. owned</div>`
@@ -1123,8 +1140,11 @@
       }
     }
 
-    _playsChipHtml(n) {
-      return `<span class="collection-tile__rank">${n} ${n === 1 ? "play" : "plays"}</span>`;
+    /** "12 plays", or "Played" for a played mark with nothing logged. */
+    _playsChipHtml(item) {
+      const n = item.play_count || 0;
+      const text = n > 0 ? `${n} ${n === 1 ? "play" : "plays"}` : "Played";
+      return `<span class="collection-tile__rank">${text}</span>`;
     }
 
     _rankChipHtml(gameId, forced = null) {

@@ -1148,7 +1148,7 @@ GRANT SELECT ON public.boardgamebuddy_bga_player_links TO boardgamebuddy_role;
 -- readers of this file.
 
 COMMENT ON SCHEMA public IS 'standard public schema';
-COMMENT ON COLUMN public.boardgamebuddy_collections.played_before_at IS 'Set when the user hand-marks a game as played somewhere they did not log it: on an owned row from the Shelf of Shame sheet, and on every status ''played'' row (057). Feeds the Shelf of Shame block of bgb_user_stats_detail and the rank queue; it is not a play and must never be counted as one.';
+COMMENT ON COLUMN public.boardgamebuddy_collections.played_before_at IS 'The played mark: set when the user says they played this game somewhere they did not log it. On a row of any status, independent of it; a game on no shelf carries it on a status ''played'' row (057). Read by the Played shelf, the status map''s played_marks, the Shelf of Shame block of bgb_user_stats_detail and the rank queue. It is not a play and must never be counted as one.';
 COMMENT ON TABLE public.boardgamebuddy_countries IS 'ISO 3166-1 alpha-2 → continent, for the location achievements (migration 068). The code set is exactly the one web/domain/geo-data.js can produce, so no country the app can detect or offer is missing a continent.';
 COMMENT ON COLUMN public.boardgamebuddy_play_players.round_scores IS 'Per-round score breakdown as a JSON array of nullable ints, e.g. [5, 8, null, 12]. NULL when no rounds were tracked (<= 1 round). The `score` column still holds the final total for backward compatibility and quick aggregation.';
 COMMENT ON COLUMN public.boardgamebuddy_play_session_participants."position" IS 'Host-assigned column order, 0-based. NULL = never ordered; see bgb_session_bundle''s (position NULLS LAST, joined_at) sort.';

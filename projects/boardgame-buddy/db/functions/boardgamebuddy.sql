@@ -1022,6 +1022,10 @@
 --               (collapsed from archive/040_search_rpc.sql)
 --               db/migrations/boardgamebuddy/041_search_exclude_expansions.sql
 --                 (adds p_include_expansions)
+--   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
+--               (a mark-only 'played' row is not joined, so that game is a
+--                catalog hit with no collection_status, like a game with
+--                only logged plays.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/search_service.py
 --               (_rpc_hits — GET /search, the per-keystroke GameFinder)
 --   Purpose:    One index-backed query for the unified game picker. Catalog
@@ -1273,7 +1277,8 @@
 --               (the 'played' shelf is every game with a visible play
 --                plus the target's 'played' rows, each once; a 'played' row
 --                does not hide a game from it the way a shelf row does. A
---                mark with no play sorts last and takes the row's added_at.)
+--                mark with no play sorts last and takes the row's added_at.
+--                Every item carries `played_before`, the played mark.)
 --               db/migrations/boardgamebuddy/069_prev_owned_status.sql
 --               (p_status='owned' matches the SET ('owned','prev_owned') —
 --                a game you sold is still on your Owned shelf, just dimmed —
@@ -1343,9 +1348,10 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/050_ghost_rpcs_and_status_map.sql)
 --   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
---               (played_marks lists the viewer's 'played' rows — the
---                games marked played without a logged play. status_map says
---                'played' for those and for games with plays alike.)
+--               (played_marks lists every game the viewer marked played
+--                without a logged play, on a row of any status. status_map
+--                alone cannot tell a mark from plays, nor see one on a
+--                shelf row.)
 --               db/migrations/boardgamebuddy/069_prev_owned_status.sql
 --               (status_map carries 'prev_owned'. expansion_counts is
 --                owned-only on purpose — an expansion you sold should not

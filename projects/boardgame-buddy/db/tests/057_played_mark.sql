@@ -1,18 +1,20 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 057_played_mark.sql — a 'played' collection row on the Played shelf
+-- 057_played_mark.sql — the played mark, on the Played shelf and beyond
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY THIS FILE EXISTS. api/tests/test_played_mark.py pins what the API
 -- decides; which games land on the Played shelf is decided in SQL, in three
 -- functions that each widen the same set (bgb_collection_shelf,
--- bgb_collection_page, bgb_profile_bundle), plus the status map's marks. This
--- checks all of them against one fixture:
+-- bgb_collection_page, bgb_profile_bundle), plus the status map's marks, the
+-- shelf items' played_before and search. This checks all of them against one
+-- fixture:
 --
 --   Owned Game          owned, no plays          → Owned shelf only
 --   Logged Game         no row, 2 plays          → Played, 2 plays
 --   Marked Game         'played' row, no plays   → Played, 0 plays, listed last
 --   Marked And Logged   'played' row, 1 play     → Played ONCE, 1 play
 --   Owned And Logged    owned, 1 play            → Owned shelf only
+--   Owned Marked        owned + mark, no plays   → Owned shelf, played_before
 --
 -- SAFE TO RUN ANYWHERE: one transaction ending in ROLLBACK, touching only rows
 -- it inserted under uuids it invented.
@@ -32,6 +34,7 @@ DECLARE
   g3 uuid := 'a0000000-0000-0000-0000-000000000573';  -- Marked Game
   g4 uuid := 'a0000000-0000-0000-0000-000000000574';  -- Marked And Logged
   g5 uuid := 'a0000000-0000-0000-0000-000000000575';  -- Owned And Logged
+  g6 uuid := 'a0000000-0000-0000-0000-000000000576';  -- Owned Marked
   r jsonb;
   v_names text;
 BEGIN
@@ -39,12 +42,13 @@ BEGIN
   VALUES (u, 'played_mark_057', 'Played Mark Test');
   INSERT INTO boardgamebuddy_games (id, name) VALUES
     (g1, 'Owned Game'), (g2, 'Logged Game'), (g3, 'Marked Game'),
-    (g4, 'Marked And Logged'), (g5, 'Owned And Logged');
+    (g4, 'Marked And Logged'), (g5, 'Owned And Logged'), (g6, 'Owned Marked');
   INSERT INTO boardgamebuddy_collections (user_id, game_id, status, game_name, played_before_at) VALUES
     (u, g1, 'owned',  'Owned Game',        NULL),
     (u, g3, 'played', 'Marked Game',       now()),
     (u, g4, 'played', 'Marked And Logged', now()),
-    (u, g5, 'owned',  'Owned And Logged',  NULL);
+    (u, g5, 'owned',  'Owned And Logged',  NULL),
+    (u, g6, 'owned',  'Owned Marked',      now());
   INSERT INTO boardgamebuddy_plays (user_id, game_id, game_name, played_at) VALUES
     (u, g2, 'Logged Game',       '2026-09-01'),
     (u, g2, 'Logged Game',       '2026-09-05'),
@@ -66,9 +70,21 @@ BEGIN
     RAISE EXCEPTION 'marked added_at is not ISO: %', r;
   END IF;
 
-  -- The owned shelf does not see a mark.
+  -- A marked game carries played_before on its shelf item; the others do not.
+  IF (SELECT string_agg(i->'game'->>'name', ', ' ORDER BY i->'game'->>'name')
+        FROM jsonb_array_elements(r->'items') i WHERE (i->>'played_before')::boolean)
+     IS DISTINCT FROM 'Marked And Logged, Marked Game' THEN
+    RAISE EXCEPTION 'played shelf played_before: %', r;
+  END IF;
+
+  -- The owned shelf does not see a 'played' row, and a mark on an owned row
+  -- leaves the game there, flagged.
   r := bgb_collection_shelf(u, u, 'owned');
-  IF (r->>'total')::int <> 2 THEN RAISE EXCEPTION 'shelf owned total: %', r->>'total'; END IF;
+  IF (r->>'total')::int <> 3 THEN RAISE EXCEPTION 'shelf owned total: %', r->>'total'; END IF;
+  IF (SELECT string_agg(i->'game'->>'name', ', ') FROM jsonb_array_elements(r->'items') i
+      WHERE (i->>'played_before')::boolean) IS DISTINCT FROM 'Owned Marked' THEN
+    RAISE EXCEPTION 'owned shelf played_before: %', r;
+  END IF;
 
   -- The paginated grid agrees with the shelf.
   r := bgb_collection_page(u, u, 'played');
@@ -86,17 +102,28 @@ BEGIN
   IF v_names IS DISTINCT FROM 'Logged Game, Marked And Logged, Marked Game' THEN
     RAISE EXCEPTION 'bundle played_page: got %', v_names;
   END IF;
-  IF (r->>'owned_total')::int <> 2 THEN RAISE EXCEPTION 'bundle owned_total: %', r->>'owned_total'; END IF;
+  IF (r->>'owned_total')::int <> 3 THEN RAISE EXCEPTION 'bundle owned_total: %', r->>'owned_total'; END IF;
 
-  -- The status map reads 'played' for plays and marks alike; the marks list
-  -- is what tells them apart.
+  -- The status map reads 'played' for plays and mark-only rows alike, and a
+  -- shelf status for a marked owned game; the marks list is what tells them
+  -- apart, whatever the status.
   r := bgb_collection_status_map(u);
   IF r->'status_map'->>g3::text <> 'played' OR r->'status_map'->>g2::text <> 'played' THEN
     RAISE EXCEPTION 'status map: %', r;
   END IF;
   IF (SELECT array_agg(x ORDER BY x) FROM jsonb_array_elements_text(r->'played_marks') x)
-       IS DISTINCT FROM ARRAY[g3::text, g4::text] THEN
+       IS DISTINCT FROM ARRAY[g3::text, g4::text, g6::text] THEN
     RAISE EXCEPTION 'played_marks: %', r->'played_marks';
+  END IF;
+
+  -- Search: a mark-only game is a catalog hit, exactly like a logged-only one.
+  IF (SELECT row(in_collection, collection_status)::text FROM boardgamebuddy_search_games(u, 'Marked Game', 5) WHERE id = g3)
+     IS DISTINCT FROM
+     (SELECT row(in_collection, collection_status)::text FROM boardgamebuddy_search_games(u, 'Logged Game', 5) WHERE id = g2) THEN
+    RAISE EXCEPTION 'search treats a mark unlike a logged game';
+  END IF;
+  IF (SELECT in_collection FROM boardgamebuddy_search_games(u, 'Marked Game', 5) WHERE id = g3) THEN
+    RAISE EXCEPTION 'search: a mark-only game reads as in the collection';
   END IF;
 
   -- The status CHECK admits 'played' and still refuses a stranger.

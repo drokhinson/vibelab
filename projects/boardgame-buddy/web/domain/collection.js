@@ -112,25 +112,16 @@
     static add(gameId, status) {
       return window.api
         .post("/collection", { game_id: gameId, status })
-        .then((r) => {
-          Collection.invalidateMyStatusMap();
-          // A played mark makes the game rankable (services/rank_service.queue).
-          if (status === "played" && window.Rank) window.Rank.invalidateQueue();
-          return r;
-        });
+        .then((r) => { Collection.invalidateMyStatusMap(); return r; });
     }
 
     // Remove by game UUID — the path the status-tag picker uses to clear
     // a tile's status. DELETE /collection/{game_id} already keys on
-    // (user_id, game_id), so the game UUID is all the backend needs.
+    // (user_id, game_id), so the game UUID is all the backend needs. A marked
+    // game keeps its mark: the server leaves the row as 'played'.
     static removeByGame(gameId) {
       return window.api.del(`/collection/${gameId}`)
-        .then((r) => {
-          Collection.invalidateMyStatusMap();
-          // The row may have been a played mark, which the rank queue offers.
-          if (window.Rank) window.Rank.invalidateQueue();
-          return r;
-        });
+        .then((r) => { Collection.invalidateMyStatusMap(); return r; });
     }
 
     /**
@@ -163,27 +154,49 @@
     }
 
     /**
-     * Mark (or unmark) an owned game as played before the user joined, so a
-     * pre-account favourite can leave the Shelf of Shame without a fabricated
-     * play. Migration 059; opened from the Stats spoke's shelf sheet.
+     * The played mark: "played it, somewhere I didn't log it" (migration 057).
+     * One mark on any game, whatever its shelf status, behind both switches —
+     * the collection sheet's and the Stats Shelf of Shame's. Never a play.
      *
-     * Deliberately does NOT bust the status map: the mark is scoped to the
-     * shelf block of bgb_user_stats_detail, and the game keeps reading as
-     * Owned everywhere else. Busting that cache would imply otherwise.
-     * It moves two caches: the stats payload (views/stats-view.js invalidates
-     * it) and the rank queue, dropped below.
+     * Optimistic like applyLocalStatus: the mark (and, for a game on no shelf,
+     * its 'played' status — the mark is what puts it on the Played shelf) is
+     * applied before the write and rolled back if it fails. The status map is
+     * busted only when that status moved; the shelves always are, since their
+     * items carry `played_before` for the Most played order. It moves the rank
+     * queue too (services/rank_service.queue) and the stats payload, which
+     * views/stats-view.js invalidates.
      *
      * @param {string} gameId
-     * @param {boolean} playedBefore
+     * @param {boolean} on
      */
-    static setPlayedBefore(gameId, playedBefore) {
+    static setPlayedBefore(gameId, on) {
+      const map = (window.store && window.store.get("myCollectionMap")) || {};
+      const prevStatus = map[gameId] || null;
+      const prevMark = Collection.isPlayedMark(gameId);
+      // Only a mark-only row changes the status: marking a game on no shelf
+      // adds 'played', clearing that mark takes it away (logged plays, if the
+      // game has any, come back with the next status-map read).
+      let nextStatus = prevStatus;
+      if (on && !prevStatus) nextStatus = "played";
+      else if (!on && prevStatus === "played" && prevMark) nextStatus = null;
+      const statusMoved = nextStatus !== prevStatus;
+
+      Collection.applyLocalMark(gameId, on);
+      document.dispatchEvent(new CustomEvent("played-mark-changed", { detail: { gameId, on } }));
+      if (statusMoved) Collection.applyLocalStatus(gameId, nextStatus);
+
       return window.api.patch(`/collection/${gameId}/played-before`, {
-        played_before: playedBefore,
+        played_before: on,
       }).then((r) => {
-        // The mark decides whether an unplayed game may be ranked
-        // (services/rank_service.queue).
+        if (statusMoved) Collection.invalidateMyStatusMap();
+        else Collection.invalidateShelves();
         if (window.Rank && window.Rank.invalidateQueue) window.Rank.invalidateQueue();
         return r;
+      }).catch((e) => {
+        Collection.applyLocalMark(gameId, prevMark);
+        document.dispatchEvent(new CustomEvent("played-mark-changed", { detail: { gameId, on: prevMark } }));
+        if (statusMoved) Collection.applyLocalStatus(gameId, prevStatus);
+        throw e;
       });
     }
 

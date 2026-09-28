@@ -881,12 +881,11 @@ class CollectionUpdate(BaseModel):
 
 
 class CollectionPlayedBefore(BaseModel):
-    """Hand-mark an owned game as played before the user joined BoardgameBuddy.
+    """Set or clear the played mark: "played it, somewhere I didn't log it".
 
-    The owned game's half of the claim a 'played' collection row makes for a
-    game you do not own (migration 057): a flag on the owned row, not a status,
-    because the game is still owned. This is a separate, narrower claim —
-    it clears the game off the Shelf of Shame and touches nothing else.
+    One mark on any game, whatever its shelf status (migration 057). On an
+    owned game it clears the Shelf of Shame; on a game on no shelf it puts the
+    game on the Played shelf. Never a play.
     """
 
     played_before: bool
@@ -899,6 +898,8 @@ class CollectionItem(BaseModel):
     added_at: datetime
     last_played_at: date | None = None
     play_count: int = 0
+    # The played mark (migration 057): played somewhere it was not logged.
+    played_before: bool = False
     game: GameSummary
     # No nested expansions: the web client asks for the flat shelf with
     # expansions included (exclude_expansions=false) and nests them itself in
@@ -930,9 +931,9 @@ class CollectionStatusMapResponse(BaseModel):
     # owns. prev_owned expansions are NOT counted — one you sold is no longer
     # clutter on the base game's shelf.
     expansion_counts: dict[str, int] = Field(default_factory=dict)
-    # Games marked played without a logged play (status 'played', migration
-    # 057). status_map says "played" for these and for games with plays alike;
-    # only these have a row the client can remove.
+    # Every game carrying the played mark (migration 057), whatever its
+    # status. status_map alone cannot say: it reads "played" for a mark and for
+    # logged plays alike, and a shelf status for a marked owned game.
     played_marks: list[str] = Field(default_factory=list)
 
 

@@ -364,10 +364,20 @@
       for (const mode of this.modes) {
         const sh = this.shelf[mode];
         if (!sh || !Array.isArray(sh.items)) continue;
-        // Any collection row at all disqualifies a game from "played, not owned".
-        const gone = mode === "played"
-          ? status != null
-          : !statusesFor(mode).includes(status);
+        // On the Played shelf, a shelf status takes the game off; "played" (a
+        // played mark on no shelf) keeps it; and none at all takes off only a
+        // mark-only tile — the one row here with no logged play — since a game
+        // with plays is still played.
+        let gone;
+        if (mode === "played") {
+          if (status === "played") gone = false;
+          else if (status == null) {
+            const it = sh.items.find((x) => x.game_id === gameId);
+            gone = !!it && !(it.play_count > 0);
+          } else gone = true;
+        } else {
+          gone = !statusesFor(mode).includes(status);
+        }
         if (gone) {
           const next = sh.items.filter((it) => it.game_id !== gameId);
           if (next.length !== sh.items.length) {

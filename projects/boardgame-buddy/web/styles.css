@@ -7268,6 +7268,16 @@ html.bgb-ptr-armed body {
   font-size: 0.82rem; color: var(--polaroid-muted);
 }
 .status-sheet__rule { height: 1px; background: var(--polaroid-line); margin: 6px 10px; }
+/* The played-mark switch under the shelf rows: row-height, the switch on the
+   trailing edge where the rows carry their radio, and a hairline above it so
+   it reads as a separate claim rather than a fourth shelf. */
+.status-sheet__mark {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 56px; padding: 6px 10px 6px 14px; margin-top: 6px;
+  border-top: 1px solid var(--polaroid-line);
+}
+.status-sheet__mark-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.status-sheet__mark-label { font-size: 0.95rem; font-weight: 600; color: var(--polaroid-ink); }
 .status-sheet__cancel {
   min-height: 52px; margin-top: 4px;
   border: 1px solid var(--polaroid-line); border-radius: 12px;

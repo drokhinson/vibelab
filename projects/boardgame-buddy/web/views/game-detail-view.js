@@ -46,6 +46,12 @@
       // so it never competes with what the screen is actually for.
       this._ranks = window.Rank.cachedSummary();
       this.listenDom("ranks-changed", () => this._loadRanks());
+      // A mark on an owned or wishlisted game moves no status, but it makes
+      // the game rankable: "Rank it" appears (or goes) beside Log a play.
+      this.listenDom("played-mark-changed", (e) => {
+        const { gameId } = e.detail || {};
+        if (this._game && gameId === this._game.id) this._paintRank();
+      });
       this.listenDom("chapters-changed", (e) => {
         // The widget may not exist yet during the initial _load, and a
         // chapter add could be for the base game OR for an active
@@ -221,13 +227,14 @@
 
     /**
      * Only a game you have played can be ranked — the rank queue's rule, and
-     * the Shelf of Shame's: a play, or the "played before joining" mark. The
-     * bundle knows the first (viewer_stats, or a derived "played" status); the
-     * mark is not in the bundle, but a marked game sits in the rank queue, so
-     * its cached copy covers it without asking the server again.
+     * the Shelf of Shame's: a play, or the played mark. The bundle knows the
+     * first (viewer_stats, or a "played" status); the mark is in the status
+     * map's played_marks, and a marked game also sits in the rank queue, so
+     * either cached copy answers without asking the server again.
      */
     _rankable(gameId) {
       if (this._viewerStats || this._status === "played") return true;
+      if (window.Collection.isPlayedMark(gameId)) return true;
       const queue = window.Rank.cachedQueue();
       return !!(queue && queue.some((it) => it.game && it.game.id === gameId));
     }

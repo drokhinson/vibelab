@@ -1,37 +1,45 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 057_played_mark.sql — "Played": a game you played but never logged here
+-- 057_played_mark.sql — one "played it, didn't log it" mark, on any game
 -- ─────────────────────────────────────────────────────────────────────────────
 --
--- The status sheet's fourth row. A game you played somewhere else, before you
--- joined or without logging it, can sit on your Played shelf without a
--- fabricated play. It is the same claim as the owned game's "played before
--- joining" mark (played_before_at, the Shelf of Shame sheet), extended to a
--- game you do not own, so it is stored the same way: a collection row with
--- status 'played' and played_before_at stamped. Picking Owned later upserts
--- the status and leaves played_before_at alone, so the claim carries over as
--- the owned game's mark.
+-- The mark is boardgamebuddy_collections.played_before_at. It says "I have
+-- played this, somewhere I did not log it here", and it is the one mechanism
+-- behind two surfaces: the Stats Shelf of Shame's switch and the collection
+-- sheet's switch flip the same column (PATCH /collection/{id}/played-before).
 --
--- It is NOT a play and never counts as one: no play count, no stats, no
--- "games played" total reads it. What does:
+-- It sits on a row of ANY status — owned, prev_owned, wishlist — and is
+-- independent of it: changing a shelf status leaves it alone, and removing a
+-- game from the collection keeps it. A game on no shelf carries it on a row
+-- with status 'played', which this migration admits to the status CHECK; that
+-- row exists only to hold the mark and goes when the mark is cleared.
 --
---   * the Played shelf, which is every game with a play the target can see
---     plus these rows (bgb_collection_shelf, bgb_collection_page,
---     bgb_profile_bundle's played page and total). A 'played' row is not a
---     shelf row, so it must not hide a game from that set the way an owned or
---     wishlisted row does;
---   * the status map, which already read 'played' rows, and now also lists
---     them as played_marks — the map says 'played' for these and for games
---     with plays alike, and the sheet offers Remove only for a real mark;
---   * the rank queue (services/rank_service.queue), which already offers any
---     row with played_before_at set.
+-- It is never a play: no play count, stat or achievement reads it. Everywhere
+-- else a marked game reads as one with logged plays in the same shelf state:
+--
+--   * the Played shelf is every game with a play the target can see plus the
+--     'played' rows, each once, marks last (bgb_collection_shelf,
+--     bgb_collection_page, bgb_profile_bundle's played page and total). A
+--     'played' row is not a shelf row, so it does not hide a game from that
+--     set the way an owned or wishlisted row does;
+--   * shelf items carry `played_before`, so the client's Most played order
+--     takes a marked game as it takes a logged one;
+--   * the status map reads 'played' for a 'played' row, as it does for a game
+--     with plays and no row, and lists every mark as played_marks — the map
+--     alone cannot tell a mark from plays, nor see one on a shelf row;
+--   * search (boardgamebuddy_search_games) treats a 'played' row as no row,
+--     so a mark-only game is a catalog hit like a logged-only one;
+--   * the Shelf of Shame (bgb_user_stats_detail) reads owned rows'
+--     played_before_at, and the rank queue (services/rank_service.queue)
+--     offers any row carrying it — both unchanged here.
 --
 -- Every owned, prev-owned and wishlist reader filters on its own status, so a
 -- 'played' row is invisible to them. The BoardGameGeek push compares only the
--- statuses BGG tracks (services/bgg_compare_service.py drops these rows), and
--- boardgamebuddy_bgg_push_queue's target_status CHECK is left as it is.
+-- statuses BGG tracks (services/bgg_compare_service.py drops 'played' rows),
+-- and boardgamebuddy_bgg_push_queue's target_status CHECK is left as it is.
 --
--- Deploy order: none. CollectionStatus.PLAYED already exists in the API, so a
--- 'played' row validates on every read before and after this runs.
+-- Deploy order: run this before the API. The API's mark write creates
+-- 'played' rows, which the old CHECK refuses; its reads accept the new
+-- shapes either way (CollectionStatus.PLAYED already exists).
 
 ALTER TABLE public.boardgamebuddy_collections
   DROP CONSTRAINT boardgamebuddy_collections_status_check;
@@ -39,7 +47,7 @@ ALTER TABLE public.boardgamebuddy_collections
   ADD CONSTRAINT boardgamebuddy_collections_status_check
   CHECK ((status = ANY (ARRAY['owned'::text, 'wishlist'::text, 'prev_owned'::text, 'played'::text])));
 
-COMMENT ON COLUMN public.boardgamebuddy_collections.played_before_at IS 'Set when the user hand-marks a game as played somewhere they did not log it: on an owned row from the Shelf of Shame sheet, and on every status ''played'' row (057). Feeds the Shelf of Shame block of bgb_user_stats_detail and the rank queue; it is not a play and must never be counted as one.';
+COMMENT ON COLUMN public.boardgamebuddy_collections.played_before_at IS 'The played mark: set when the user says they played this game somewhere they did not log it. On a row of any status, independent of it; a game on no shelf carries it on a status ''played'' row (057). Read by the Played shelf, the status map''s played_marks, the Shelf of Shame block of bgb_user_stats_detail and the rank queue. It is not a play and must never be counted as one.';
 
 CREATE OR REPLACE FUNCTION public.bgb_collection_status_map(p_viewer uuid)
  RETURNS jsonb
@@ -103,13 +111,14 @@ BEGIN
       GROUP BY c.game_base_game_bgg_id
     ) e;
 
-  -- Games marked played without a logged play (status 'played', 057). The
-  -- map reads 'played' for these and for games with plays alike; this is
-  -- what tells the two apart, so only a real mark offers to be removed.
+  -- Every game the viewer marked played without a logged play (057), on
+  -- a row of any status. The map alone cannot say: it reads 'played' for a
+  -- mark and for logged plays alike, and a shelf status for a marked
+  -- owned or wishlisted game. This is what the sheet's switch shows.
   SELECT COALESCE(jsonb_agg(c.game_id::TEXT), '[]'::jsonb)
     INTO v_played_marks
     FROM boardgamebuddy_collections c
-    WHERE c.user_id = p_viewer AND c.status = 'played';
+    WHERE c.user_id = p_viewer AND c.played_before_at IS NOT NULL;
 
   RETURN jsonb_build_object(
     'status_map', v_status_map,
@@ -238,6 +247,10 @@ BEGIN
             'added_at', COALESCE(pno.last_played_at::TEXT || 'T00:00:00+00:00', (SELECT to_jsonb(c.added_at) #>> '{}' FROM boardgamebuddy_collections c WHERE c.user_id = target AND c.game_id = pno.game_id)),
             'last_played_at', pno.last_played_at,
             'play_count', COALESCE(pno.play_count, 0),
+            'played_before', EXISTS (
+              SELECT 1 FROM boardgamebuddy_collections c
+              WHERE c.user_id = target AND c.game_id = pno.game_id
+                AND c.played_before_at IS NOT NULL),
             'game', jsonb_build_object(
               'id', g.id,
               'bgg_id', g.bgg_id,
@@ -302,6 +315,9 @@ BEGIN
             'added_at', c.added_at,
             'last_played_at', ps.last_played_at,
             'play_count', COALESCE(ps.play_count, 0),
+            -- The played mark (057), so an unlogged but marked game can join
+            -- the client's Most played order as a logged one does.
+            'played_before', c.played_before_at IS NOT NULL,
             'game', jsonb_build_object(
               'id', c.game_id,
               'bgg_id', c.game_bgg_id,
@@ -1248,3 +1264,39 @@ BEGIN
 END;
 $function$;
 GRANT EXECUTE ON FUNCTION public.bgb_profile_bundle(viewer uuid, target uuid, col_per_page integer, plays_per_page integer) TO boardgamebuddy_role;
+
+CREATE OR REPLACE FUNCTION public.boardgamebuddy_search_games(p_viewer uuid, p_query text, p_limit integer DEFAULT 20, p_include_expansions boolean DEFAULT false)
+ RETURNS TABLE(id uuid, bgg_id integer, name text, year_published integer, min_players integer, max_players integer, playing_time integer, thumbnail_url text, image_url text, theme_color text, is_expansion boolean, base_game_bgg_id integer, expansion_color text, rulebook_url text, play_mode text, collection_status text, in_collection boolean)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT
+    g.id,
+    g.bgg_id,
+    g.name,
+    g.year_published,
+    g.min_players,
+    g.max_players,
+    g.playing_time,
+    g.thumbnail_url,
+    g.image_url,
+    g.theme_color,
+    g.is_expansion,
+    g.base_game_bgg_id,
+    g.expansion_color,
+    g.rulebook_url,
+    g.play_mode,
+    c.status                 AS collection_status,
+    (c.user_id IS NOT NULL)  AS in_collection
+  FROM public.boardgamebuddy_games g
+  -- A mark-only 'played' row (057) is not a shelf: the game is a catalog hit,
+  -- as one with only logged plays is.
+  LEFT JOIN public.boardgamebuddy_collections c
+    ON c.game_id = g.id AND c.user_id = p_viewer AND c.status <> 'played'
+  WHERE g.name ILIKE '%' || COALESCE(p_query, '') || '%'
+    AND (COALESCE(p_include_expansions, false) OR NOT g.is_expansion)
+  ORDER BY (c.user_id IS NOT NULL) DESC, g.name
+  LIMIT GREATEST(COALESCE(p_limit, 20), 0);
+$function$;
+GRANT EXECUTE ON FUNCTION public.boardgamebuddy_search_games(p_viewer uuid, p_query text, p_limit integer, p_include_expansions boolean) TO boardgamebuddy_role;
