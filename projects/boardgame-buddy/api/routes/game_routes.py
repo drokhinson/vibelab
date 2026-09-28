@@ -603,14 +603,7 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
     time_el = item.find("playingtime")
     raw_img, raw_thumb = thing_item_image_urls(item)
 
-    categories = [
-        link.get("value", "")
-        for link in item.findall("link[@type='boardgamecategory']")
-    ]
-    mechanics = [
-        link.get("value", "")
-        for link in item.findall("link[@type='boardgamemechanic']")
-    ]
+    categories, mechanics = _thing_links(item)
 
     is_expansion, base_game_bgg_id = _extract_expansion_meta(item)
     expansion_color = _next_expansion_color(sb, base_game_bgg_id) if is_expansion else None
@@ -1076,6 +1069,39 @@ def _meta_cols(item: Optional[ET.Element], *, has_year: bool) -> dict:
     return cols
 
 
+def _thing_links(item: ET.Element) -> tuple[list[str], list[str]]:
+    """BGG's category and mechanic tags off one /thing <item>. Shared by the
+    import and the admin full refresh, so the two read them identically."""
+    categories = [link.get("value", "") for link in item.findall("link[@type='boardgamecategory']")]
+    mechanics = [link.get("value", "") for link in item.findall("link[@type='boardgamemechanic']")]
+    return categories, mechanics
+
+
+def _thing_gameplay_cols(item: ET.Element) -> dict:
+    """What the import writes about how a game plays, re-read for an existing
+    row: tags, the play_mode they imply, and the player counts / time.
+
+    A count BGG leaves out (or answers 0) is omitted rather than written, so a
+    thin record never blanks a value the row already has.
+    """
+    categories, mechanics = _thing_links(item)
+    cols: dict = {
+        "categories": categories,
+        "mechanics": mechanics,
+        "play_mode": derive_play_mode(mechanics).value,
+    }
+    for col, tag in (("min_players", "minplayers"), ("max_players", "maxplayers"),
+                     ("playing_time", "playingtime")):
+        el = item.find(tag)
+        try:
+            value = int(el.get("value", "0")) if el is not None else 0
+        except ValueError:
+            value = 0
+        if value > 0:
+            cols[col] = value
+    return cols
+
+
 async def _hydrate_metadata_from_bgg(sb: Client, game_id: str, bgg_id: int, *, has_year: bool) -> dict:
     """Read one game's BGG record and write everything it gives.
 
@@ -1170,6 +1196,58 @@ async def refresh_single_game_metadata(
     refreshed = (
         sb.table("boardgamebuddy_games").select("*").eq("id", game_id).execute()
     )
+    if not refreshed.data:
+        raise HTTPException(status_code=500, detail="Failed to update game row")
+    return GameDetail(**refreshed.data[0])
+
+
+@router.post(
+    "/games/admin/{game_id}/refresh-bgg",
+    response_model=GameDetail,
+    status_code=200,
+    summary="Re-read one game's whole BGG record: tags, play mode, player counts, stats (admin)",
+)
+async def refresh_single_game_from_bgg(
+    game_id: str = Path(..., description="Catalog game id"),
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> GameDetail:
+    """Admin-only: the game page's "Refresh from BoardGameGeek" button.
+
+    refresh-metadata above rewrites what the backfill sweeps (description,
+    stats, publishers, a missing year). This also rewrites what only the import
+    ever wrote — categories, mechanics, the play_mode they imply, player counts
+    and playing time — which is what the starter catalog (002_seed.sql) got
+    wrong: every row there is play_mode 'competitive', Pandemic included. Art
+    is fetched too when the row has none. The name is left alone.
+    """
+    sb = get_supabase()
+    existing = (
+        sb.table("boardgamebuddy_games")
+        .select("bgg_id, year_published, image_url")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    row = existing.data[0]
+    bgg_id = row["bgg_id"]
+    if not bgg_id:
+        raise HTTPException(status_code=400, detail="Game has no bgg_id; cannot refresh from BGG")
+
+    body = await fetch_bgg("/thing", {"id": bgg_id, "stats": 1}, timeout=10.0, use_cache=False)
+    item = parse_bgg_xml(body, context=f"refresh bgg_id={bgg_id}").find("item")
+    if item is None:
+        raise HTTPException(status_code=404, detail="BoardGameGeek has no record under this game's id")
+    cols = _meta_cols(item, has_year=bool(row.get("year_published")))
+    cols.update(_thing_gameplay_cols(item))
+    sb.table("boardgamebuddy_games").update(cols).eq("id", game_id).execute()
+    # play_mode and the counts are denormalized onto collection rows.
+    _sync_denormalized_game_fields(sb, game_id)
+    if not row.get("image_url"):
+        await _hydrate_images_from_bgg(sb, game_id, bgg_id)
+    _invalidate_game_caches()
+
+    refreshed = sb.table("boardgamebuddy_games").select("*").eq("id", game_id).execute()
     if not refreshed.data:
         raise HTTPException(status_code=500, detail="Failed to update game row")
     return GameDetail(**refreshed.data[0])

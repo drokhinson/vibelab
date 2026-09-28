@@ -21987,6 +21987,13 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
    differs. Dashed while unranked — an invitation, not a status — and a solid
    hairline once it carries a number. */
 .game-detail__rank-host { display: contents; }
+/* Admin-only row at the foot of the game page (Refresh from BoardGameGeek). */
+.game-detail__admin {
+  display: flex; justify-content: center;
+  margin-top: 8px; padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.game-detail__admin-btn { min-height: 44px; color: var(--ink-muted); }
 .game-detail__rank-btn {
   border: 1px dashed var(--accent);
   background: transparent;
