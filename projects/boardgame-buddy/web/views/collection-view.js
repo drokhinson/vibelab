@@ -523,7 +523,7 @@
         // made both pop in once the first shelf landed, and moved the grid.
         this.container.innerHTML = `
           ${this._renderHead()}
-          <div id="collection-rank-host">${this._rankCardSlot()}</div>
+          <div id="collection-rank-host" class="rank-banner">${this._rankCardSlot()}</div>
           ${this._renderShelfPicker()}
           ${this._renderControls(tree)}
           <div class="profile-loading">
@@ -542,7 +542,7 @@
       // for an expansion, so the tree gets the search field without it.
       this.container.innerHTML = `
         ${this._renderHead()}
-        <div id="collection-rank-host">${this._rankCardSlot()}</div>
+        <div id="collection-rank-host" class="rank-banner">${this._rankCardSlot()}</div>
         ${this._renderShelfPicker()}
         ${this._renderControls(tree)}
         <div id="collection-tree-controls-host">${tree ? this._renderTreeControls() : ""}</div>
