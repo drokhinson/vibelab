@@ -1,7 +1,8 @@
 // views/rank-queue-view.js — "Rank your games", opened from the Collection card.
 //
 // Every owned or played game without a rank, A to Z, one after another through
-// the same questions the game page's sheet asks (ui/rank-flow.js). The list is
+// the same questions the game page's sheet asks (ui/rank-flow.js). "Start
+// ranking" begins at the top; tapping a row begins at that game. The list is
 // snapshotted when ranking starts, so a game ranked here never reshuffles what
 // is still to come. "Done for now" keeps everything ranked so far — each game is
 // saved the moment its questions are answered.
@@ -119,21 +120,25 @@
       }
       return `
         <ol class="rank-queue__list">
-          ${this._items.map((it) => `
-            <li class="rank-queue__row">
-              ${gameArtImg(it.game, "chip", { cls: "rank-flow__thumb" })
-                || `<span class="rank-flow__thumb rank-flow__art-empty"><i data-icon="dice-6" class="w-4 h-4"></i></span>`}
-              <span class="rank-queue__row-name">${escapeHtml(it.game.name)}</span>
-              <span class="rank-queue__tag">${escapeHtml(it.category_label)}</span>
+          ${this._items.map((it, i) => `
+            <li>
+              <button type="button" class="rank-queue__row" onclick="window.rankQueueView._start(${i})">
+                ${gameArtImg(it.game, "chip", { cls: "rank-flow__thumb" })
+                  || `<span class="rank-flow__thumb rank-flow__art-empty"><i data-icon="dice-6" class="w-4 h-4"></i></span>`}
+                <span class="rank-queue__row-name">${escapeHtml(it.game.name)}</span>
+                <span class="rank-queue__tag">${escapeHtml(it.category_label)}</span>
+                <i data-icon="chevron-right" class="w-4 h-4 rank-queue__go" aria-hidden="true"></i>
+              </button>
             </li>`).join("")}
         </ol>
         <button class="btn btn-primary rank-queue__cta" type="button"
                 onclick="window.rankQueueView._start()">Start ranking</button>`;
     }
 
-    _start() {
+    // A tapped row starts there and carries on down the list from it.
+    _start(idx = 0) {
       this._mode = "active";
-      this._idx = 0;
+      this._idx = idx;
       this.render();
     }
 

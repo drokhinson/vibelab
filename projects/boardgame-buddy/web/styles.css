@@ -22239,11 +22239,17 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .rank-queue__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .rank-queue__row {
   display: flex; align-items: center; gap: 10px;
-  min-height: 56px; padding: 4px 8px;
-  border-radius: 10px;
+  width: 100%; min-height: 56px; padding: 4px 8px;
+  border: 0; border-radius: 10px; background: none;
+  font: inherit; text-align: left; cursor: pointer;
   color: var(--polaroid-ink);
   animation: fadeUp 240ms ease both;
+  transition: background 120ms ease, transform 120ms ease;
 }
+.rank-queue__row:active { background: var(--polaroid-line); transform: scale(0.985); }
+.rank-queue__row:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -3px; }
+@media (hover: hover) { .rank-queue__row:hover { background: var(--polaroid-bg-soft); } }
+.rank-queue__go { flex: none; color: var(--polaroid-muted); }
 .rank-queue__row-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank-queue__tag {
   flex: none; font-size: 0.72rem; padding: 2px 8px; border-radius: 999px;
