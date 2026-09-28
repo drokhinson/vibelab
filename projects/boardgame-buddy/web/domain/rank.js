@@ -23,7 +23,7 @@
   // Declared best first; a category's list stacks them in this order.
   const TIERS = [
     { id: "love", label: "Love it", icon: "chevron-up" },
-    { id: "good", label: "It's a good game", icon: "minus" },
+    { id: "good", label: "A good game", icon: "minus" },
     { id: "not", label: "Not for me", icon: "chevron-down" },
   ];
 

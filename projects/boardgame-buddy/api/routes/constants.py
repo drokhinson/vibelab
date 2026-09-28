@@ -658,7 +658,7 @@ class RankTier(StrEnum):
     """
 
     LOVE = "love"    # "Love it"
-    GOOD = "good"    # "It's a good game"
+    GOOD = "good"    # "A good game"
     NOT = "not"      # "Not for me"
 
 

@@ -5,7 +5,7 @@
 --
 -- A player records how much they like a game by RANKING it against the other
 -- games of its kind rather than by giving it stars. The flow is a gut check
--- (Love it / It's a good game / Not for me) followed by a handful of "which do
+-- (Love it / A good game / Not for me) followed by a handful of "which do
 -- you prefer?" questions that binary-search the new game into its tier. The
 -- result is a total order per category, so there are no ties.
 --

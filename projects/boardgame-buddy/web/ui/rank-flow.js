@@ -1,7 +1,7 @@
 // ui/rank-flow.js — the ranking questions, shared by the game page's sheet and
 // the rank queue.
 //
-// A gut check first (Love it / It's a good game / Not for me), then "which do
+// A gut check first (Love it / A good game / Not for me), then "which do
 // you prefer?" against games already in that tier, each answer halving the
 // range the new game can land in. So ranking against n games in a tier costs
 // about log2(n+1) questions. "Too close to call" places it straight after the
