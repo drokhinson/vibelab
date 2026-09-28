@@ -50,16 +50,43 @@ def _ordered(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda r: (_TIER_INDEX.get(r["tier"], 99), r["position"]))
 
 
+# Each tier owns a band of the 10-point scale, best game at the top of it.
+# The bands never overlap, so a game the player loves always outscores one
+# they merely liked, however long either list gets.
+_SCORE_BANDS = {
+    RankTier.LOVE.value: (10.0, 7.0),
+    RankTier.GOOD.value: (6.9, 4.0),
+    RankTier.NOT.value: (3.9, 1.0),
+}
+
+
+def _score(tier: str, index: int, count: int) -> float:
+    """A rating out of 10 for the game at `index` of `count` in its tier,
+    spread evenly down the tier's band. A tier of one sits at its top."""
+    hi, lo = _SCORE_BANDS[tier]
+    if count <= 1:
+        return hi
+    return round(hi - (hi - lo) * index / (count - 1), 1)
+
+
 def _entries(rows: list[dict[str, Any]]) -> list[RankEntry]:
     by_cat: dict[str, list[dict[str, Any]]] = {}
     for r in rows:
         by_cat.setdefault(r["category"], []).append(r)
     out: list[RankEntry] = []
     for cat, cat_rows in by_cat.items():
-        for i, r in enumerate(_ordered(cat_rows)):
+        ordered = _ordered(cat_rows)
+        tier_sizes: dict[str, int] = {}
+        for r in ordered:
+            tier_sizes[r["tier"]] = tier_sizes.get(r["tier"], 0) + 1
+        seen: dict[str, int] = {}
+        for i, r in enumerate(ordered):
+            idx = seen.get(r["tier"], 0)
+            seen[r["tier"]] = idx + 1
             out.append(RankEntry(
                 game_id=r["game_id"], category=cat, category_label=category_label(cat),
                 tier=RankTier(r["tier"]), position=i + 1,
+                score=_score(r["tier"], idx, tier_sizes[r["tier"]]),
             ))
     return out
 

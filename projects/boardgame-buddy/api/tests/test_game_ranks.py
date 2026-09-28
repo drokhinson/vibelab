@@ -176,6 +176,21 @@ def test_position_stacks_tiers_whatever_the_stored_numbers(sb):
     assert got == {"b": 1, "d": 2, "a": 3, "c": 4}
 
 
+def test_score_spreads_each_tier_down_its_own_band(sb):
+    games = [_game(g, g, family="familygames") for g in "abcdefg"]
+    sb["sb"] = _SB(games, ranks=[
+        _rank("a", "family", "love", 0), _rank("b", "family", "love", 1), _rank("c", "family", "love", 2),
+        _rank("d", "family", "good", 0), _rank("e", "family", "good", 1),
+        _rank("f", "family", "not", 0),
+    ])
+    got = {e.game_id: e.score for e in run(R.list_ranks(user=USER)).ranks}
+    assert got == {"a": 10.0, "b": 8.5, "c": 7.0, "d": 6.9, "e": 4.0, "f": 3.9}
+
+
+def test_score_bands_never_overlap():
+    assert S._score("love", 99, 100) > S._score("good", 0, 5) > S._score("not", 0, 1)
+
+
 def test_positions_are_per_category(sb):
     sb["sb"] = _SB([_game("a", "a"), _game("b", "b")], ranks=[
         _rank("a", "family", "good", 0), _rank("b", "party", "not", 0),

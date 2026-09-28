@@ -952,10 +952,12 @@
       const parted = item.status === "prev_owned";
       // Your own shelf only, and only your top 5 in the game's category: a
       // chip on every ranked tile would be noise, and on someone else's shelf
-      // it would be YOUR rank on THEIR game.
+      // it would be YOUR rank on THEIR game. Reads as the game page pill does
+      // (Rank.badge): "#2 Family" in the top 3, then "8.6/10".
       const rank = !other && this._ranks && this._ranks[g.id];
-      const rankChip = rank && rank.position <= 5
-        ? `<span class="collection-tile__rank">#${rank.position} ${escapeHtml(rank.category_label)}</span>`
+      const badge = rank && rank.position <= 5 ? window.Rank.badge(rank) : null;
+      const rankChip = badge
+        ? `<span class="collection-tile__rank">${escapeHtml(badge.num + badge.rest)}</span>`
         : "";
       const stamp = parted
         ? `<div class="collection-tile__stamp" aria-hidden="true">Prev. owned</div>`

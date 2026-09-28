@@ -16,6 +16,9 @@ class RankEntry(BaseModel):
 
     `position` is the player-facing number, 1-based across the whole
     category with the tiers stacked love → good → not: "#3 Family".
+    `score` is the same place read as a rating out of 10, which the client
+    shows once a game falls out of its category's top 3 (see
+    rank_service._score).
     """
 
     game_id: str
@@ -23,6 +26,7 @@ class RankEntry(BaseModel):
     category_label: str
     tier: RankTier
     position: int
+    score: float
 
 
 class RanksResponse(BaseModel):
