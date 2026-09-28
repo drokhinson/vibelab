@@ -86,8 +86,8 @@ for (const f of [
   "ui/bgg-log-step.js",
   "ui/phase-log.js",
   "ui/admin-run-log.js",
-  // Loaded for §6: the extraction that produced phase-log.js came out of this
-  // file, so it is the regression surface.
+  // Loaded for §6: it renders through phase-log.js, the primitive it shares
+  // with the run log, so it is the regression surface.
   "ui/bgg-check-log.js",
   "domain/admin-run-tools.js",
   "domain/admin-run-flow.js",
@@ -336,12 +336,12 @@ console.log("\nthe log");
   }).includes("stopped reporting"));
 }
 
-// ── 6. The BGG check log, which the extraction could have broken ────────────
-// ui/phase-log.js came OUT of ui/bgg-check-log.js, and that page is live and
-// user-facing. Nothing about its output was meant to change, and every way it
-// could have would render a plausible checklist that is lying about a running
-// sweep — so the four things its own header calls load-bearing are pinned
-// here, next to the primitive they now share.
+// ── 6. The BGG check log, which renders through the same primitive ──────────
+// ui/bgg-check-log.js renders through ui/phase-log.js, and that page is live
+// and user-facing. Every way the shared primitive could drift would render a
+// plausible checklist that is lying about a running sweep — so the four things
+// its own header calls load-bearing are pinned here, next to the primitive
+// they share.
 console.log("\nthe BGG check log after the extraction");
 {
   const pending = win.renderBggCheckLog(null, {});
@@ -377,10 +377,8 @@ console.log("\nthe BGG check log after the extraction");
 }
 
 // ── 7. The panel's Sync now is one tap, and it is the deed ──────────────────
-// There was a PolaroidPopup.confirm here, and the argument for it was that
-// navigating is one tap too late to ask — true while the run page started
-// nothing on arrival. It starts now, so the button has to actually start
-// something: a version that only navigates leaves an admin on an idle page
+// No confirm popup: the run page starts the run on arrival, so the button has
+// to actually start something: a version that only navigates leaves an admin on an idle page
 // believing they kicked off a twenty-minute sweep.
 console.log("\nthe panel hands off in one tap");
 {
@@ -409,7 +407,7 @@ console.log("\nthe panel hands off in one tap");
     nav.length === 1 && nav[0].name === "admin-run" && nav[0].params.tool === "bgg-metadata");
   ok("and starts the run in the same tap", api.posts.length === 1);
   ok("the run it started is the panel's own", api.posts[0].name === "bgg-metadata");
-  // The confirm would have failed an assertion above if it were still called.
+  // The confirm stub fails an assertion above if it is ever called.
   ok("with no confirm in between", true);
 
   // A second press while it is going must not open a second drain.

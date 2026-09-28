@@ -18,9 +18,8 @@
 //      popup. Swapped, the popup is handed a representative and presents one
 //      arbitrary member of 58 identical plays as "the" play, which is the lie
 //      the plays log deliberately refuses to tell.
-//   3. THE TWO ECHOES LAND. `plays-changed` (the run sheet's delete) had no
-//      listener anywhere in the app before this screen; `play-changed` is the
-//      popup's. A dropped row has to take its plays off the header count, and
+//   3. THE TWO ECHOES LAND. `plays-changed` (the run sheet's delete) has this
+//      screen as its only listener; `play-changed` is the popup's. A dropped row has to take its plays off the header count, and
 //      emptying the batch has to leave the screen — a header with no body and
 //      a delete button for nothing is what staying looks like.
 import fs from "node:fs";

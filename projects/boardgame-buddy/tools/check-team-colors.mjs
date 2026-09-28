@@ -185,10 +185,10 @@ console.log("\nthe spectator's roster lands on the host's colours:");
 
 console.log("\na lobby whose host has not named any side is untinted:");
 {
-  // Every participant row written before migration 050 has no team key at all,
-  // and the bundle RPC deploys separately from the web build that reads it.
-  // Both have to read as "no sides", which is the untinted grid this screen
-  // rendered before — not as one anonymous side every seat shares.
+  // A participant row can arrive with no team key at all: the bundle RPC
+  // deploys separately from the web build that reads it. That and a null team
+  // both have to read as "no sides", an untinted grid — not as one anonymous
+  // side every seat shares.
   ok("a roster with no team key at all",
      T.indexMap([{ id: "p-1", display_name: "Ana" },
                  { id: "p-2", display_name: "Bo" }]) === null);

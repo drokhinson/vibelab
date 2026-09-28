@@ -31,8 +31,8 @@
 //      indistinguishable from a broken link.
 //   7. THE TOUR ARMS NO BACK GUARD, and its scenes stay off the boot path.
 //      The first is .claude/rules/overlays.md §8b: a routed screen already has
-//      a history entry, and arming over it is the double-entry bug the chapter
-//      wizard shipped. The second is why the scene modules are
+//      a history entry, and arming over it is the double-entry bug. The
+//      second is why the scene modules are
 //      <link rel=prefetch> rather than <script src> — a <script src> would put
 //      them on every sign-in's critical path AND inside the bundler's
 //      manifest, costing every visitor for a tour most never open.
@@ -86,7 +86,7 @@ ok("no scene is registered that no chapter uses",
    `orphans: ${V.ids().filter((id) => !CHAPTERS.some((c) => c.vignette === id)).join(", ")}`);
 // A CHAPTER MAY CARRY NO BODY.
 //
-// The community chapter dropped its paragraph — the scene under it scrolls
+// The community chapter has no paragraph — the scene under it scrolls
 // through three game nights and makes the same point better than a sentence
 // restating it. That makes "no body" a supported shape, and the renderer has
 // to tolerate it: an unguarded ${ch.body} prints the string "undefined" into
@@ -187,9 +187,9 @@ ok("the tour is registered on the router", read("init.js").includes('register("t
 // Platform session (or the absence of one), and the Firebase SDK it decides
 // against is a CDN script. So this asserts the shape of the decision — that
 // the no-session branch consults the stashed route and the router's own
-// public list before falling back to the login screen. It is the branch that
-// sent a stranger following a /tour link, or Google's consent-screen link to
-// /privacy, to a login form instead.
+// public list before falling back to the login screen. Get it wrong and a
+// stranger following a /tour link, or Google's consent-screen link to
+// /privacy, lands on a login form instead.
 const initSrc = read("init.js");
 const branch = initSrc.slice(initSrc.indexOf('if (event === "SIGNED_OUT" || !sess)'),
                              initSrc.indexOf("reportBootTiming(\"auth\")"));
@@ -211,10 +211,9 @@ ok("views/tour-view.js arms no back guard", !/BgbBackGuard\s*\.\s*arm/.test(tour
 //
 // render() runs twice on a cold mount (renderLoading, then View.mount), and
 // the deck's click handler goes on the CONTAINER, which innerHTML does not
-// replace. Bound from render() the handlers stacked — one tap on Next ran
-// _go(step + 1) twice and the deck skipped a chapter, then four on the second
-// visit because nothing removed them on unmount. The split is the fix: the
-// container click and the keydown latch behind _bound and register a remover,
+// replace. Bound from render() the handlers would stack — one tap on Next
+// running _go(step + 1) twice so the deck skips a chapter, then four on the
+// second visit unless unmount removes them. So the container click and the keydown latch behind _bound and register a remover,
 // while the swipe rebinds every paint because [data-clip] is inside the
 // markup render() replaces.
 ok("the container click handler is latched, not bound per paint",

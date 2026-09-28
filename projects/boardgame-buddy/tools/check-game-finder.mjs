@@ -9,8 +9,8 @@
 // checks the things that are invisible when they break:
 //
 //   1. WITH THE CATALOG INDEX ON THE DEVICE a keystroke is answered
-//      synchronously and makes NO request. This is the whole fix: the picker
-//      used to debounce and round-trip to /search on every character.
+//      synchronously and makes NO request — no debounce, no round trip to
+//      /search per character.
 //   2. RANKING: exact > prefix > word-prefix > contains, and the viewer's own
 //      games first within a rung — the collection-first order /search does in
 //      SQL, reproduced from the status map.
@@ -22,8 +22,8 @@
 //      otherwise (one request), and as the partial row when that fails —
 //      or, with `instantPick`, handed on in the tap frame with no request.
 //   5. MEMORY-ONLY CACHE ENTRIES (`persist: false`, and a predicate that says
-//      no) never reach localStorage — the per-keystroke stringify + setItem
-//      the old search memo paid is gone, and a catalog past its size cap
+//      no) never reach localStorage — no per-keystroke stringify + setItem,
+//      and a catalog past its size cap
 //      does not compete with the game bundles for the 3 MB budget.
 //   6. THE LIST IS PATCHED, NOT REBUILT: every paint goes through
 //      BgbDomPatch.morph and every <li> carries a data-morph-key, which is

@@ -8,15 +8,15 @@
 // into a VM context and checks the things the unified importer rests on and
 // that are invisible when they break.
 //
-// The three importers stayed three models on purpose: a parse → global
+// The three importers are three models on purpose: a parse → global
 // name-map → run-collapse machine, an EXIF → per-file upload machine, and a
 // sign-in → sweep → handle-map machine. Merging them would be a thousand lines
 // of `if (source === …)`. What makes one review screen render all of them is
 // that they answer the SAME interface. Assertion 1 is the whole justification
 // for that choice, and it is one loop.
 //
-// The rest guard the per-play seat override, which is the genuinely new and
-// genuinely dangerous piece: seats in the note importer are DERIVED through a
+// The rest guard the per-play seat override, which is the genuinely
+// dangerous piece: seats in the note importer are DERIVED through a
 // global name mapping, so editing one play's table must not edit every play
 // that name appears in — and must not change what a play already sends.
 import fs from "node:fs";
@@ -48,9 +48,9 @@ function load() {
     ImportPeople: { viewerRow: () => null, candidates: () => [] },
     BgbNameMatch: { best: () => null },
   };
-  // Same globals as loadUi()'s sandbox, deliberately: the two used to differ,
-  // and a model touching RegExp at module scope would then throw in one and
-  // not the other — a gate that disagrees with itself about what "loads" means.
+  // Same globals as loadUi()'s sandbox, deliberately: if the two differed, a
+  // model touching RegExp at module scope would throw in one and not the
+  // other — a gate that disagrees with itself about what "loads" means.
   const sandbox = {
     window: win, console, Date, Number, Math, Map, Set, Promise, JSON, String,
     Array, Object, Boolean, URL, RegExp, Error, Intl, parseInt, parseFloat, isNaN,
@@ -488,7 +488,7 @@ console.log("\n5. Each source still writes its own columns after an edit");
 
   // The BoardGameGeek source's own asymmetry, and the one that matters most:
   // its second idempotency key. Without bgg_play_id on the payload, migration
-  // 044's pre-check cannot see the plays the retired sync wrote and the
+  // 044's pre-check cannot see BGG plays stored with no client_key and the
   // wizard re-imports every one of them.
   const g = bggDraft();
   const gGroups = g.assignGroups(g.importable());
@@ -661,7 +661,7 @@ console.log("\n8. A pre-edit draft restores with the new fields defaulted");
 }
 
 // ── 9. Every inline handler resolves ────────────────────────────────────────
-// The one gate that catches the whole class of failure this refactor risks.
+// The one gate that catches this whole class of failure.
 // Handlers are `onclick="window.thing._method(...)"` strings, resolved by name
 // at CLICK time — so a renamed method is a silently dead button with no
 // build-time error anywhere. Every name a step file writes has to exist on the
@@ -767,11 +767,9 @@ console.log("\n10. Each branch's step list is walkable end to end");
 }
 
 // ── 11. Every step body renders ─────────────────────────────────────────────
-// The gate that catches a helper deleted along with the function above it.
-// Splitting the two step modules cut `thumb()` and `emptyStep()` out of the
-// photo one — they sat below the renderers that moved — and nothing said so:
-// both files parsed, both exported, and the pager threw
-// "thumb is not defined" only when somebody opened it.
+// The gate that catches a helper deleted along with the function above it:
+// both files still parse and export, and the pager throws
+// "thumb is not defined" only when somebody opens it.
 
 console.log("\n11. Every step body renders without throwing");
 {
@@ -1001,10 +999,10 @@ console.log("\n11. Every step body renders without throwing");
 }
 
 // \u2500\u2500 12. The draft envelope knows every source \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-// clear() used to sweep the LEGACY probe list, which is the two pre-wizard
-// keys. A third model's key left behind by a finished import is resurrectable
-// on the next open \u2014 the exact failure domain/import-draft.js's header is
-// about \u2014 so the sweep list and the probe list are now separate.
+// clear() sweeps its own list, separate from the LEGACY probe list (the two
+// pre-wizard keys): a third model's key left behind by a finished import is
+// resurrectable on the next open \u2014 the exact failure
+// domain/import-draft.js's header is about.
 
 console.log("\n12. The draft envelope knows every source");
 {

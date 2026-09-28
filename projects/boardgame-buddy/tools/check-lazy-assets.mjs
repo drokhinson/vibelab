@@ -3,15 +3,14 @@
 //
 //     node projects/boardgame-buddy/tools/check-lazy-assets.mjs
 //
-// THE BUG THIS EXISTS FOR, because it is invisible and it recurred:
+// THE BUG THIS EXISTS FOR, because it is invisible:
 //
 // sw.js serves same-origin subresources from its cache. Navigations are
 // network-first, so the shell and the content-hashed bundle are always
 // current — which means an app whose lazily-loaded modules are frozen at some
 // older build looks completely fine. The only symptom is a screen that
 // resembles an older version of itself, and that is indistinguishable from
-// work that was never done. A tour scene shipped three releases before anyone
-// could see it.
+// work that was never done.
 //
 // Two mechanisms keep it fixed, and each fails silently on its own:
 //
@@ -78,8 +77,8 @@ ok("...and the Tailwind pattern matches the swapped shell", TW_RE.test(swapped))
 console.log("\nevery lazy module is stamped");
 // EVERY module path in a file that lazily loads anything, not just the ones
 // passed as a literal to load(). views/tour-view.js keeps its three scene
-// modules in a SCENE_SRCS array — which is precisely the set that went stale,
-// so a guard that only reads load("…") would have missed the whole bug.
+// modules in a SCENE_SRCS array, so a guard that only reads load("…") would
+// miss them.
 const MODULE_PATH = /"((?:ui|widgets|domain|views)\/[\w.-]+\.js)"/g;
 const loads = new Set();
 for (const rel of fs.readdirSync(W, { recursive: true })) {

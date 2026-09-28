@@ -18,10 +18,9 @@
 // the static shell, so there is nothing to unhide; and the view's own render()
 // throws on `null.innerHTML` from inside the router's navigation, where no
 // user-facing error surfaces. The result is a **blank page** reached by a real
-// link from a real screen — which is exactly what shipped for admin-rulebooks
-// between 052 and this check: the spoke's view, its route, its path row, its
-// script tag, its API client and its Settings entry were all present and
-// correct, and the one `<main>` was not.
+// link from a real screen, even when the view, its route, its path row, its
+// script tag, its API client and its Settings entry are all present and
+// correct.
 //
 // Nothing in the app can catch this at runtime, because the shell is static
 // markup and the register call is code — they never meet until somebody
@@ -118,7 +117,7 @@ ok(
 
 // The alias rows are the reason the check above is not a plain set difference,
 // so assert that some exist. If a refactor turned them into something this
-// parser cannot see, the check above would go back to passing vacuously on the
+// parser cannot see, the check above would pass vacuously on the
 // rows it silently dropped.
 const aliased = routed.filter((r) => r.alias);
 ok(`the ${aliased.length} alias rows were recognised as aliases`, aliased.length >= 5,

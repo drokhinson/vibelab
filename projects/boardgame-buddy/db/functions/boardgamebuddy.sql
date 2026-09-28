@@ -227,11 +227,12 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/012_rpcs_feed_and_stats.sql)
 --   Last updated in: db/migrations/boardgamebuddy/013_hot_games_exclude_imports.sql
---               (imported plays no longer count: rows with a non-NULL
+--               (imported plays do not count: rows with a non-NULL
 --                import_batch_id (one per paste, 007) or import_group_id (a
 --                run of identical plays inside a paste, 005) are dropped
 --                before the GROUP BY. The rail is a "what is everybody
 --                playing right now" signal and a backfilled notebook is not
+--                that. BGG-synced plays do count — see the migration.)
 --                that. BGG-synced plays still count — see the migration.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Top-N most-played games in the last N days for the Feed's
@@ -279,8 +280,6 @@
 --            favorite_game_name TEXT, favorite_play_count BIGINT)
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/015_user_stats_with_favorite.sql)
---               (originally 012; widened to surface owned_games (base only),
---                owned_expansions, and favorite_game)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/stats_service.py
 --   Purpose:    Per-user stats card on the Profile view (Played Games,
 --               Owned Games, Wins, Favorite Game). owned_games excludes
@@ -296,15 +295,16 @@
 --                roster for a winner OR a score — and every RATIO is filtered
 --                by it: career.rated_plays, the nemesis opponent set and the
 --                co-op record. A play where nobody won and nobody scored
---                recorded no outcome, so counting it as a loss reported defeats
---                that never happened. Counts are untouched: it still lands in
---                total_plays, unique_games, podium, rhythm, table_size, taste.
---                games[] gains decided_plays — the denominator wins is read
---                against, NOT to be confused with the existing scored_plays,
---                which counts plays with a WINNER'S score for the average.
---                personal_bests now excludes co-op, so the deliberate 0 a co-op
---                loss records cannot become somebody's "record".)
---               (shelf block replaced by 059_shelf_played_before.sql)
+--                recorded no outcome, so counting it as a loss would report
+--                defeats that never happened. Counts are not filtered: it
+--                lands in total_plays, unique_games, podium, rhythm,
+--                table_size, taste. games[] carries decided_plays — the
+--                denominator wins is read against, NOT to be confused with
+--                scored_plays, which counts plays with a WINNER'S score for
+--                the average. personal_bests excludes co-op, so the
+--                deliberate 0 a co-op loss records cannot become somebody's
+--                "record".)
+--               (shelf block defined in 059_shelf_played_before.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/stats_routes.py
 --               (GET /users/me/stats/detail)
 --   Purpose:    Everything on the Stats spoke (/profile/stats) in one call —
@@ -325,7 +325,7 @@
 --               alongside total_plays/win_count. nemesis, table_size.avg and
 --               rhythm.busiest_weekday are null when there is nothing to
 --               compute; every other key is always present.
---               shelf (as of 059) is
+--               shelf (059) is
 --               {owned, played, unplayed, marked, games[], games_truncated}:
 --               'played' counts a logged play OR a collections.played_before_at
 --               mark, and 'games' is every owned base game with no logged
@@ -349,31 +349,27 @@
 --   thing that seed exists to avoid.
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/014_feed_order_by_played_at.sql)
---               (originally 012; signature changed to a composite cursor)
 --   Last updated in: db/migrations/boardgamebuddy/031_feed_scoring_template.sql
---               (adds scoring_template, carried straight off the `page` CTE —
---               no new read, no behavior change in SQL. bgb_plays_page has
---               emitted it since 018; this gives the feed the same field so the
---               play-detail popup, which paints from a seed projected off the
---               feed card before its revalidation lands, gets the round grid
---               right on its first frame instead of repainting the whole card.
---               DROP + CREATE, since another OUT column is a new return type —
---               which also discards the ACL, so 028's revoke is re-applied for
---               this function alongside the grant.)
+--               (scoring_template, carried straight off the `page` CTE — the
+--               same field bgb_plays_page emits (018), so the play-detail
+--               popup, which paints from a seed projected off the feed card
+--               before its revalidation lands, gets the round grid right on
+--               its first frame. A DROP + CREATE of this function discards
+--               the ACL, so 028's revoke has to be re-applied alongside the
+--               grant.)
 --   Previously updated in: db/migrations/boardgamebuddy/022_feed_import_batch.sql
---               (adds import_batch_id, carried straight off the `page` CTE —
---               no new read, no behavior change in SQL. It is the flag the
---               feed's client-side grouping needs to tell an imported play
---               from a live one: imports group on (played_at, LOGGER) instead
---               of on the roster, so one afternoon's paste is one section
---               headed "Marco imported 19 games" rather than one section per
---               permutation of who was at the table. import_group_id could not
---               answer it — 005 sets that only on plays the importer found
---               indistinguishable from another in the same paste, so every
---               one-off in an import carries a batch id and no group id.
---               DROP + CREATE, since another OUT column is a new return type.)
+--               (import_batch_id, carried straight off the `page` CTE. It is the
+--               flag the feed's client-side grouping needs to tell an imported
+--               play from a live one: imports group on (played_at, LOGGER)
+--               instead of on the roster, so one afternoon's paste is one
+--               section headed "Marco imported 19 games" rather than one
+--               section per permutation of who was at the table.
+--               import_group_id cannot answer it — 005 sets that only on
+--               plays the importer found indistinguishable from another in
+--               the same paste, so every one-off in an import carries a batch
+--               id and no group id.)
 --   Before that: db/migrations/boardgamebuddy/016_play_reactions.sql
---               (adds reaction_count, viewer_reacted and reactors — the "Good
+--               (reaction_count, viewer_reacted and reactors — the "Good
 --               game" reaction, drawn on the SESSION footer but stored per
 --               play, because a feed session is grouped client-side off a
 --               viewer-filtered participant list and so has no key worth
@@ -382,54 +378,45 @@
 --               reaction_count carries the exact total, and viewer_reacted is
 --               a bool_or over the full set rather than a scan of the cap.)
 --   Previously updated in: db/migrations/boardgamebuddy/015_feed_full_roster.sql
---               (adds players, expansions and country_code, so the play card's
+--               (players, expansions and country_code, so the play card's
 --               back face and the detail popup paint from the feed payload
 --               instead of each calling GET /plays/{id} on open. `players` is
 --               the UNFILTERED scorecard — every seat, ghosts included, with
 --               score and round_scores — built by the roster LATERAL that
 --               already reads those rows for winner_display_name and
 --               participant_count, so it costs serialisation and no I/O.
---               `participants` is unchanged and stays filtered to viewer +
---               accepted buddies: it is the session GROUPING KEY on the FE,
---               not a scorecard. `expansions` is the one new read, a second
---               LATERAL on the (play_id, expansion_game_id) PK. DROP + CREATE,
---               since three more OUT columns is a new return type.)
+--               `participants` stays filtered to viewer + accepted buddies:
+--               it is the session GROUPING KEY on the FE, not a scorecard.
+--               `expansions` is a second LATERAL on the
+--               (play_id, expansion_game_id) PK.)
 --   Previously updated in: db/migrations/boardgamebuddy/007_play_import_batches.sql
---               (also returns import_group_id — 005 returned the COUNT without
---               the id, so the feed could say "58 plays" and had no way to act
---               on them; the run sheet deletes by it. Another OUT column, so
---               another DROP + CREATE.)
+--               (returns import_group_id beside the run's count, so the feed
+--               can act on a run: the run sheet deletes by it.)
 --   Grouping from: db/migrations/boardgamebuddy/005_play_import_groups.sql
 --               (one card per imported run: `page` keeps only the lowest-id row
 --               of each import_group_id and reports the run's size as
 --               group_count. The filter sits INSIDE `page`, before the LIMIT,
 --               so a page is 20 cards rather than 20 rows of which 19 are the
---               same run — a 106-play import used to consume five pages of
---               every follower's feed. DROP + CREATE rather than CREATE OR
---               REPLACE: adding an OUT column is not a replace, and there is
---               no MIN() for uuid, hence ORDER BY id LIMIT 1.)
+--               same run. There is no MIN() for uuid, hence ORDER BY id
+--               LIMIT 1.)
 --   Perf shape from: db/migrations/boardgamebuddy/043_feed_perf_and_bootstrap_split.sql
---               (perf only, no behavior change — verified identical rows and
---               row order across 390 viewer x limit x cursor cases. A `page`
---               CTE now applies the cursor and LIMIT first and a LATERAL
---               resolves each page row's roster; previously the winners/
---               participants CTEs group-aggregated the entire play_players
---               table on every call — Postgres can't push the join qual
---               through a GROUP BY subquery — so feed latency grew with total
---               plays across all users, not the viewer's. 105 ms -> 5 ms on a
---               30k-play fixture. Language changed sql -> plpgsql so `lim` can
---               be interpolated as a literal via RETURN QUERY EXECUTE: as a
---               bind parameter it destroyed the planner's row estimate for
---               `page` and made the rewrite 8x slower than the original.)
---               Behavior last changed in 032_feed_plays_buddy_participation.sql
---               (visibility predicate widened from "logger ∈ visible OR
---               viewer ∈ participants" to "any participant ∈ visible",
---               so plays where a buddy was tagged but the logger is not
---               a buddy of the viewer now surface in the feed.)
+--               (a `page` CTE applies the cursor and LIMIT first and a LATERAL
+--               resolves each page row's roster, so feed latency tracks the
+--               viewer's page rather than total plays across all users —
+--               Postgres can't push the join qual through a GROUP BY
+--               subquery, so roster CTEs aggregated ahead of the page would
+--               scan the entire play_players table on every call. plpgsql so
+--               `lim` can be interpolated as a literal via RETURN QUERY
+--               EXECUTE: as a bind parameter it destroys the planner's row
+--               estimate for `page`.)
+--               Visibility predicate from 032_feed_plays_buddy_participation.sql
+--               ("any participant ∈ visible", so a play where a buddy was
+--               tagged surfaces even when the logger is not a buddy of the
+--               viewer.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Visible plays for the Feed: any play where the viewer or
 --               an accepted buddy participated (via boardgamebuddy_play_players),
---               plus a legacy safety branch for logger ∈ visible. Pre-joined
+--               plus a safety branch for logger ∈ visible. Pre-joined
 --               to game name/image, winner display, and a participant-aware
 --               roster. Ordered by played_at DESC, created_at DESC. Cursor
 --               is the last row's (played_at, created_at) for lexicographic
@@ -440,12 +427,12 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/012_rpcs_feed_and_stats.sql)
 --               db/migrations/boardgamebuddy/045_participated_play_stats.sql
---                 (was joining plays on p.user_id = uid only, so a game the
---                  user played but a buddy logged read as "never played" and
---                  got nudged at them; now counts participated plays)
+--                 (counts participated plays, not just logged ones, so a game
+--                  the user played but a buddy logged is not nudged at them as
+--                  "never played")
 --   Called by:  projects/boardgame-buddy/api/routes/services/discovery_service.py
 --               (fetch_back_on_shelf — the Discover tab's "Back on the shelf"
---               rail. The Feed card it was written for never shipped.)
+--               rail.)
 --   Purpose:    Owned games this user hasn't played in N days.
 
 -- bgb_suggested_buddies(uid UUID, lim INT DEFAULT 5)
@@ -454,35 +441,29 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/012_rpcs_feed_and_stats.sql)
 --               db/migrations/boardgamebuddy/057_suggested_buddies_mutuals.sql
---                 (DROP + CREATE — the return type gained play_count. Adds
---                  played-with candidates alongside friends-of-friends and
---                  ranks shared plays above graph paths; excludes candidates
---                  on ANY existing edge with the viewer — pending and blocked
---                  included, not just accepted — and candidates with no
---                  profile row; lim now defaults to 5)
+--                 (play_count: played-with candidates alongside
+--                  friends-of-friends, shared plays ranked above graph paths;
+--                  excludes candidates on ANY existing edge with the viewer —
+--                  pending and blocked included, not just accepted — and
+--                  candidates with no profile row; lim defaults to 5)
 --               db/migrations/boardgamebuddy/066_suggested_buddies_skip_unset_profiles.sql
---                 (CREATE OR REPLACE — body only, so the GRANT survives. Adds
---                  `pr.needs_setup IS NOT TRUE` to the profile join, so a
+--                 (`pr.needs_setup IS NOT TRUE` on the profile join, so a
 --                  profile that has never been through the setup modal — email
---                  local-part as its display name, default badge — is no longer
---                  suggestable here either. 063 had the filter and this did
---                  not, which was an oversight rather than a decision.)
+--                  local-part as its display name, default badge — is not
+--                  suggestable here either, matching 063.)
 --               db/migrations/boardgamebuddy/072_suggestions_from_sent_requests.sql
---                 (DROP + CREATE — the return type gained pending_mutual_count
---                  and via_user_id. A pending request the VIEWER sent is now a
---                  first-hop link: the second traversal hops from those targets
---                  over their accepted edges. It gets its own count rather than
---                  being folded into mutual_count, so the tile's "Mutual buddy"
---                  stays true and no existing caller's number changes meaning.
---                  via_user_id names which first-hop person explains a
---                  candidate — an accepted link preferred over a pending one —
---                  so the tile can say "Buddy of Priya". The second hop stays
---                  accepted-only, and `connected` still excludes the people the
---                  viewer has asked.)
+--                 (pending_mutual_count and via_user_id. A pending request the
+--                  VIEWER sent is a first-hop link: the second traversal hops
+--                  from those targets over their accepted edges. It gets its
+--                  own count rather than being folded into mutual_count, so the
+--                  tile's "Mutual buddy" stays true. via_user_id names which
+--                  first-hop person explains a candidate — an accepted link
+--                  preferred over a pending one — so the tile can say "Buddy of
+--                  Priya". The second hop stays accepted-only, and `connected`
+--                  excludes the people the viewer has asked.)
 --               db/migrations/boardgamebuddy/014_buddy_suggestion_dismissals.sql
---                 (CREATE OR REPLACE — body only, so the GRANT survives. Adds a
---                  `dismissed` CTE over boardgamebuddy_buddy_suggestion_dismissals
---                  and excludes those candidates. A separate CTE from `connected`
+--                 (a `dismissed` CTE over boardgamebuddy_buddy_suggestion_dismissals
+--                  excludes those candidates. A separate CTE from `connected`
 --                  on purpose: a dismissed person is not connected to the viewer,
 --                  they are refused by them.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
@@ -509,14 +490,13 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/063_onboarding_buddy_suggestions.sql)
 --               db/migrations/boardgamebuddy/072_suggestions_from_sent_requests.sql
---                 (DROP + CREATE — the same two columns and the same
---                  sent-request traversal as bgb_suggested_buddies above, so
---                  the two functions stay the mirror of each other they were
---                  written to be. tier_graph's floor widened to admit a
+--                 (the same two columns and the same sent-request traversal as
+--                  bgb_suggested_buddies above, so the two functions stay
+--                  mirrors of each other. tier_graph's floor admits a
 --                  candidate whose only signal is a request the viewer sent;
---                  tier_active rows carry 0 and NULL for the new columns.)
+--                  tier_active rows carry 0 and NULL for those columns.)
 --               db/migrations/boardgamebuddy/014_buddy_suggestion_dismissals.sql
---                 (CREATE OR REPLACE — body only. The dismissal filter goes on
+--                 (the dismissal filter sits on
 --                  `eligible`, the shared floor BOTH tiers draw from, so a
 --                  dismissed person is gone from the earned-signal tier and the
 --                  recently-active fallback alike.)
@@ -544,7 +524,7 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/072_suggestions_from_sent_requests.sql)
 --               db/migrations/boardgamebuddy/014_buddy_suggestion_dismissals.sql
---                 (CREATE OR REPLACE — body only. Excludes dismissed candidates
+--                 (excludes dismissed candidates
 --                  too: without it a dismissed person would be absent from the
 --                  first paint and then promoted into the grid the moment the
 --                  user ticked one of their buddies.)
@@ -568,8 +548,7 @@
 --   → TABLE (mechanic TEXT)
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/019_perf_indexes.sql)
---   Called by:  (nothing — GET /games/mechanics, its only caller, was removed
---               as uncalled. Kept because the mechanics filter is a plausible
+--   Called by:  (nothing. Kept because the mechanics filter is a plausible
 --               near-term feature and the function is free to keep.)
 --   Purpose:    Sorted distinct mechanic strings across the games catalog,
 --               without a full table scan + Python aggregation.
@@ -579,7 +558,7 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/021_profile_and_game_detail_bundles.sql)
 --   Last updated in: db/migrations/boardgamebuddy/030_game_viewer_stats.sql
---               (adds `viewer_stats` — the viewer's own record with this one
+--               (`viewer_stats` — the viewer's own record with this one
 --                game: plays, wins, decided_plays, scored_plays,
 --                avg_winning_score, your_avg_score, your_best_score, first and
 --                last played. NULL when they have never played it. Same row
@@ -589,13 +568,13 @@
 --                does not have to pull an eleven-block whole-history payload
 --                to draw one ring.)
 --               Before that: db/migrations/boardgamebuddy/023_game_detail_bundle_viewer_status_played.sql
---               (viewer_status now falls through to 'played' when the viewer
+--               (viewer_status falls through to 'played' when the viewer
 --               has any visible play of the game with no collection row —
---               same fix Profile bundle's status_map got in migration 022)
+--               the same rule as Profile bundle's status_map, migration 022)
 --               db/migrations/boardgamebuddy/055_hi_res_tile_art.sql
---                 (each expansion now carries image_url as well as
+--                 (each expansion carries image_url as well as
 --                  thumbnail_url — the reel crops its polaroids at 132x110,
---                  which upscaled BGG's ~200px thumbnail)
+--                  which would upscale BGG's ~200px thumbnail)
 
 --   Called by:  shared-backend/routes/boardgame_buddy/game_routes.py
 --               (GET /games/{game_id}/bundle)
@@ -616,62 +595,55 @@
 --                recorded a result — same `decided` rule as
 --                bgb_user_stats_detail. shared_plays is the denominator
 --                your_wins/their_wins are read against, so a play nobody won
---                and nobody scored showed up as a game you had both somehow
---                lost, and the profile's split bar drew the difference as a
---                phantom third party. Everything else is verbatim from 011.)
+--                and nobody scored would show up as a game you had both
+--                somehow lost, and the profile's split bar would draw the
+--                difference as a phantom third party.)
 --   Previously updated in: db/migrations/boardgamebuddy/069_prev_owned_status.sql
 --               (owned_page returns the SET ('owned','prev_owned') so the
 --                Collection spoke's first-frame seed holds the same rows
---                bgb_collection_shelf will; owned_total stays owned-only and
---                is joined by the new owned_parted_total. status_map carries
---                'prev_owned' unaided — it has never had a status filter.
---                expansion_counts stays owned-only. bootstrap_version NOT
---                bumped: the added key is additive and a pre-069 bundle
---                missing it reads as zero, which is the old behaviour.)
+--                bgb_collection_shelf will; owned_total is owned-only, with
+--                owned_parted_total beside it. status_map carries
+--                'prev_owned' unaided — it has no status filter.
+--                expansion_counts is owned-only. owned_parted_total is
+--                additive, so bootstrap_version stays put: a cached bundle
+--                missing it reads as zero.)
 --               db/migrations/boardgamebuddy/029_profile_avatar_config.sql
---                 (buddy + buddy-request blocks now emit `other_avatar` JSONB
---                  instead of `other_avatar_url` TEXT, following the
---                  avatar_url → avatar rename on boardgamebuddy_profiles)
+--                 (buddy + buddy-request blocks emit `other_avatar` JSONB,
+--                  read off boardgamebuddy_profiles.avatar)
 --               db/migrations/boardgamebuddy/045_participated_play_stats.sql
---                 (played-shelf play_count reached play_players with a
---                  LEFT JOIN then COUNT(*), so a play the user logged was
---                  counted once per participant — a 4-player play read as
---                  4 plays. Now EXISTS, matching bgb_play_stats.)
+--                 (played-shelf play_count reaches play_players through
+--                  EXISTS, matching bgb_play_stats — a LEFT JOIN then
+--                  COUNT(*) would count a play once per participant.)
 --               db/migrations/boardgamebuddy/055_hi_res_tile_art.sql
---                 (owned/wishlist pages emit a real image_url instead
---                  of NULL, via a LEFT JOIN to boardgamebuddy_games — 020
---                  denormalized name/thumbnail onto collection rows but not
---                  the full-size art)
+--                 (owned/wishlist pages emit a real image_url via a LEFT JOIN
+--                  to boardgamebuddy_games — 020 denormalized name/thumbnail
+--                  onto collection rows but not the full-size art)
 --               db/migrations/boardgamebuddy/064_profile_bundle_buddy_blocks.sql
---                 (Profile Other became buddy-aware: new `is_buddy` flag,
---                  new buddy-only `together` + `top_games` blocks, and
+--                 (Profile Other is buddy-aware: an `is_buddy` flag,
+--                  buddy-only `together` + `top_games` blocks, and
 --                  `recent_plays` is NULL — not [] — for a viewer who is
 --                  neither the target nor an accepted buddy. The COUNT
 --                  `recent_plays_total` stays visible to everyone; it is one
 --                  of the four headline stats a public profile shows.)
 --               db/migrations/boardgamebuddy/071_profile_bundle_ghost_claims.sql
---                 (new self-only `ghost_claims_incoming` block beside
+--                 (self-only `ghost_claims_incoming` block beside
 --                  `buddy_requests_incoming`, so the Profile tab's dot and the
 --                  Buddies card's count are right on first paint. Additive and
---                  self-null, so bootstrap_version is deliberately NOT bumped —
---                  064's argument, verbatim. Its body is 069's verbatim: this
+--                  self-null, so it needs no bootstrap_version bump. This
 --                  function is replaced wholesale, so a migration that adds a
---                  key MUST be rebased onto whichever one defined it last.)
+--                  key MUST be built on whichever one defined it last.)
 --               db/migrations/boardgamebuddy/011_profile_bundle_visibility_union.sql
---                 (PERFORMANCE ONLY — output byte-identical to 071, verified
---                  across 80 viewer/target/page-size combinations at 1k and
---                  201k plays. Five blocks expressed the visibility rule as
---                  `user_id = target OR EXISTS (…play_players…)`, which no
---                  index can serve, so each was a full scan of the SHARED
+--                 (the visibility rule is the my_plays UNION form
+--                  bgb_user_stats uses: one arm per index, dedup on p.id.
+--                  `user_id = target OR EXISTS (…play_players…)` is not
+--                  index-servable, so it would be a full scan of the SHARED
 --                  boardgamebuddy_plays table — one account's first paint
---                  scaling with every other account's history. Now the
---                  my_plays UNION form bgb_user_stats has always used: one arm
---                  per index, dedup on p.id. ~800ms → ~275ms at 201k plays.
---                  The two owned/wishlist LATERALs keep their OR EXISTS on
---                  purpose — they also filter p.game_id, which
---                  idx_bgb_plays_game_played serves, and converting them
---                  measured 0.5ms → 98ms. bootstrap_version NOT bumped: shape
---                  unchanged, and a bump wipes every client's cache.)
+--                  scaling with every other account's history. The two
+--                  owned/wishlist LATERALs keep their OR EXISTS on purpose —
+--                  they also filter p.game_id, which idx_bgb_plays_game_played
+--                  serves, and the UNION form measures 0.5ms → 98ms there.
+--                  A bootstrap_version bump wipes every client's cache, so it
+--                  is reserved for shape changes.)
 
 --   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
 --               (GET /profile/bundle)
@@ -694,7 +666,7 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/033_bootstrap_bundle.sql)
 --   Last updated in: db/migrations/boardgamebuddy/043_feed_perf_and_bootstrap_split.sql
---               (bootstrap_version → 2; the game-bundle block is now skipped
+--               (bootstrap_version 2; the game-bundle block is skipped
 --               when max_game_bundles <= 0, which is how the backend calls it)
 --   Called by:  shared-backend/routes/boardgame_buddy/bootstrap_routes.py
 --               (GET /bootstrap, with max_game_bundles = 0)
@@ -736,8 +708,8 @@
 --               is still running rather than after the save)
 --   Last updated in: db/migrations/boardgamebuddy/056_participant_order.sql
 --               (participants sort by `position NULLS LAST, joined_at` — the
---               one and only live participant-ordering site. 054 added
---               `scores`, the live grid, [] outside phase='play')
+--               one and only live participant-ordering site. `scores`, the
+--               live grid, is [] outside phase='play' (054))
 --   Last updated in: db/migrations/boardgamebuddy/018_scoring_templates.sql
 --               (emits `scoring_template`, the row labels the host applied, so
 --               the spectator's read-only mirror can label its rows too — it
@@ -747,8 +719,7 @@
 --               endpoint; also invoked internally by the three RPCs below)
 --   Purpose:    Single round-trip lobby payload: session row + participant
 --               roster with profile avatars + optional GameSummary + the
---               live score grid. Replaced the 3-4 sequential PostgREST
---               selects _build_response used to fan out. The scores array is
+--               live score grid. The scores array is
 --               how a spectator who joined after Gather sees the grid at all:
 --               they hold no participant row, so the table's RLS SELECT
 --               policy hides it from their own client (migration 054).
@@ -760,10 +731,10 @@
 --               (collapsed from archive/036_session_rpcs.sql)
 --   Last updated in: db/migrations/boardgamebuddy/056_participant_order.sql
 --               (seats the host at position 0 — with a NULL there the host
---               sorts LAST the moment bgb_add_participant gives everyone else
---               a real position). Before that, 038:
---               (code entropy from uuid_send(gen_random_uuid()) — 036's
---               gen_random_bytes failed on Supabase because pgcrypto lives
+--               would sort LAST the moment bgb_add_participant gives everyone
+--               else a real position). Also 038:
+--               (code entropy from uuid_send(gen_random_uuid()) —
+--               gen_random_bytes fails on Supabase because pgcrypto lives
 --               in the `extensions` schema, outside the function's
 --               search_path = public)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
@@ -772,9 +743,7 @@
 --               allocates a unique 5-char Crockford code (≤6 retries against
 --               the partial unique index on (code) WHERE status='open'),
 --               seats the host as participant #1. The code alphabet and
---               length live only here — 036/038's comments point at
---               PLAY_SESSION_CODE_ALPHABET / _LENGTH in constants.py, which
---               no longer exist.
+--               length live only here, not in constants.py.
 
 -- bgb_get_session(p_code TEXT)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired"}
@@ -783,8 +752,8 @@
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (get_session — GET /sessions/{code}, the 2s lobby poll)
 --   Purpose:    Open/expiry-gated session fetch. Expired sessions are marked
---               status='abandoned' (status only, matching the old
---               _fetch_open_session) and reported as expired → 410.
+--               status='abandoned' (status only, not phase) and reported as
+--               expired → 410.
 
 -- bgb_join_session(p_code TEXT, p_user UUID DEFAULT NULL,
 --                  p_user_display_name TEXT DEFAULT NULL,
@@ -798,8 +767,7 @@
 --   Purpose:    Idempotent one-call join. During Gather, adds authed callers
 --               by user_id and guests by trimmed case-insensitive
 --               display_name; after Gather the roster is untouched
---               (spectator). Same semantics the Python service had, minus
---               the 3-4 extra round trips.
+--               (spectator).
 
 -- bgb_watch_session(p_code TEXT, p_viewer UUID)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired"}
@@ -834,8 +802,7 @@
 --               (list_joinable — GET /sessions/joinable, the Join chooser)
 --   Purpose:    One-call Join chooser payload: open unexpired sessions in
 --               phase gather/play/settle visible to the viewer (own hosted,
---               already-joined, or hosted by an accepted buddy). Replaced
---               the 5 sequential PostgREST selects list_joinable fanned out.
+--               already-joined, or hosted by an accepted buddy).
 
 -- bgb_log_play(p_user UUID, p_payload JSONB)
 --   → JSONB shaped like models.PlayResponse { id, game_id, game_name,
@@ -878,11 +845,6 @@
 --               play insert, so a refused play leaves nothing behind, and both
 --               are envelopes rather than exceptions so bgb_import_plays fails
 --               one element of a chunk instead of the chunk.)
---               db/migrations/boardgamebuddy/044_cleanup.sql
---                 (stops writing plays.game_image_url / game_play_mode, which
---                  044 drops; stops writing the boardgamebuddy_buddies roster,
---                  whose only reader — GET /plays/filter-options — was removed;
---                  stops emitting the always-null buddy_id key on each player)
 --               db/migrations/boardgamebuddy/048_play_client_key.sql
 --                 (honours p_payload.client_key: pre-checks for a stored key,
 --                  writes the column, and catches unique_violation for the
@@ -894,35 +856,28 @@
 --                  NORMALIZED value back)
 --               db/migrations/043_bga_import.sql
 --                 (reads p_payload.bga_table_id, pre-checks it the same way as
---                  client_key and writes the column. ALSO widens the
---                  unique_violation handler: there are two unique indexes a
---                  play can violate now, and resolving the winner's id by
---                  client_key alone returned {"duplicate": true, "id": null}
---                  for a caller that sent only a table id — a wrong answer
---                  that raises nothing.)
+--                  client_key and writes the column. The unique_violation
+--                  handler resolves the winner on every unique key a play can
+--                  violate: resolving by client_key alone would return
+--                  {"duplicate": true, "id": null} for a caller that sent only
+--                  a table id — a wrong answer that raises nothing.)
 --               db/migrations/boardgamebuddy/044_play_bgg_play_id.sql
 --                 (reads p_payload.bgg_play_id, pre-checks
 --                  (user_id, bgg_play_id) for a stored play and returns the
 --                  duplicate envelope, and writes the column. BoardGameGeek
---                  plays are written by the importer now — POST /bgg/sync no
---                  longer inserts them — and this pre-check is the only one
---                  that can see the plays the retired sync path wrote, because
---                  those carry no client_key. Built on 043's body, not 023's:
---                  re-emitting the older one would have dropped bga_table_id
---                  and its dedup with nothing raising. Widens the
---                  unique_violation handler a second time — three indexes can
---                  fire now, and the BGG arm is also the only thing that can
+--                  plays are written by the importer, and this pre-check is the
+--                  only one that can see BGG plays stored with no client_key.
+--                  The unique_violation handler covers all three indexes that
+--                  can fire, and the BGG arm is the only thing that can
 --                  resolve a race against the pending-imports worker, which
 --                  writes a bgg_play_id and no client_key.)
 --   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by
 --               bgb_finalize_session
 --   Purpose:    One-call play write: resolves the game, inserts the play with
---               its surviving denormalized game_* columns (migration 020),
+--               its denormalized game_* columns (migration 020),
 --               bulk-writes play_players + play_expansions, and returns the
---               hydrated response. Replaced the 6 sequential PostgREST calls
---               log_play fanned out — including a read-back of the expansion
---               rows it had just inserted. Idempotent when the payload
+--               hydrated response. Idempotent when the payload
 --               carries a client_key, which is what makes the web app's
 --               offline outbox safe to retry after a lost response.
 
@@ -938,7 +893,7 @@
 --               logic: it loops the payload and calls bgb_log_play per element,
 --               so game resolution, the denormalized game columns, client_key
 --               idempotency and the player/expansion inserts have exactly one
---               implementation. A game_not_found element — or, since 023, a
+--               implementation. A game_not_found element — or a
 --               no_players or duplicate_player one — reports in `results`
 --               and the rest of the chunk still lands — a batch that aborted
 --               wholesale would make a 300-play import unfinishable over one
@@ -950,29 +905,23 @@
 --     {"error": "not_found" | "expired" | "forbidden" | "game_not_found"}
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/042_write_rpcs.sql)
---               (body replaced by 052_finalize_score_matches_rounds.sql, then
---                again by 053_host_only_live_scores.sql)
+--               (body from 053_host_only_live_scores.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (finalize_session — POST /sessions/{code}/finalize)
 --   Purpose:    One-call wrap-up: open/expiry/host gates, calls bgb_log_play,
---               marks the session finalized. Replaced a 10 round-trip Python
---               chain — the host's Save used to block on all of it. A failed
+--               marks the session finalized. A failed
 --               write (game_not_found) leaves the session open so the host can
 --               retry. The duplicate envelope passes straight through (it has
 --               no `error` key and its `id` is the original play's), so the
 --               session still gets finalized against that play — the caller
 --               reads the row back via play_routes.load_play_response.
---               It no longer touches boardgamebuddy_play_session_scores at
---               all. 042 overlaid the joiners' live per-round totals onto the
---               host's player list and 052 narrowed that to a fallback for
---               players whose payload carried no round breakdown; migration
---               053 made the host the only person who can write a score, so
---               the payload IS the grid the host was looking at
+--               It does not read boardgamebuddy_play_session_scores at
+--               all: only the host can write a score (053), so the payload
+--               IS the grid the host was looking at
 --               (play-flow-view._commitResolvedScores folds the live overlay
 --               into the draft before building it, and PlayerEntry re-derives
---               score from round_scores). An overlay could now only ever
---               disagree with the payload — which is exactly the class of bug
---               052 was written to fix.
+--               score from round_scores). An overlay could only ever
+--               disagree with the payload.
 
 -- bgb_plays_page(p_target UUID, p_page INT DEFAULT 1, p_per_page INT DEFAULT 20,
 --                p_game UUID DEFAULT NULL, p_buddy UUID DEFAULT NULL,
@@ -981,13 +930,11 @@
 --   `players` entries carry `team` (048), same roster shape as bgb_feed_plays.
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/039_perf_rpcs_and_indexes.sql)
---               (body replaced by 065_play_country.sql, which adds the
+--               (body from 065_play_country.sql, which carries the
 --                country_code key so a play keeps its country past the
 --                response to its own POST)
 --   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
---               (list_plays — GET /plays). The second caller, GET
---               /games/{id}/plays, was removed as uncalled; that data now
---               rides on /games/{id}/bundle.
+--               (list_plays — GET /plays).
 --   Last updated in: db/migrations/boardgamebuddy/005_play_import_groups.sql
 --               (same one-card-per-run rule as bgb_feed_plays, applied in
 --               `filtered` so `counted` totals CARDS — a pager reading 106
@@ -1001,8 +948,7 @@
 --               plus plays where they appear as a participant. Filters
 --               (game / buddy participant / free-text over game_name +
 --               player_display_name), sort, LIMIT/OFFSET, and player +
---               expansion aggregation all in SQL. Replaced an 8-11 round
---               trip Python path that fetched every visible play tuple.
+--               expansion aggregation all in SQL.
 --               Reads denormalized plays.game_* columns (020).
 
 -- bgb_play_stats(p_viewer UUID, p_game_ids UUID[] DEFAULT NULL)
@@ -1013,12 +959,9 @@
 --               (_play_stats — GET /collection AND GET /collection/grid, both
 --               shelves). Also services/game_service.py (recently_played —
 --               GET /games/recently-played + the /bootstrap seed).
---               This is the reference implementation of the visibility rule;
---               migration 045 aligned the last two surfaces onto it.
+--               This is the reference implementation of the visibility rule (045).
 --   Purpose:    Per-game play_count / last_played_at via SQL GROUP BY over
---               the viewer's visible plays (own + participant). Replaced
---               _plays_visible_to_user + _index_plays, which shipped every
---               play row to Python to count — unbounded post-BGG-sync.
+--               the viewer's visible plays (own + participant).
 
 -- bgb_bgg_sync_status(p_user UUID)
 --   → JSONB { bgg_username, has_credentials, pending_count, errored_count,
@@ -1030,17 +973,16 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/039_perf_rpcs_and_indexes.sql)
 --   Last updated in: db/migrations/boardgamebuddy/006_bgg_check_session.sql
---               (the import roll-up gained `AND kind <> 'catalog'`, because a
+--               (the import roll-up carries `AND kind <> 'catalog'`, because a
 --                POST /bgg/check queues catalog rows into the same table and
---                they were being counted into the last IMPORT's window —
---                which made a finished import read as unfinished. The new
---                catalog_session_* keys are the same roll-up for those rows,
---                anchored on profiles.bgg_last_check_started_at.)
+--                counting them into the last IMPORT's window would make a
+--                finished import read as unfinished. The catalog_session_*
+--                keys are the same roll-up for those rows, anchored on
+--                profiles.bgg_last_check_started_at.)
 --   Called by:  shared-backend/routes/boardgame_buddy/bgg_link_routes.py
 --               (get_sync_status — GET /bgg/sync/status, FE poll target)
---   Purpose:    One-call import-progress poll (was up to 7 round trips per
---               poll). Session roll-up per distinct bgg_id mirrors the old
---               Python precedence (pending > error > done); names are the
+--   Purpose:    One-call import-progress poll. Session roll-up per distinct
+--               bgg_id uses the precedence pending > error > done; names are the
 --               20 most recently completed. has_credentials mirrors
 --               bgg_client.has_stored_credentials so auth_state derives
 --               without shipping the encrypted secret. The catalog roll-up
@@ -1076,7 +1018,7 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/040_search_rpc.sql)
 --               db/migrations/boardgamebuddy/041_search_exclude_expansions.sql
---                 (adds p_include_expansions; drops + recreates the 3-arg form)
+--                 (adds p_include_expansions)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/search_service.py
 --               (_rpc_hits — GET /search, the per-keystroke GameFinder)
 --   Purpose:    One index-backed query for the unified game picker. Catalog
@@ -1084,10 +1026,10 @@
 --               migration 039); LEFT JOIN onto the viewer's collection marks
 --               in_collection + collection_status; collection-first ordering
 --               (in_collection DESC, name) in SQL. Columns mirror _helpers._GAME_SELECT
---               plus the two collection extras. Replaced the two-query PostgREST
---               path whose collection match filtered an embedded !inner-joined
---               games.name column that the trigram index couldn't reliably serve.
---               search_service falls back to that path if this RPC is absent.
+--               plus the two collection extras. search_service falls back to a
+--               two-query PostgREST path if this RPC is absent; that path's
+--               collection match filters an embedded !inner-joined games.name
+--               column the trigram index can't reliably serve.
 --               p_include_expansions defaults to false: expansions aren't
 --               pickable as a session's main game and live in the base game's
 --               expansion section instead.
@@ -1098,12 +1040,11 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/046_session_write_rpcs.sql)
 --   Called by:  (SQL-internal only) the five host-write RPCs below
---   Purpose:    Shared open/expiry/host/phase gate, a one-for-one port of
---               session_service._fetch_open_session plus each write's own
+--   Purpose:    Shared open/expiry/host/phase gate covering each write's own
 --               checks. The expiry path sets `status` only, not `phase`,
---               matching that helper and bgb_get_session. Deliberately NOT
---               retrofitted onto bgb_get_session / bgb_join_session: those sit
---               on the 2s poll path and 046 carries no behavior change there.
+--               matching bgb_get_session. Deliberately NOT used by
+--               bgb_get_session / bgb_join_session: those sit on the 2s poll
+--               path.
 
 -- bgb_add_participant(p_host UUID, p_code TEXT, p_user UUID, p_display_name TEXT)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
@@ -1116,7 +1057,7 @@
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (add_participant — POST /sessions/{code}/participants)
 --   Purpose:    Host-seats a buddy (p_user set) or ghost (p_user NULL) in one
---               call where the service took four. Dedup mirrors
+--               call. Dedup mirrors
 --               bgb_join_session — by user_id, or case-insensitively by
 --               trimmed display_name — riding the two partial unique indexes,
 --               with unique_violation swallowed so a double-tap is an
@@ -1154,10 +1095,9 @@
 --               a side's seats share ONE grid cell and that merge is gated on
 --               the mode, so tags without the mode would merge a grid the host
 --               had un-merged. NULL (or an unrecognised value) leaves the
---               stored mode alone, so an older client cannot un-say it. The tags are typed on the host's local draft and had no
---               server-side home before this, which is why 048 could give a
---               SAVED seat its team and still leave every live mirror
---               untinted. p_teams is the whole {participant_id: tag} map and a
+--               stored mode alone, so an older client cannot un-say it. The tags are typed on the host's local draft and this is
+--               their only server-side home until the play is saved.
+--               p_teams is the whole {participant_id: tag} map and a
 --               participant it omits is CLEARED — that is how a side the host
 --               deletes stops tinting. Ids from another session are ignored,
 --               as in bgb_reorder_participants. Tags are trimmed, truncated to
@@ -1177,7 +1117,7 @@
 --               (collapsed from archive/046_session_write_rpcs.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (remove_participant — DELETE /sessions/{code}/participants/{id})
---   Purpose:    Gather-only roster removal, 4 round trips → 1. The host can't
+--   Purpose:    Gather-only roster removal in one round trip. The host can't
 --               be removed this way; abandoning ends a session.
 
 -- bgb_update_session_game(p_host UUID, p_code TEXT, p_game UUID)
@@ -1225,9 +1165,7 @@
 --               (collapsed from archive/046_session_write_rpcs.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (abandon_session — DELETE /sessions/{code})
---   Purpose:    Close an open lobby. Retiring this last Python-side gate let
---               session_service drop _fetch_open_session and _build_response
---               entirely — every path through that module is now one RPC.
+--   Purpose:    Close an open lobby. Every session_service write path is one RPC.
 
 -- bgb_play_partners(p_viewer UUID)
 --   → JSONB { "accounts": [BuddyEdgeResponse…], "pending": [PendingBuddyEdge…],
@@ -1235,7 +1173,7 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/047_play_partners_rpc.sql)
 --   Last updated in: projects/boardgame-buddy/db/migrations/049_play_partners_pending.sql
---               (adds `pending`: one row per LIVE buddy request the viewer is
+--               (`pending`: one row per LIVE buddy request the viewer is
 --                a party to, either direction, newest first —
 --                {id, other_user_id, other_display_name, other_username,
 --                 other_avatar, direction: 'incoming'|'outgoing', created_at}.
@@ -1246,7 +1184,7 @@
 --                rows, not statuses, so this list is only ever people still
 --                waiting on an answer.)
 --               Before that: db/migrations/boardgamebuddy/012_buddy_aliases.sql
---               (`accounts` rows gained other_alias: the viewer's OWN private
+--               (`accounts` rows carry other_alias: the viewer's OWN private
 --                nickname for that buddy, projected off alias_by_a/alias_by_b
 --                by which side of the canonical edge the viewer is. Per-viewer
 --                by construction — the other party's call to this RPC gets
@@ -1255,7 +1193,7 @@
 --                the client dedupes accounts before recents, so a `recent` row
 --                that reaches the picker is by definition not a buddy.)
 --               Before that: db/migrations/boardgamebuddy/061_play_partners_pending_request_id.sql
---               (`recent` rows gained pending_request_id — the pending edge's
+--               (`recent` rows carry pending_request_id — the pending edge's
 --                own id, so the Buddies screen's played-with row can cancel an
 --                outgoing request or accept an incoming one without a second
 --                /buddies/requests round trip to look the id up by user)
@@ -1266,14 +1204,11 @@
 --               GET /buddies keeps buddy_service.list_accepted_buddies: the
 --               Buddies screen would otherwise compute ghosts and played-with
 --               counts it never renders.
---   Purpose:    The Gather player picker in one call. Replaced twelve round
---               trips across three endpoints — including a pass that pulled
---               every play id the viewer touches into Python to count them in
---               a dict (unbounded after a BGG sync). Two asymmetries are
---               deliberate ports, not oversights: `recent` spans plays the
+--   Purpose:    The Gather player picker in one call. Two asymmetries are
+--               deliberate, not oversights: `recent` spans plays the
 --               viewer logged OR appears in, while `ghosts` covers only plays
 --               they logged; and ghost grouping is case-sensitive on the
---               trimmed name, matching the Python dict key.
+--               trimmed name.
 
 -- bgb_collection_page(viewer UUID, target UUID, p_status TEXT DEFAULT 'owned',
 --                     p_search TEXT DEFAULT NULL, p_players INT DEFAULT NULL,
@@ -1292,33 +1227,28 @@
 --               native app page against, and which the Collection spoke falls
 --               back to once a shelf outgrows /collection/shelf's row cap.
 --   Purpose:    The paginated, server-filtered sibling of bgb_collection_shelf.
---               The endpoint used to read the WHOLE shelf on every page turn
---               and filter, sort and slice it in Python, across two round trips
---               (owned/wishlist) or three (played). Worse than slow: those
---               reads carried no limit, PostgREST silently caps an unbounded
---               select at 1000 rows, and the filter ran AFTER the truncation —
---               so on a large shelf a matching game could be missing because it
---               sat past row 1000. All four now happen in SQL, in one round
---               trip, with expansion_count folded in as a catalog-wide LATERAL
---               (the third round trip) and play stats as a second one, same
---               visibility rule as bgb_play_stats.
---               Equivalence rules carried over from the Python, each called out
---               at its predicate in the migration: NULL player bounds are
+--               Filtering, sorting, counting and paging all happen in SQL, in
+--               one round trip — never in Python after an unbounded read:
+--               PostgREST silently caps an unbounded select at 1000 rows, so a
+--               filter run after it would miss a matching game past row 1000.
+--               expansion_count folds in as a catalog-wide LATERAL and play
+--               stats as a second one, same visibility rule as bgb_play_stats.
+--               Filter rules, each called out at its predicate in the
+--               migration: NULL player bounds are
 --               permissive, a 6+ player search drops the lower bound, NULL
 --               playtime counts as zero, and the search is a plain substring
 --               rather than a LIKE pattern (a typed % is a percent sign). The
---               join onto boardgamebuddy_games is INNER, matching the Python's
---               skip of a collection row whose game row had gone, and it is
+--               join onto boardgamebuddy_games is INNER, skipping a
+--               collection row whose game row is gone, and it is
 --               where every filter reads from — rulebook_url exists only there,
 --               which is why this does not use the denormalized c.game_*
 --               columns the shelf reads. Wishlist is self-only, matching
 --               bgb_collection_shelf and bgb_profile_bundle. The 'played'
---               branch ignores p_sort and p_prioritize_exact_players, as the
---               Python did — that shelf is defined by recency.
---   NOTE:       One deliberate DIFFERENCE from the Python: every ordering ends
---               in a unique tiebreak (the game/collection id). Ties previously
---               fell in arbitrary PostgREST order, so a tied row could appear
---               on two pages or on none.
+--               branch ignores p_sort and p_prioritize_exact_players — that
+--               shelf is defined by recency.
+--   NOTE:       Every ordering ends in a unique tiebreak (the game/collection
+--               id); without it ties fall in arbitrary order, so a tied row
+--               could appear on two pages or on none.
 --   NOTE:       A separate function rather than parameters on
 --               bgb_collection_shelf: CREATE OR REPLACE cannot change a
 --               signature, so widening it would leave a second overload the
@@ -1334,26 +1264,23 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/049_collection_shelf.sql)
 --   Last updated in: db/migrations/boardgamebuddy/069_prev_owned_status.sql
---               (p_status='owned' now matches the SET ('owned','prev_owned') —
+--               (p_status='owned' matches the SET ('owned','prev_owned') —
 --                a game you sold is still on your Owned shelf, just dimmed —
---                and the new `parted_total` counts how many of the returned
+--                and `parted_total` counts how many of the returned
 --                rows are prev_owned so the client can subtract them from the
 --                shelf's displayed count. `total` deliberately counts BOTH,
 --                because `truncated` is about the rows on offer. Zero on the
 --                wishlist and played branches.)
 --               db/migrations/boardgamebuddy/055_hi_res_tile_art.sql
---                 (owned/wishlist items emit a real image_url instead of NULL,
---                  via a LEFT JOIN to boardgamebuddy_games for that one column;
---                  collection tiles crop square and were upscaling the ~200px
---                  thumbnail. The 'played' branch already had `g` in scope.)
+--                 (owned/wishlist items emit a real image_url via a LEFT JOIN
+--                  to boardgamebuddy_games for that one column; collection
+--                  tiles crop square and would upscale the ~200px thumbnail.
+--                  The 'played' branch has `g` in scope anyway.)
 --   Called by:  shared-backend/routes/boardgame_buddy/collection_routes.py
 --               (GET /collection/shelf), which the web Collection and Wishlist
 --               spokes call once per shelf via domain/collection.js.
 --   Purpose:    A whole shelf in ONE round trip so the client can paginate,
---               filter and search locally. /collection/grid materialized the
---               entire shelf on every request and sliced it in Python, so page
---               9 cost what page 1 cost — ~1s per page turn. Three round trips
---               collapse to one here: the shelf reads the denormalized
+--               filter and search locally. The shelf reads the denormalized
 --               c.game_* columns (020) rather than embedding the games row
 --               (image_url is the one exception — see 055),
 --               play stats fold in as a LATERAL (same visibility rule as
@@ -1371,26 +1298,24 @@
 --               definition, so no denormalized columns exist for them, and by
 --               the same token a prev_owned game stays OFF the played shelf:
 --               it still has a collection row.
---   NOTE:       /collection/grid is deliberately still live — the native app
+--   NOTE:       /collection/grid is deliberately kept live — the native app
 --               (app/src/api/client.js) and the web game explorer page against it.
 
 -- bgb_link_ghost(p_viewer UUID, p_display_name TEXT, p_target UUID)
 --   → JSONB { "updated": INT } | { "error": "not_found" }
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/050_ghost_rpcs_and_status_map.sql)
---   Last updated in: 070_ghost_claims.sql — now a thin wrapper over
---               bgb_link_ghost_rows, and matches on lower(btrim(...)) rather
---               than ILIKE, so ' Davo ' is caught too. The widening is what
+--   Last updated in: 070_ghost_claims.sql — a thin wrapper over
+--               bgb_link_ghost_rows, matching on lower(btrim(...)) rather
+--               than ILIKE, so ' Davo ' is caught too. That is what
 --               makes this and the claim key agree on one set of rows.
 --   Called by:  services/played_with_service.link_ghost (POST /ghost-players/link)
 --   Purpose:    Stamp a real account onto every ghost row matching a name in
---               the viewer's own plays. Replaces a SELECT of EVERY play id the
---               viewer owns, pulled into Python and handed back as a PostgREST
---               `in_` filter — which rides in the query string, so a few
---               hundred plays made a multi-KB URL and a few thousand failed
---               outright (414). Same "pull every play id into Python" pass 047
---               removed from /play-partners. PostgREST cannot put a subquery in
---               an UPDATE's WHERE, hence SQL. 3 round trips → 1.
+--               the viewer's own plays. PostgREST cannot put a subquery in an
+--               UPDATE's WHERE, and handing every play id back as an `in_`
+--               filter rides in the query string — a few hundred plays make a
+--               multi-KB URL and a few thousand fail outright (414) — hence
+--               SQL.
 
 -- bgb_merge_ghosts(p_viewer UUID, p_source TEXT, p_target TEXT)
 --   → JSONB { "updated": INT }
@@ -1398,41 +1323,33 @@
 --               (collapsed from archive/050_ghost_rpcs_and_status_map.sql)
 --   Called by:  services/played_with_service.merge_ghosts (POST /ghost-players/merge)
 --   Purpose:    Collapse two spellings of one ghost. Same query-string cliff as
---               bgb_link_ghost. 2 round trips → 1. Name validation (blank,
---               identical) stays in Python and still short-circuits with no DB
---               call at all.
+--               bgb_link_ghost. Name validation (blank, identical) stays in
+--               Python and short-circuits with no DB call at all.
 
 -- bgb_collection_status_map(p_viewer UUID)
 --   → JSONB { "status_map": {game_id: status}, "expansion_counts": {base_bgg_id: n} }
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/050_ghost_rpcs_and_status_map.sql)
 --   Last updated in: db/migrations/boardgamebuddy/069_prev_owned_status.sql
---               (status_map now carries 'prev_owned'. expansion_counts stays
---                owned-only on purpose — an expansion you sold is no longer
---                clutter on the base game's shelf.)
+--               (status_map carries 'prev_owned'. expansion_counts is
+--                owned-only on purpose — an expansion you sold should not
+--                badge the base game's shelf.)
 --   Called by:  collection_routes.collection_status_map (GET /collection/status-map),
 --               which web/domain/collection.js reads for status pills and
 --               expansion badges.
---   Purpose:    The two dicts the web client actually needs. It used to derive
---               them from GET /collection: three UNBOUNDED round trips (whole
---               collection + games join; bgb_play_stats over the viewer's
---               entire visible play history; an IN-query to hydrate
---               played-not-owned games) of which everything but these two dicts
---               was discarded — including the play stats that were round trip
---               2's only purpose. At a 60s fresh window it re-fired about once
---               a minute of active navigation. Round trip 2 grew with the
---               viewer's TOTAL VISIBLE plays, i.e. with their buddies' logging
---               too. Reads the denormalized game_* columns (020), so no games
+--   Purpose:    The two dicts the web client actually needs, without the
+--               unbounded collection + play-stats reads GET /collection makes.
+--               Reads the denormalized game_* columns (020), so no games
 --               join; the played branch uses the participated-in visibility
 --               rule shared with bgb_play_stats (039/045).
---   NOTE:       GET /collection is deliberately unchanged — the native app
---               consumes its row shape (app/src/store/AppContext.js:262).
+--   NOTE:       GET /collection keeps its row shape deliberately — the native
+--               app consumes it (app/src/store/AppContext.js:262).
 
 -- bgb_sync_achievements(uid UUID)
 --   → JSONB { total, earned_count, metrics, groups[], achievements[] }
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/062_achievements.sql)
---               (body replaced by 068_location_achievements.sql, which carries
+--               (body from 068_location_achievements.sql, which carries
 --                plays.country_code through the my_plays CTE and adds the
 --                countries / continents metrics)
 --   Last updated in: db/migrations/boardgamebuddy/034_team_coop_win_achievements.sql
@@ -1448,8 +1365,8 @@
 --               Before that: 033_chapter_dislikes.sql
 --               (scopes all three user_chapters subqueries — guide_chapters,
 --                chapters_borrowed and grid_adopters — to state='kept'. That
---                table now holds both halves of a viewer's opinion, so a row
---                no longer means "adopted" on its own, and a disliked chapter
+--                table holds both halves of a viewer's opinion, so a row
+--                does not mean "adopted" on its own, and a disliked chapter
 --                counting toward any of the three would be counting a refusal
 --                as an adoption.)
 --               Before that: 019_scoring_grid_achievements.sql
@@ -1521,9 +1438,9 @@
 --               bgb_accept_ghost_claim, bgb_dismiss_ghost_claim (SQL only)
 --   Purpose:    The four facts every single-ghost path needs, computed once so
 --               they cannot disagree. `visible` mirrors the FEED's rule (043);
---               `collides` is the double-seat guard — migration 023 added
---               uq_bgb_play_players_play_user, so a merge that would seat one
---               person twice is now refused by the database either way, and
+--               `collides` is the double-seat guard —
+--               uq_bgb_play_players_play_user (023) refuses a merge that would
+--               seat one person twice either way, and
 --               this check is what turns that into an answerable "already
 --               seated" instead of a failed merge.
 
@@ -1675,7 +1592,7 @@
 --
 -- Two stored facts the sources cannot supply: the watermark
 -- boardgamebuddy_profiles.link_notifications_seen_at ("have you seen this",
--- named for plays but covering all three since 009), and
+-- named for plays but covering all three), and
 -- boardgamebuddy_buddy_edges.accepted_by ("who said yes", which is not
 -- derivable because a QR scan writes an edge that is born accepted with nobody
 -- having asked).
@@ -1732,11 +1649,11 @@
 --            played_from, played_to, game_id, game_name, game_thumbnail_url,
 --            import_batch_id, edge_id)
 --   Defined in: db/migrations/boardgamebuddy/051_account_deletion_handover.sql
---               (introduced in 009_unified_notifications.sql; 010 rewrites the
+--               (introduced in 009_unified_notifications.sql; 010 shapes the
 --                body as narrow-scan → top-N keys → aggregate-the-page, so the
 --                array_aggs, the COUNT(DISTINCT) and the catalog join run over
 --                the ~20 entries on the page instead of over every entry the
---                account has ever had. Output is unchanged.)
+--                account has ever had.)
 --   Called by:  services/notification_service.list_notifications
 --               (GET /notifications, and the /bootstrap gather, which prefetches
 --               page one so the bell opens without a round trip)
@@ -1748,26 +1665,26 @@
 --               one kind with NO actor_id — the actor is a deleted account —
 --               so its name rides up the union from plays.inherited_from_name
 --               and the final SELECT coalesces the join that is going to miss.
---               That is what kept RETURNS TABLE unchanged and 051 a REPLACE. A play_link row is one ENTRY, not one play:
+--               A play_link row is one ENTRY, not one play:
 --               a batch, a run of identical imported plays, or one retroactive
 --               ghost-link collapses to a single row, so a 214-play import is
 --               one line with one tick box. play_ids holds ONLY the plays the
 --               viewer is seated in, because the unlink button's count has to
 --               match what it can actually move. Keyset-paged on the TUPLE
 --               (occurred_at, entry_key) — three sources feeding one ordering
---               makes ties ordinary, and 008's timestamp-only cursor silently
---               dropped every row sharing a boundary timestamp.
+--               makes ties ordinary, and a timestamp-only cursor would silently
+--               drop every row sharing a boundary timestamp.
 
 -- bgb_notifications_unread(p_viewer UUID)
 --   → INT
 --   Defined in: db/migrations/boardgamebuddy/051_account_deletion_handover.sql
---               (introduced in 009_unified_notifications.sql; 010 moves the
---                watermark from HAVING MAX(linked_at) > seen to a WHERE on
---                linked_at, which is the same set of entries — "some member is
---                newer" and "the newest member is newer" say the same thing —
---                but is an index condition rather than a filter on an
---                aggregate. An account that has read everything now scans no
---                rows instead of all of them.)
+--               (introduced in 009_unified_notifications.sql; 010 puts the
+--                watermark in a WHERE on linked_at rather than HAVING
+--                MAX(linked_at) > seen — the same set of entries, since "some
+--                member is newer" and "the newest member is newer" say the
+--                same thing — because a WHERE is an index condition rather
+--                than a filter on an aggregate, so an account that has read
+--                everything scans no rows.)
 --   Called by:  services/notification_service.unread_count
 --               (GET /notifications, and — via list_notifications — /bootstrap)
 --   Purpose:    The header bell's dot: the same four sources against the same
@@ -1807,9 +1724,9 @@
 --               actually DISPLAYED, not now(): a notification landing between
 --               the list request and this call must not be marked seen without
 --               ever having been on screen. Returns the stamp so the client
---               reconciles without a second read. Kept its 008 name in 009 —
---               it writes the watermark and never knew which kinds it covered,
---               so covering three needed no change.
+--               reconciles without a second read. Named for links but
+--               kind-agnostic: it writes the watermark and never knows which
+--               kinds it covers.
 
 -- bgb_release_notices_unseen(p_viewer UUID, p_limit INTEGER DEFAULT 5)
 --   → TABLE(id, title, body_md, link_route, link_label, published_at)
@@ -1851,8 +1768,7 @@
 --               via the single-play wrapper)
 --   Purpose:    THE ghost-out write, and the inverse of bgb_link_ghost_rows —
 --               the caller's seat becomes a ghost carrying their name, owned
---               implicitly by whoever logged the play. Replaces the two-step
---               PostgREST pair played_with_service used to run: one statement,
+--               implicitly by whoever logged the play. One statement,
 --               so the identity-check backfill and the null-out cannot be
 --               interleaved, and the fallback name is read from the profile
 --               rather than trusted from the client. Scoped twice —

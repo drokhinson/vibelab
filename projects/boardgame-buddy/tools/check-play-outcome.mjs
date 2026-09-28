@@ -9,21 +9,20 @@
 // context and checks the caption — the one line on the card that makes a claim
 // a person can catch being wrong.
 //
-// Written after a team night came back as "We lost" on a game the table had
-// won. Three things had to line up for that, and all three are pinned here:
+// A team night must never come back as "We lost" on a game the table won.
+// Three things have to line up for that, and all three are pinned here:
 //
-//   1. The caption read `winner_display_name`, the aggregate the feed RPC
-//      computes at fetch time, while `outcomeUnrecorded` read the roster
-//      beside it. Any patch that moved one without the other — a saved edit
-//      through Play.mergeIntoCard, a hand-built card — left the card stating
-//      a result its own scoreboard contradicted. The roster wins now.
-//   2. Play.mergeIntoCard rewrote the roster and left the aggregate alone, so
-//      crowning a winner from the edit popup changed the scoreboard on the
-//      back of the card and nothing on the front.
-//   3. PlaySession.applyTeamTag (then PlayFlowView._setTeam) overwrote a seat's
-//      win with its new teammates', so naming a team AFTER crowning it cleared
-//      the win — and the play SAVED that way. A caption can be re-rendered; a
-//      play logged with nobody flagged is gone.
+//   1. The caption reads the roster, not `winner_display_name`, the aggregate
+//      the feed RPC computes at fetch time. Any patch that moves one without
+//      the other — a saved edit through Play.mergeIntoCard, a hand-built card
+//      — would otherwise leave the card stating a result its own scoreboard
+//      contradicts.
+//   2. Play.mergeIntoCard has to carry a crowning from the edit popup to the
+//      front of the card, not just to the scoreboard on the back.
+//   3. PlaySession.applyTeamTag must not overwrite a seat's win with its new
+//      teammates', or naming a team AFTER crowning it clears the win — and the
+//      play SAVES that way. A caption can be re-rendered; a play logged with
+//      nobody flagged is gone.
 //
 // A team play also has no all-or-nothing shape to fall back on: the winner
 // list is half the table by construction, which is why the viewer's own seat
@@ -84,8 +83,8 @@ const text = (html) => html.replace(/<[^>]*>/g, "").trim();
 
 console.log("\nteam plays read as the viewer's own side:");
 {
-  // The night in the bug report: a team game, the viewer's side won, and the
-  // winner list is half the table.
+  // A team game where the viewer's side won, and the winner list is half the
+  // table.
   const won = card([
     seat("You", { user_id: "u-me", is_winner: true, score: 520 }),
     seat("Britt", { user_id: "u-b", is_winner: true, score: 520 }),
@@ -111,8 +110,8 @@ console.log("\nteam plays read as the viewer's own side:");
 
 console.log("\nthe caption names people the way the viewer does:");
 {
-  // The complaint: rename someone, and the back of the card calls them the new
-  // thing while the caption on the front still calls them the old one.
+  // Rename someone, and the caption on the front must call them what the back
+  // of the card does.
   win.Buddy.forgetAliases();
   win.Buddy.rememberAliases([
     { other_user_id: "u-b", other_alias: "Dickaloo", id: "edge-b" },
@@ -130,9 +129,9 @@ console.log("\nthe caption names people the way the viewer does:");
   ]);
   eq("a ghost winner is untouched", text(caption(ghost)), "Won byUncle Ray90");
 
-  // "You" is decided by user id now, not by comparing the joined winner list
-  // against me.display_name — that compare was already wrong for two players
-  // sharing a name, and an aliased viewer would break it outright.
+  // "You" is decided by user id, not by comparing the joined winner list
+  // against me.display_name — that compare is wrong for two players sharing a
+  // name, and an aliased viewer would break it outright.
   const mine = card([
     seat("You", { user_id: "u-me", is_winner: true, score: 500 }),
     seat("Britt", { user_id: "u-b", score: 420 }),
@@ -156,8 +155,7 @@ console.log("\nthe caption names people the way the viewer does:");
 
 console.log("\nthe roster is the source of truth, not the aggregate:");
 {
-  // Exactly the shape Play.mergeIntoCard used to leave behind: the play was
-  // edited to crown the table's winners, the roster says so, and the
+  // A play edited to crown the table's winners: the roster says so, and the
   // fetch-time aggregate still says nobody won.
   const stale = card([
     seat("You", { user_id: "u-me", is_winner: true, score: 520 }),
@@ -262,8 +260,8 @@ console.log("\nan edit carries the aggregates with it (Play.mergeIntoCard):");
 
 console.log("\na saved play remembers the sides (PlaySession.toPlayCreate):");
 {
-  // Before migration 048 the tag settled the side's win flags and was then
-  // dropped on the floor, so a team night saved as N seats and no sides.
+  // The tag has to reach the payload, not just settle the side's win flags, or
+  // a team night saves as N seats and no sides.
   const ps = new win.PlaySession({
     gameId: "g1",
     playedAt: "2026-09-18",
@@ -298,7 +296,7 @@ console.log("\nnaming a team never drops a recorded win (PlaySession.applyTeamTa
     { name: "Sam", is_winner: false, team: "" },
   ];
   // Each tag either agrees with the side already or has nothing to say, so
-  // nothing moves at any point — which is exactly the property that broke.
+  // nothing moves at any point — which is exactly the property under test.
   eq("tagging the first seat of a side settles nothing yet",
      PS.applyTeamTag(players, 0, "Dickaloo"), false);
   ok("...and leaves its win alone", players[0].is_winner === true);
