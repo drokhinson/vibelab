@@ -96,8 +96,9 @@
       window.BgbIcons.render(root);
     }
 
-    /** Where the rules put this ranked game now — which may not be where it
-     *  was ranked (its BGG data was refreshed since). Null when unknown. */
+    /** The category the rules give this ranked game from its current data —
+     *  which can differ from the category its rank is stored in. Null when
+     *  unknown. */
     _current() {
       const own = (window.Rank.cachedSummary() || {})[this._game.id] || this._ctx.rank;
       if (!own || !own.current_category) return null;
@@ -113,9 +114,9 @@
       // Only the first flow of an open takes the preset tier; Re-rank asks again.
       const tier = rerank ? null : this._tier;
       this._tier = null;
-      // A Re-rank ranks the game in the category it belongs in NOW, so a game
-      // whose BGG data changed (Pandemic, refreshed to co-op) moves there and
-      // leaves its old list. Same category: the stored list, exactly as before.
+      // A Re-rank ranks the game in the category its current data gives it.
+      // When that differs from the stored one, the game moves there and leaves
+      // the stored list; otherwise it is re-ranked within the stored list.
       let context = { ...this._ctx, rank: null };
       let ready = null;
       let reload = null;

@@ -1,7 +1,6 @@
-"""The game page's admin "Refresh from BoardGameGeek" re-reads what only the
-import used to write — tags, the play_mode they imply, player counts — which is
-what the old starter catalog got wrong (every row 002_seed.sql used to insert was 'competitive',
-Pandemic included). One /thing call, admin-only."""
+"""The game page's admin "Refresh from BoardGameGeek" rewrites the fields
+otherwise written only at import — tags, the play_mode they imply, player
+counts — from one /thing call. Admin-only."""
 
 import asyncio
 import os

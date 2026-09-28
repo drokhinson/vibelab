@@ -238,8 +238,8 @@ def test_a_ranked_game_keeps_its_category_when_bgg_disagrees_later(sb):
 
 
 def _pandemic_case(sb):
-    """Pandemic ranked in family while the seed row called it competitive; an
-    admin refresh has since made it coop. Two other family games sit around it."""
+    """Pandemic stored in family, while its game row (play_mode coop) now puts
+    it in coop. Two other family games sit around it."""
     games = [
         _game("p", "Pandemic", family="familygames", mode="coop", min_p=2, max_p=4),
         _game("a", "Azul", family="familygames"),

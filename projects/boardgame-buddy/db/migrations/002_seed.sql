@@ -10,8 +10,7 @@
 --
 -- Run after 001_baseline.sql, before 003_rpcs.sql.
 --
--- Four tables plus the two storage buckets — and deliberately no games (see
--- the note where the catalog used to be). Values are the FINAL text after
+-- Four tables plus the two storage buckets. Values are the FINAL text after
 -- every later edit in the archive — notably archive/067 rewrote all 19
 -- achievement taglines into plain second-person prose, and those rewritten
 -- taglines are what appear below, not the originals from archive/062.
@@ -35,16 +34,6 @@ INSERT INTO public.boardgamebuddy_chapter_types (id, label, icon, display_order)
   ('tips',            'Tips & Tricks',   'lightbulb',   50),
   ('variant',         'Variants',        'shuffle',     60)
 ON CONFLICT (id) DO NOTHING;
-
-
--- ── Game catalog: deliberately NOT seeded ────────────────────────────────────
--- This file used to insert a 22-game starter catalog (Catan, Pandemic, …) with
--- every row left at its column defaults — play_mode 'competitive', no art, no
--- description, BGG's tags half-filed. On a rebuilt database those rows
--- pre-empted the real import: a game whose bgg_id already exists is never
--- imported again, so it kept the wrong data (Pandemic ranked as Family, not
--- Co-op). The catalog now grows only through the BGG import path, which writes
--- the whole record. A fresh database starts with an empty search box.
 
 
 -- ── Achievement groups ───────────────────────────────────────────────────────

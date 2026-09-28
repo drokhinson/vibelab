@@ -1214,11 +1214,11 @@ async def refresh_single_game_from_bgg(
     """Admin-only: the game page's "Refresh from BoardGameGeek" button.
 
     refresh-metadata above rewrites what the backfill sweeps (description,
-    stats, publishers, a missing year). This also rewrites what only the import
-    ever wrote — categories, mechanics, the play_mode they imply, player counts
-    and playing time — which is what the old starter catalog (once in 002_seed.sql) got
-    wrong: every row there is play_mode 'competitive', Pandemic included. Art
-    is fetched too when the row has none. The name is left alone.
+    stats, publishers, a missing year). This also rewrites the fields otherwise
+    written only at import — categories, mechanics, the play_mode they imply,
+    player counts and playing time — so a row with wrong or default values for
+    them can be corrected. Art is fetched too when the row has none. The name
+    is left alone.
     """
     sb = get_supabase()
     existing = (
