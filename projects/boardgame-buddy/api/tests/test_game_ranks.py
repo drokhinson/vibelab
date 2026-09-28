@@ -8,7 +8,8 @@ everything the service decides on its own:
   * the category comes from BGG's family, then a fallback, never the client;
   * a ranked game keeps the category it was ranked in;
   * "#N" stacks the tiers love → good → not, whatever the stored positions;
-  * the queue is owned ∪ played, minus ranked, minus expansions, A to Z.
+  * the queue is played (a play, or the played-before mark), minus ranked,
+    minus expansions, A to Z — the shelf of shame is not offered.
 """
 
 import asyncio
@@ -34,10 +35,10 @@ USER = CurrentUser(user_id=ME, display_name="Me", username="me", is_admin=False)
 
 
 def _game(gid, name, *, family=None, cats=(), weight=None, expansion=False, pubs=None,
-          min_p=None, max_p=None):
+          min_p=None, max_p=None, mode="competitive"):
     return {
         "id": gid, "bgg_id": None, "name": name, "is_expansion": expansion,
-        "play_mode": "competitive", "bgg_family": family, "categories": list(cats),
+        "play_mode": mode, "bgg_family": family, "categories": list(cats),
         "bgg_weight": weight, "publishers": pubs,
         "min_players": min_p, "max_players": max_p,
     }
@@ -55,6 +56,16 @@ class _Q:
 
     def in_(self, col, vals):
         return _Q([r for r in self.rows if r.get(col) in set(vals)])
+
+    @property
+    def not_(self):
+        rows = self.rows
+
+        class _Not:
+            def is_(self, col, val):
+                assert val == "null"
+                return _Q([r for r in rows if r.get(col) is not None])
+        return _Not()
 
     def order(self, col):
         return _Q(sorted(self.rows, key=lambda r: r.get(col)))
@@ -157,6 +168,11 @@ def run(coro):
     (_game("1", "up to 4", min_p=2, max_p=4, weight=3), "strategy"),
     (_game("1", "gin rummy", cats=["Card Game"], pubs=["(Public Domain)"],
            min_p=2, max_p=2), "card"),                                       # Card comes first
+    # Co-op, after Card and 2-player.
+    (_game("1", "pandemic", family="strategygames", mode="coop", min_p=2, max_p=4), "coop"),
+    (_game("1", "duet", mode="coop", min_p=2, max_p=2), "two_player"),
+    (_game("1", "coop cards", cats=["Card Game"], pubs=["(Public Domain)"], mode="coop"), "card"),
+    (_game("1", "team", family="partygames", mode="team"), "party"),
 ])
 def test_category_rules(game, expected):
     assert rank_category(game) == expected
@@ -268,7 +284,9 @@ def test_remove(sb):
 
 # ── Queue ────────────────────────────────────────────────────────────────────
 
-def test_queue_is_owned_or_played_minus_ranked_and_expansions_a_to_z(sb):
+def test_queue_is_played_minus_ranked_and_expansions_a_to_z(sb):
+    """Played = a play, or the Shelf of Shame's "played before" mark. An owned
+    game with neither is on the shelf of shame and is not offered."""
     games = [
         _game("1", "spirit Island", family="strategygames"),
         _game("2", "Azul", family="familygames"),
@@ -277,15 +295,18 @@ def test_queue_is_owned_or_played_minus_ranked_and_expansions_a_to_z(sb):
         _game("5", "Brass", family="strategygames"),
         _game("6", "Wish", family="familygames"),
         _game("7", "Sold", family="familygames"),
+        _game("8", "Shame", family="familygames"),
     ]
+    marked = "2026-01-01T00:00:00Z"
     collections = [
-        {"id": "c1", "user_id": ME, "game_id": "1", "status": "owned"},
-        {"id": "c2", "user_id": ME, "game_id": "2", "status": "owned"},
-        {"id": "c4", "user_id": ME, "game_id": "4", "status": "owned"},
-        {"id": "c5", "user_id": ME, "game_id": "5", "status": "owned"},
-        {"id": "c6", "user_id": ME, "game_id": "6", "status": "wishlist"},
-        {"id": "c7", "user_id": ME, "game_id": "7", "status": "prev_owned"},
-        {"id": "c8", "user_id": "someone-else", "game_id": "6", "status": "owned"},
+        {"id": "c1", "user_id": ME, "game_id": "1", "status": "owned", "played_before_at": marked},
+        {"id": "c2", "user_id": ME, "game_id": "2", "status": "owned", "played_before_at": None},
+        {"id": "c4", "user_id": ME, "game_id": "4", "status": "owned", "played_before_at": marked},
+        {"id": "c5", "user_id": ME, "game_id": "5", "status": "owned", "played_before_at": marked},
+        {"id": "c6", "user_id": ME, "game_id": "6", "status": "wishlist", "played_before_at": None},
+        {"id": "c7", "user_id": ME, "game_id": "7", "status": "prev_owned", "played_before_at": None},
+        {"id": "c8", "user_id": ME, "game_id": "8", "status": "owned", "played_before_at": None},
+        {"id": "c9", "user_id": "someone-else", "game_id": "6", "status": "owned", "played_before_at": marked},
     ]
     sb["sb"] = _SB(games, collections=collections, plays=["3", "2"], ranks=[_rank("5", "strategy", "love", 0)])
     items = run(R.rank_queue(user=USER)).items

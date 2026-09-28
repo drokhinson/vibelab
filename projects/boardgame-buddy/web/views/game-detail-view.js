@@ -184,6 +184,7 @@
       if (!g || g.is_expansion || !this._ranks) return "";
       const r = this._ranks[g.id];
       if (!r) {
+        if (!this._rankable(g.id)) return "";
         return `
           <button class="btn game-detail__action game-detail__rank-btn" type="button"
                   onclick="window.gameDetailView._openRank(event)">
@@ -198,6 +199,19 @@
           <i data-icon="list-numbers" class="w-4 h-4"></i>
           <span><span class="game-detail__rank-num">${b.num}</span>${escapeHtml(b.rest)}</span>
         </button>`;
+    }
+
+    /**
+     * Only a game you have played can be ranked — the rank queue's rule, and
+     * the Shelf of Shame's: a play, or the "played before joining" mark. The
+     * bundle knows the first (viewer_stats, or a derived "played" status); the
+     * mark is not in the bundle, but a marked game sits in the rank queue, so
+     * its cached copy covers it without asking the server again.
+     */
+    _rankable(gameId) {
+      if (this._viewerStats || this._status === "played") return true;
+      const queue = window.Rank.cachedQueue();
+      return !!(queue && queue.some((it) => it.game && it.game.id === gameId));
     }
 
     _paintRank() {

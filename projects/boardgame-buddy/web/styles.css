@@ -22098,10 +22098,25 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .rank-flow__error { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 0; text-align: center; color: var(--polaroid-muted); }
 
 .rank-flow__badge {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
   margin: 4px 0 0;
   font-family: var(--font-polaroid); font-weight: 700; font-size: 1.35rem;
   color: var(--polaroid-ink);
 }
+.rank-flow__score { font-size: 1rem; color: var(--polaroid-muted); white-space: nowrap; }
+.rank-flow__score b { font-family: var(--font-score); font-size: 1.35rem; color: var(--accent-ink); }
+/* Only ever holds the failed-save line; empty (and so no gap) otherwise. */
+.rank-flow__save { margin: 0; font-size: 0.85rem; color: var(--rust); text-align: center; }
+.rank-flow__save:empty { display: none; }
+.rank-flow__retry {
+  position: relative; border: 0; background: none; padding: 0 4px;
+  font: inherit; font-weight: 600; color: var(--accent-ink); text-decoration: underline; cursor: pointer;
+}
+.rank-flow__retry::before { content: ""; position: absolute; inset: -14px -8px; }
+.rank-flow__done-actions { display: flex; gap: 8px; }
+.rank-flow__done-actions .btn { min-height: 52px; }
+.rank-flow__undo { flex: none; color: var(--polaroid-ink); }
+.rank-flow__continue { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank-flow__num { font-family: var(--font-score); color: var(--accent-ink); }
 .rank-flow__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .rank-flow__row {
@@ -22123,10 +22138,31 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 
 /* Collection: the closable card. Comes back on every visit (see
    collection-view.js), so it is kept to one line of copy and one action. */
+/* The "Rank your games" card docks above the bottom nav rather than sitting
+   in the flow: it arrives after the shelf has painted (ranks load second), and
+   in the flow it shoved the whole collection down when it did. Docked-footer
+   recipe and z-index as .bgbnotif-bar; the view's bottom padding grows while
+   it is up so the last row of tiles can still scroll clear of it. */
+.rank-banner {
+  position: fixed;
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
+  left: var(--bgb-col-center);
+  transform: translateX(-50%);
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max);
+  box-sizing: border-box;
+  padding: 0 12px 10px;
+  z-index: 35;
+  pointer-events: none;
+}
+.rank-banner:empty { display: none; }
+.rank-banner > * { pointer-events: auto; }
+[data-view="collection"]:has(.rank-banner .rank-card) { padding-bottom: 104px; }
 .rank-card {
   position: relative;
   display: flex; align-items: center; gap: 12px;
-  margin: 0 0 12px;
+  margin: 0;
+  box-shadow: var(--sh-2);
   padding: 12px 44px 12px 12px;
   border: 1px solid var(--accent-ink);
   border-radius: 14px;

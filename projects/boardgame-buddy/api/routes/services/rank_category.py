@@ -19,6 +19,11 @@ is ranked in 2-player: min and max players both 2. A game that also plays solo
 or with more is not. It too comes before BGG's families, which would otherwise
 scatter these across Strategy, Family and War; a two-player-only classic card
 game (Gin Rummy) stays in Card.
+
+Then co-op games (play_mode "coop", derived from BGG's Cooperative mechanic)
+are ranked in Co-op, playing together being a different thing to enjoy from
+playing against each other. A co-op game made for exactly two players stays in
+2-player.
 """
 
 from typing import Any
@@ -35,6 +40,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "customizable": "Customizable",
     "card": "Card",
     "two_player": "2-player",
+    "coop": "Co-op",
 }
 
 # BGG's <rank type="family" name="…"> values → our category.
@@ -83,6 +89,8 @@ def rank_category(game: dict[str, Any]) -> str:
         return "card"
     if _is_two_player_only(game):
         return "two_player"
+    if game.get("play_mode") == "coop":
+        return "coop"
     family = BGG_FAMILY_TO_CATEGORY.get(game.get("bgg_family") or "")
     if family:
         return family
