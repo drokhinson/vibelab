@@ -5,6 +5,14 @@ answer is BGG's own family ranks (bgg_family, migration 056) where the game has
 one, and otherwise a fallback read off the categories and weight the catalog
 already holds, so a game the metadata backfill has not reached yet still gets a
 sensible list rather than a blank.
+
+One rule outranks BGG's families: a traditional playing-card game (Euchre,
+500, Hearts, Cribbage) is ranked in Card. BGG's "Card Game" tag alone is far
+too broad for that — Dominion, Sushi Go and Exploding Kittens all carry it —
+but BGG credits the traditional ones to the publisher "(Public Domain)", which
+the catalog already holds (migration 040). The pair picks out exactly the games
+played with an ordinary deck, and they group together even where BGG also
+ranks one under Family or Strategy.
 """
 
 from typing import Any
@@ -19,6 +27,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "abstract": "Abstract",
     "children": "Children's",
     "customizable": "Customizable",
+    "card": "Card",
 }
 
 # BGG's <rank type="family" name="…"> values → our category.
@@ -48,8 +57,19 @@ _CATEGORY_TAGS: list[tuple[str, str]] = [
 _STRATEGY_WEIGHT = 2.5
 
 
+_CARD_GAME_TAG = "Card Game"
+_PUBLIC_DOMAIN = "(Public Domain)"
+
+
+def _is_playing_card_game(game: dict[str, Any]) -> bool:
+    return (_CARD_GAME_TAG in (game.get("categories") or [])
+            and _PUBLIC_DOMAIN in (game.get("publishers") or []))
+
+
 def rank_category(game: dict[str, Any]) -> str:
     """The category key a catalog row is ranked in."""
+    if _is_playing_card_game(game):
+        return "card"
     family = BGG_FAMILY_TO_CATEGORY.get(game.get("bgg_family") or "")
     if family:
         return family

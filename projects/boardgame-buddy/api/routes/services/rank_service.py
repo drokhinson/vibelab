@@ -30,7 +30,7 @@ from .rank_category import category_label, rank_category
 TABLE = "boardgamebuddy_game_ranks"
 _TIER_INDEX = {t.value: i for i, t in enumerate(RANK_TIER_ORDER)}
 # The category decision reads these on top of the GameSummary columns.
-_GAME_COLS = game_select_clause() + ", categories, bgg_weight, bgg_family"
+_GAME_COLS = game_select_clause() + ", categories, publishers, bgg_weight, bgg_family"
 _IN_CHUNK = 150
 
 

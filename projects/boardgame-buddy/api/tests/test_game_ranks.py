@@ -33,11 +33,11 @@ ME = "00000000-0000-0000-0000-00000000000a"
 USER = CurrentUser(user_id=ME, display_name="Me", username="me", is_admin=False)
 
 
-def _game(gid, name, *, family=None, cats=(), weight=None, expansion=False):
+def _game(gid, name, *, family=None, cats=(), weight=None, expansion=False, pubs=None):
     return {
         "id": gid, "bgg_id": None, "name": name, "is_expansion": expansion,
         "play_mode": "competitive", "bgg_family": family, "categories": list(cats),
-        "bgg_weight": weight,
+        "bgg_weight": weight, "publishers": pubs,
     }
 
 
@@ -142,6 +142,13 @@ def run(coro):
     (_game("1", "a", weight="2.49"), "family"),
     (_game("1", "a"), "family"),                                              # nothing known
     (_game("1", "a", family="somethingnew", weight=4), "strategy"),           # unknown family falls through
+    # Traditional playing-card games: Card Game tag AND a (Public Domain) credit.
+    (_game("1", "euchre", family="familygames", cats=["Card Game", "Trick-taking"],
+           pubs=["(Public Domain)", "Bicycle"]), "card"),                    # beats BGG's family
+    (_game("1", "dominion", family="strategygames", cats=["Card Game"],
+           pubs=["Rio Grande Games"]), "strategy"),                          # the tag alone is not enough
+    (_game("1", "chess", cats=["Abstract Strategy"], pubs=["(Public Domain)"]), "abstract"),
+    (_game("1", "unsynced", cats=["Card Game"], pubs=None), "family"),       # publishers not synced yet
 ])
 def test_category_rules(game, expected):
     assert rank_category(game) == expected
