@@ -14,8 +14,7 @@
 // Exposure strategy:
 //   • Functions with identical signatures across web and native land as flat
 //     globals (e.g. `ingColor`, `arcPath`, `levenshtein`, `buildSauceFamilies`)
-//     — web's duplicate copies were deleted and call sites use the bridged
-//     globals directly.
+//     — call sites use the bridged globals directly.
 //   • Functions whose web version reads from the global `state`/`currentUser`
 //     while the shared version takes them as parameters live under
 //     `window.SBShared.<module>.<name>` (e.g. `SBShared.filter.isSauceAvailable`).
@@ -33,7 +32,7 @@ import * as pieMath from './shared/pieMath.js';
 import * as builderHelpers from './shared/builder.js';
 import * as apiFactory from './shared/api.js';
 
-// Flat globals — exact same signature as web's old versions.
+// Flat globals — exact same signature on web and native.
 Object.assign(window, constants, units, colors, pieMath);
 window.buildSauceFamilies = families.buildSauceFamilies;
 window.pickDisplayedFromFamily = families.pickDisplayedFromFamily;

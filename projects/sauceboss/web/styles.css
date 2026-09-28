@@ -870,8 +870,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 
 /* Step input source — "Combine from previous step" pill and chip.
-   Replaces the legacy .step-ref-row dropdown, which got clipped by its own
-   overflow:hidden container. The pill mirrors .add-ing-btn; the chip mirrors
+   The pill mirrors .add-ing-btn; the chip mirrors
    .ing-readonly so it slots cleanly into the .builder-ings-list as the
    step's final row. The pill lives in .builder-step-actions alongside the
    add-ingredient pill, always side-by-side on a single row. */
@@ -2743,7 +2742,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 .sm-tool-btn [data-lucide] { width: 14px; height: 14px; }
 
 /* ─────────────────────────────
-   BOTTOM NAV (saucebook redesign)
+   BOTTOM NAV
 ───────────────────────────── */
 .bottom-nav {
   position: fixed;

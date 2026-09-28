@@ -1,7 +1,7 @@
 'use strict';
 // @ts-check
 //
-// Bottom-bar tab navigation for the saucebook redesign. Three tabs:
+// Bottom-bar tab navigation. Three tabs:
 //   • browse    — read-only listing of all sauces; available to anon users
 //   • saucebook — current user's library; locked for anon
 //   • pantry    — current user's missing-ingredient list; locked for anon

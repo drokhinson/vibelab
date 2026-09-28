@@ -178,13 +178,12 @@ async function loadProfile() {
 }
 
 // Fetch the user's saucebook and hydrate ingredientNames client-side from
-// allSauces. The /saucebook RPC was extended in 017/018 to aggregate per-sauce
-// ingredient names, but that join (sauce_step → sauce_step_ingredient →
-// ingredient with array_agg DISTINCT per sauce) dominated latency for users
-// with many saved sauces (observed 30s+). Migration 026 strips that CTE; we
-// re-derive ingredientNames here from the full envelopes returned by
-// get_sauceboss_all_sauces_full, which is already fast and would have loaded
-// anyway when the user opens a recipe.
+// allSauces. The /saucebook RPC does not aggregate per-sauce ingredient names
+// (migration 026): that join (sauce_step → sauce_step_ingredient →
+// ingredient with array_agg DISTINCT per sauce) dominates latency for users
+// with many saved sauces (30s+). We re-derive ingredientNames here from the
+// full envelopes returned by get_sauceboss_all_sauces_full, which is fast and
+// would load anyway when the user opens a recipe.
 async function loadSaucebook() {
   if (!currentUser) return;
   state.saucebookLoading = true;

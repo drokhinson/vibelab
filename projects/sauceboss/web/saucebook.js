@@ -256,7 +256,7 @@ function _ensureSaucebookFilters() {
       authorId: null,
     };
   }
-  // Backfill new fields for state objects created before this code deployed.
+  // Backfill fields missing from a filter-state object that predates them.
   if (!state.saucebookFilters.dishes) state.saucebookFilters.dishes = new Set();
   return state.saucebookFilters;
 }

@@ -15,7 +15,7 @@ let currentUser = null;      // { id, display_name, is_admin } or null
 
 // ─── Global state ─────────────────────────────────────────────────────────────
 let state = {
-  // ── Tab-bar navigation (added by the saucebook redesign) ───────────────────
+  // ── Tab-bar navigation ─────────────────────────────────────────────────────
   // Three primary tabs in the bottom nav: 'browse' | 'saucebook' | 'pantry'.
   // Anonymous users land on 'browse'; the others render lock badges and route
   // to the auth modal on tap (see tabs.js setActiveTab).
@@ -83,7 +83,7 @@ let state = {
     subtype: null,              // optional sauceboss_dish row at dish_level='subtype'
   },
 
-  // ── Current selection (legacy — kept for the recipe-view path) ──────────────
+  // ── Current selection (legacy — used by the recipe-view path) ──────────────
   selectedItem: null,           // a parent item (carb / protein / salad)
   selectedPrep: null,           // optional variant of selectedItem
   preparations: [],             // variants for selectedItem (may be empty)

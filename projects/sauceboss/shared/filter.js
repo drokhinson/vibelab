@@ -1,5 +1,4 @@
 // Sauce / ingredient filter helpers. Pure — takes context as args, no globals.
-// Ported from web/helpers.js 342-409.
 
 import { CATEGORY_ORDER } from './constants.js';
 
@@ -22,8 +21,8 @@ export function missingSauceIngredients(sauce, disabledIngredients) {
   return missing;
 }
 
-// Substitutions live in `sauceboss_ingredient.substitutions[]` post-013, so
-// the map shape is now `{ [ingredientName]: string[] }`. Older callers may
+// Substitutions live in `sauceboss_ingredient.substitutions[]` (migration
+// 013), so the map shape is `{ [ingredientName]: string[] }`. A caller may
 // still see the legacy `[{ substituteName, notes }]` shape during a deploy
 // window — accept both transparently.
 export function getSubstitutionText(ingredientName, substitutions) {

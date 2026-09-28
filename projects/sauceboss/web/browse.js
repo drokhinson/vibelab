@@ -243,10 +243,9 @@ function browseClearAllFilters() {
   browseRunSearch();
 }
 
-// Discrete page navigation. The Browse view used to grow a single list with
-// "Load more"; the user feedback is that page-by-page navigation is clearer
-// once there are dozens of recipes (and the total-count chip above tells
-// you how many pages there are total).
+// Discrete page navigation rather than one list grown by "Load more":
+// page-by-page navigation is clearer once there are dozens of recipes (and
+// the total-count chip above tells you how many pages there are total).
 async function browseGoToPage(page) {
   const pageSize = state.browse.pageSize || 20;
   const totalPages = Math.max(1, Math.ceil((state.browse.total || 0) / pageSize));
@@ -327,11 +326,11 @@ function browseOpenRecipe(sauceId) {
 }
 
 // Trigger an initial fetch when the user lands on the Browse tab. Called
-// explicitly from setActiveTab + init.js — replaces the previous
-// MutationObserver lazy-load, which fired ensure() on every #app mutation
-// and could loop into repeated browseFetch() calls when a filter happened
-// to return zero items (each empty result triggered another render →
-// observer → ensure → browseFetch cycle, freezing the tab).
+// explicitly from setActiveTab + init.js, not from a MutationObserver — an
+// observer fires ensure() on every #app mutation and can loop into repeated
+// browseFetch() calls when a filter happens to return zero items (each empty
+// result triggers another render → observer → ensure → browseFetch cycle,
+// freezing the tab).
 function browseEnsureLoaded() {
   const b = state.browse;
   if (!b || b.loading || b.items.length > 0 || b.error) return;

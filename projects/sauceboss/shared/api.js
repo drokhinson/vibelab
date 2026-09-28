@@ -19,11 +19,11 @@ import { withIngredientNames } from './filter.js';
  * @typedef {Object<string, string>} IngredientCategoryMap
  *   Lowercased ingredient name → category label.
  *   e.g. `{ "garlic": "Produce", "olive oil": "Oils & Fats" }`.
- *   Post-013 the backend returns this dict directly (sauceboss_ingredient.category).
+ *   The backend returns this dict directly (sauceboss_ingredient.category, migration 013).
  *
  * @typedef {Object<string, string[]>} SubstitutionMap
  *   Ingredient name → list of substitute names.
- *   Post-013 the backend returns this dict directly (sauceboss_ingredient.substitutions[]).
+ *   The backend returns this dict directly (sauceboss_ingredient.substitutions[], migration 013).
  *
  * @typedef {Object} IngredientRow
  * @property {string} id
@@ -197,14 +197,14 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       };
     },
 
-    // Post-013 the backend returns the dict shape directly (one round-trip,
+    // The backend returns the dict shape directly (one round-trip,
     // reads sauceboss_ingredient.category — no join, no array-to-dict reshape).
     /** @returns {Promise<IngredientCategoryMap>} */
     ingredientCategories: async () => {
       const data = await call('/ingredient-categories');
       return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
     },
-    // Post-013 the backend returns the dict shape directly (one round-trip,
+    // The backend returns the dict shape directly (one round-trip,
     // reads sauceboss_ingredient.substitutions[]).
     /** @returns {Promise<SubstitutionMap>} */
     substitutions: async () => {
@@ -332,10 +332,10 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     // via /sauces on tap (saucebookOpenRecipe → api.allSauces).
     /**
      * Slim metadata only — ingredientNames is NOT included by the backend
-     * (migration 026 dropped the expensive ingredient_names_agg CTE). Callers
-     * that need ingredient-availability filtering should hydrate from
+     * (the ingredient_names_agg CTE is too expensive; see migration 026).
+     * Callers that need ingredient-availability filtering should hydrate from
      * api.allSauces() locally; web/auth.js loadSaucebook() is the reference.
-     * withIngredientNames is still applied so each row carries an (initially
+     * withIngredientNames is applied so each row carries an (initially
      * empty) Set ready for replacement.
      *
      * @returns {Promise<Array<{

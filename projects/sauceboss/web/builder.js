@@ -396,7 +396,7 @@ function renderBuilderInstructions() {
   `;
 }
 
-// Bottom-sheet ingredient editor — replaces the inline name/qty/unit inputs.
+// Bottom-sheet ingredient editor.
 // Driven by `state.builder._ingEditor = { si, ii, draft, acResults, acSelected }`.
 // `ii === -1` means a new row is being added (commits on Save). Anything else
 // edits an existing row in-place. The sheet renders as the last child of the
