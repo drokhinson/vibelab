@@ -119,7 +119,7 @@
             <h3 class="rank-queue__name font-display">${escapeHtml(item.game.name)}</h3>
           </div>
           <div id="rank-queue-flow" class="rank-queue__flow"></div>
-          <div id="rank-queue-foot">${this._skipHtml(item, 1)}</div>`;
+          <div id="rank-queue-foot">${this._skipHtml(item)}</div>`;
       }
       return `
         <ol class="rank-queue__list">
@@ -182,35 +182,55 @@
       }
     }
 
-    // Under the questions: skip THIS game. Under the result (whose Continue
-    // is the Next button): skip the suggested next one.
+    // Under the questions: skip this game. Under the result (whose Continue
+    // is the Next button): back to the list, to pick what to rank next.
     _paintFoot(step) {
       const foot = this.container.querySelector("#rank-queue-foot");
       if (!foot) return;
-      const key = step === "result" ? "next" : "this";
-      if (foot.__skipFor === key) return;
-      foot.__skipFor = key;
-      const next = this._items[this._idx + 1];
-      foot.innerHTML = key === "this"
-        ? this._skipHtml(this._items[this._idx], 1)
-        : (next ? this._skipHtml(next, 2) : "");
+      const key = step === "result" ? "list" : "skip";
+      if (foot.__footFor === key) return;
+      foot.__footFor = key;
+      foot.innerHTML = key === "skip"
+        ? this._skipHtml(this._items[this._idx])
+        : `
+          <button class="btn btn-ghost rank-queue__skip" type="button"
+                  onclick="window.rankQueueView._backToList()">
+            <i data-icon="list-numbers" class="w-4 h-4"></i> Back to unranked games
+          </button>`;
       this.refreshIcons(foot);
     }
 
     // Skip leaves a game unranked and moves on; it comes back the next time
-    // the queue opens. Before this game is ranked it skips THIS game (step 1);
-    // once it is, it skips the suggested next one (step 2).
-    _skipHtml(item, step) {
+    // the queue opens.
+    _skipHtml(item) {
       return `
         <button class="btn btn-ghost rank-queue__skip" type="button"
-                onclick="window.rankQueueView._skip(${step})">
+                onclick="window.rankQueueView._skip()">
           Skip ${escapeHtml(item.game.name)} <i data-icon="chevron-right" class="w-4 h-4"></i>
         </button>`;
     }
 
-    _skip(step) {
+    /** The list again, minus what was just ranked; the server's copy follows
+     *  once this game's background save has landed. */
+    async _backToList() {
+      if (this._flow) {
+        this._lastWrite = this._flow.settled();
+        this._flow.destroy();
+        this._flow = null;
+      }
+      this._seq++;
+      this._mode = "list";
+      this._idx = 0;
+      this._items = this._items.filter((it) => !this._rankedIds.has(it.game.id));
+      this.render();
+      window.scrollTo(0, 0);
+      await this._lastWrite;
+      if (this._mounted && this._mode === "list") this._load();
+    }
+
+    _skip() {
       this._skipped++;
-      this._next(step);
+      this._next();
     }
 
     _next(step = 1) {
