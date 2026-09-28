@@ -67,18 +67,18 @@ def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:
         import_group_id=(str(row["import_group_id"]) if row.get("import_group_id") else None),
         # Migration 022. Same unmigrated-RPC tolerance as everything around it:
         # an older function returns no such key, the default holds, and the
-        # feed groups imports by roster exactly as it did before.
+        # feed groups imports by roster alone.
         import_batch_id=(str(row["import_batch_id"]) if row.get("import_batch_id") else None),
         # Migration 015. Same unmigrated-RPC tolerance as `participants` and
         # `group_count` above: an older function returns neither key, the
         # defaults hold, and the client falls back to fetching the play on
-        # first flip exactly as it did before.
+        # first flip.
         players=[PlayPlayerResponse(**p) for p in (row.get("players") or [])],
         expansions=[PlayExpansionRef(**e) for e in (row.get("expansions") or [])],
         country_code=row.get("country_code"),
         # Migration 031. Same unmigrated-RPC tolerance as everything above: an
         # older function returns no such key, the default holds, and the detail
-        # popup repaints once to pick up the template exactly as it did before.
+        # popup repaints once to pick up the template.
         scoring_template=row.get("scoring_template"),
         # Migration 016. Same unmigrated-RPC tolerance as everything above: an
         # older function returns none of these keys, the defaults hold, and the
@@ -344,20 +344,20 @@ async def build_feed_page(
 ) -> FeedPageResponse:
     """Assemble a single page of mixed feed cards.
 
-    The three blocks are independent, and used to run one after another on
-    whatever thread called this — five or six serialized PostgREST round trips,
-    because fetch_hot_games and fetch_suggested_buddies are each an RPC plus a
-    hydration read. /bootstrap gathers five branches and this was the slowest of
-    them, so those round trips set the whole endpoint's floor, and therefore the
-    floor on a cold boot's first paint.
+    The three blocks are independent, so they run concurrently and the wall
+    time is the slowest block rather than their sum. Run one after another they
+    would be five or six serialized PostgREST round trips, because
+    fetch_hot_games and fetch_suggested_buddies are each an RPC plus a
+    hydration read — and /bootstrap gathers this alongside its other branches,
+    so those round trips would set the whole endpoint's floor, and therefore
+    the floor on a cold boot's first paint.
 
-    Now the wall time is the slowest block rather than their sum. The Supabase
-    client is synchronous, so each block goes to a worker thread — the same
-    to_thread + gather shape bootstrap_routes.py already uses, moved down here
-    where it can cover the blocks individually.
+    The Supabase client is synchronous, so each block goes to a worker thread —
+    the same to_thread + gather shape bootstrap_routes.py uses, applied here
+    so it can cover the blocks individually.
 
-    A cursored page fetches plays alone, exactly as before: hot games and
-    suggestions only ever appear on the first page.
+    A cursored page fetches plays alone: hot games and suggestions only ever
+    appear on the first page.
     """
     first_page = cursor is None
     plays_task = asyncio.to_thread(

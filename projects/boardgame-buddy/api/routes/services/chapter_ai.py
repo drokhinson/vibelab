@@ -109,7 +109,7 @@ def _build_prompt(
     """Four numbered sections, in a fixed order: what to write, what formatting
     the app supports, the player's own steer, and the shape of the reply.
 
-    The game's BGG description is deliberately NOT here. It ran to a couple of
+    The game's BGG description is deliberately NOT here. It runs to a couple of
     thousand characters of publisher marketing copy for a model that either
     knows the game or is being told (below) to write a skeleton instead — the
     most expensive part of the prompt and the least load-bearing.
@@ -121,8 +121,8 @@ def _build_prompt(
     lines.append("")
     lines.append("Draft ONE chapter of this type for this game.")
     lines.append("")
-    # Matters more now that the description is gone: with no publisher blurb to
-    # lean on, a model that half-knows the game has more room to confabulate.
+    # Matters more because the description is left out: with no publisher blurb
+    # to lean on, a model that half-knows the game has more room to confabulate.
     lines.append(
         "If you do not reliably know this specific game's rules, do NOT invent "
         "specific numbers, card names, or costs. Write a useful skeleton for "
@@ -134,13 +134,11 @@ def _build_prompt(
     lines.append(banner(2, "SUPPORTED FORMATTING AND PREFERENCES"))
     lines.append(_AUTHORING_GUIDE.strip())
 
-    # Section 3 is untrusted text a player typed into a form. It used to sit
-    # ABOVE the authoring guide so that every rule it could try to talk its way
-    # out of was stated after it. The numbered sections put it here instead, so
-    # the defence is carried by the framing rather than by the ordering: it is
-    # delimited, truncated, labelled as a topic hint, and told by name which
-    # sections it cannot change. Section 4 — the JSON contract, the one that
-    # matters most — still follows it either way.
+    # Section 3 is untrusted text a player typed into a form. It sits AFTER the
+    # authoring guide, so the defence is carried by the framing rather than by
+    # the ordering: it is delimited, truncated, labelled as a topic hint, and
+    # told by name which sections it cannot change. Section 4 — the JSON
+    # contract, the one that matters most — still follows it.
     #
     # Emitted even when blank, so the section numbers the other sections refer
     # to are the same in every prompt.

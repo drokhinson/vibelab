@@ -3,7 +3,7 @@
 The BGG source of the play importer asks one question — *which of my
 BoardGameGeek plays are not in BgB yet?* — and this answers it without writing
 a single play. Everything that lands does so later, through the wizard's review
-and POST /plays/import, which is the whole point of the move.
+and POST /plays/import, so nothing is written before the user has reviewed it.
 
 Three steps, and the order matters:
 
@@ -91,8 +91,8 @@ def _summaries_for(sb: Client, bgg_ids: list[int]) -> dict[int, GameSummary]:
     """{bgg_id → GameSummary} for the games the catalog already has."""
     # Imported here rather than at module scope: bgg_link_routes imports this
     # package's siblings and game_routes imports models, so a top-level import
-    # of a routes module from a service is the shape that has caused cycles
-    # here before.
+    # of a routes module from a service is the shape that closes an import
+    # cycle.
     from ..bgg_link_routes import _existing_game_map
 
     rows = _existing_game_map(sb, bgg_ids)
@@ -114,8 +114,7 @@ async def pending_plays(sb: Client, user_id: str, username: str) -> BggPendingPl
         existing_bgg_play_ids, sb, user_id, [p["bgg_play_id"] for p in raw]
     )
     # BGG can repeat a play id across pages; keep one row per id. dict keeps
-    # insertion order, so the last page to mention a play wins the same way the
-    # retired write path let it.
+    # insertion order, so the last page to mention a play wins.
     missing: dict[int, dict] = {
         p["bgg_play_id"]: p for p in raw if p["bgg_play_id"] not in already
     }

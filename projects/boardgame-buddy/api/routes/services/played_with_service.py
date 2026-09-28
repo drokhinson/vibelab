@@ -5,11 +5,9 @@ with player_user_id set) the viewer has shared a play with. Ghost players are
 free-text nicknames the viewer logged without an account; the link endpoint
 promotes them by stamping player_user_id on every matching row.
 
-The three read paths — buddies, ghosts, played-with — are one RPC
-(bgb_play_partners, migration 047). They were twelve round trips across three
-endpoints, one of which pulled every play id the viewer touches into Python to
-count them in a dict. Migration 049 adds a fourth list to the same call:
-`pending`, the buddy requests waiting on an answer either way, which the player
+The read paths — buddies, ghosts, played-with — are one RPC
+(bgb_play_partners, migration 047). Migration 049 adds a fourth list to the
+same call: `pending`, the buddy requests waiting on an answer either way, which the player
 picker offers as seatable people — the request is why they are at your table.
 """
 
@@ -30,10 +28,9 @@ def fetch_play_partners(sb: Client, viewer_id: str) -> PlayPartnersResponse:
     """Everything the Gather player picker needs, in ONE round trip.
 
     bgb_play_partners (migration 047) does the buddy edges, the ghost roll-up
-    and the played-with counts as SQL aggregates. The three lists used to be
-    three endpoints and twelve round trips — including a pass that pulled every
-    play id the viewer touches into Python just to count them in a dict, which
-    is unbounded for a BGG-synced account.
+    and the played-with counts as SQL aggregates. Counting in Python would mean
+    pulling every play id the viewer touches into a dict, which is unbounded
+    for a BGG-synced account.
     """
     data = sb.rpc("bgb_play_partners", {"p_viewer": viewer_id}).execute().data or {}
     return PlayPartnersResponse(
@@ -77,10 +74,10 @@ def link_ghost(
     if target_user_id == viewer_id:
         raise HTTPException(status_code=400, detail="Cannot link a ghost to yourself")
 
-    # One statement (migration 050). This used to SELECT every play id the
-    # viewer owns and hand the list back as a PostgREST `in_` filter — which
-    # rides in the query string, so a few thousand plays produced a URL that
-    # failed outright rather than merely slowly.
+    # One statement (migration 050), not a SELECT of every play id the viewer
+    # owns handed back as a PostgREST `in_` filter — that rides in the query
+    # string, so a few thousand plays produce a URL that fails outright rather
+    # than merely slowly.
     data = sb.rpc("bgb_link_ghost", {
         "p_viewer": viewer_id,
         "p_display_name": display_name.strip(),
@@ -110,9 +107,9 @@ def ghost_out_of_plays(
     the notifications screen selects: one tick on an imported batch has to
     unlink 214 plays without the client holding 214 ids.
 
-    One RPC rather than the two PostgREST calls it replaced, for two reasons.
-    A per-play loop over a batch is two round trips per play. And the
-    identity-check backfill and the null-out are now a single UPDATE, so no
+    One RPC rather than two PostgREST calls, for two reasons. A per-play loop
+    over a batch is two round trips per play. And the identity-check backfill
+    and the null-out are a single UPDATE, so no
     concurrent write can land between them and abort on
     bgb_play_players_identity_chk.
 

@@ -1,8 +1,8 @@
 """Mutual buddy graph service.
 
 Owns reads/writes against boardgamebuddy_buddy_edges. The legacy
-boardgamebuddy_buddies table is no longer used for friendship — it stays
-around only to record free-text ghost players inside a single user's plays.
+boardgamebuddy_buddies table is not used for friendship — it only records
+free-text ghost players inside a single user's plays.
 """
 
 from datetime import datetime, timezone

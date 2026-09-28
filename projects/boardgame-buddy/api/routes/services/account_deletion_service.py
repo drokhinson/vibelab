@@ -1,32 +1,28 @@
 """account_deletion_service.py — everything `DELETE /profile` has to destroy.
 
-Deleting an account used to be one statement: drop the
-`boardgamebuddy_profiles` row and let the schema's cascades take the rest.
-That left two things standing, and both of them made the deletion look like it
-had not happened.
+Dropping the `boardgamebuddy_profiles` row and letting the schema's cascades
+take the rest is not a deletion. Two things would stay standing, and both of
+them would make the deletion look like it had not happened.
 
-1. **The Identity Platform credential.** The rows went; the account at the
-   provider did not. Signing in with Google afterwards succeeded, handed back
-   the same uid, and `get_current_user` auto-created a fresh profile row — an
-   emptied account, not a deleted one. Signing up again with the same address
-   and a password failed with `auth/email-already-in-use`, which the sign-in
-   screen words as "you already have an account". Either way the person is
-   told their deleted account still exists, because it did.
-2. **The play photos.** `object_store.py` had no delete, and the privacy
-   policy said so in as many words — "deleting a play or your account removes
-   the records but does not currently delete the stored image files ... We are
-   fixing this." The URLs cascaded away with the plays; the objects stayed,
-   public to anyone still holding the link.
+1. **The Identity Platform credential.** The rows go; the account at the
+   provider does not. Signing in with Google afterwards would succeed, hand
+   back the same uid, and `get_current_user` would auto-create a fresh profile
+   row — an emptied account, not a deleted one. Signing up again with the same
+   address and a password would fail with `auth/email-already-in-use`, which
+   the sign-in screen words as "you already have an account". Either way the
+   person is told their deleted account still exists, because it does.
+2. **The play photos.** The URLs cascade away with the plays; the objects in
+   storage do not, and stay public to anyone still holding the link.
 
-And then fixing (1) exposed a third thing, which is the opposite problem:
-deletion was destroying data that was never only the deleter's.
+And the cascade has the opposite problem too: it destroys data that was never
+only the deleter's.
 
 3. **Everybody else's game nights.** `plays.user_id` is ON DELETE CASCADE and
    `play_players.play_id` cascades off the play, so deleting the person who
-   LOGGED a night deleted the night — and the seat of every other account at
-   that table with it. They lost a play, a win, a "played with" edge and
-   achievement progress, for an act they had no part in. Since migration 051
-   such a play is HANDED OVER instead: it passes to the account that was
+   LOGGED a night would delete the night — and the seat of every other account
+   at that table with it. They would lose a play, a win, a "played with" edge
+   and achievement progress, for an act they had no part in. So such a play is
+   HANDED OVER instead (migration 051): it passes to the account that was
    seated earliest, and only a play nobody else was at still goes. That is
    `bgb_delete_account_rows`, and the reasoning for the heir, the collisions
    that would otherwise abort the whole delete, and what the heir gains lives
@@ -43,12 +39,12 @@ from db import get_supabase
 
 logger = logging.getLogger(__name__)
 
-# The Supabase Storage bucket play photos used before the R2 cutover. The
-# objects are STILL THERE: `Docs/RUNBOOK_R2_CUTOVER.md` §12 says in bold not to
-# delete the Supabase buckets because they are the rollback, and `036` only
-# rewrote the URLs — it copied nothing back and removed nothing. So after the
-# cutover a pre-migration photo exists in both stores, and a deletion that
-# cleared only R2 would leave a public copy of the same image on supabase.co.
+# The Supabase Storage bucket that holds play photos from before the R2
+# cutover. Those objects are STILL THERE: `Docs/RUNBOOK_R2_CUTOVER.md` §12 says
+# in bold not to delete the Supabase buckets because they are the rollback, and
+# `036` only rewrites the URLs — it copies nothing back and removes nothing. So
+# a pre-cutover photo exists in both stores, and a deletion that cleared only
+# R2 would leave a public copy of the same image on supabase.co.
 #
 # Kept as its own constant rather than imported from `play_routes` to avoid a
 # routes -> routes import; the two must stay equal, and `test_account_deletion`
@@ -152,9 +148,8 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
     They are equal only for the 23 migrated accounts; see `jwt_auth.py`.
 
     THE ORDER IS PHOTOS, ROWS, CREDENTIAL, and each boundary is a decision.
-    "Rows" is one RPC rather than one DELETE since migration 051 — the
-    handover and the profile delete have to be the same transaction — but the
-    three steps and their boundaries are unchanged:
+    "Rows" is one RPC rather than one DELETE (migration 051), because the
+    handover and the profile delete have to be the same transaction:
 
     * **Photos first, and a failure here aborts before anything is
       destroyed.** The keys are derived from the uid, not read from the rows,
@@ -170,8 +165,8 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
       `get_current_supabase_user`, not `get_current_user`), and both purges and
       `accounts:delete` are no-ops the second time.
     * **Configuration is checked before step one.** `identity_admin` being
-      unconfigured is the only way to reach the old behaviour — rows deleted,
-      login intact — so the route refuses up front rather than discovering it
+      unconfigured is the only way to end up with rows deleted and the login
+      intact, so the route refuses up front rather than discovering it
       after the cascade. This is why `identity_admin.configured()` is False
       rather than silently no-op.
 
@@ -194,9 +189,8 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
     supabase_count = await asyncio.to_thread(_purge_supabase_photos_sync, app_uid)
 
     sb = get_supabase()
-    # ONE RPC, ONE TRANSACTION (migration 051). This was a direct
-    # `.table("boardgamebuddy_profiles").delete()` until plays started
-    # surviving their logger, and it cannot be one any more: the handover
+    # ONE RPC, ONE TRANSACTION (migration 051). It cannot be a direct
+    # `.table("boardgamebuddy_profiles").delete()`: the handover
     # decides an heir, clears the photo links, backfills the names the FK is
     # about to null, and deletes the profile — and a failure between any two of
     # those would leave plays owned by other people while the account they were

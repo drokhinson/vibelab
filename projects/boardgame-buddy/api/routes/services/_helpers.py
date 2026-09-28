@@ -94,8 +94,7 @@ async def reject_if_push_running(sb: Client, user_id: str) -> None:
 
 # The JSONB-returning RPCs (migrations 036/037/042/046) signal gate failures
 # with {"error": "<code>"} instead of raising, so a caller gets one round trip
-# either way. This maps those codes onto the HTTP statuses the routes have
-# always returned.
+# either way. This maps those codes onto the HTTP statuses the routes return.
 RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "not_found": (404, "Session not found"),
     "expired": (410, "Session expired"),
