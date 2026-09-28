@@ -5,7 +5,7 @@
 // ranking" begins at the top; tapping a row begins at that game. The list is
 // snapshotted when ranking starts, so a game ranked here never reshuffles what
 // is still to come. "Done for now" keeps everything ranked so far — each game is
-// saved the moment its questions are answered.
+// saved the moment its questions are answered. Skip leaves a game for later.
 
 (function () {
   class RankQueueView extends window.View {
@@ -24,6 +24,7 @@
       this._mode = "list";   // "list" | "active" | "done"
       this._idx = 0;
       this._ranked = 0;
+      this._skipped = 0;
       this._seq = 0;
     }
 
@@ -68,7 +69,7 @@
     _renderHead() {
       const n = this._items.length;
       const active = this._mode === "active";
-      const title = active ? `${this._idx + 1} of ${n}` : this._mode === "done" ? "All ranked" : "Unranked games";
+      const title = active ? `${this._idx + 1} of ${n}` : this._mode === "done" ? (this._skipped ? "End of the list" : "All ranked") : "Unranked games";
       const right = active
         ? `<button class="btn btn-ghost btn-sm rank-queue__stop" type="button"
                    onclick="window.router.up('collection')">Done for now</button>`
@@ -100,7 +101,8 @@
       }
       if (this._mode === "done") {
         return `
-          <p class="rank-queue__done">You ranked ${this._ranked} ${this._ranked === 1 ? "game" : "games"}.</p>
+          <p class="rank-queue__done">You ranked ${this._ranked} ${this._ranked === 1 ? "game" : "games"}.${
+            this._skipped ? ` ${this._skipped} skipped ${this._skipped === 1 ? "game stays" : "games stay"} in your queue for next time.` : ""}</p>
           <button class="btn btn-primary rank-queue__cta" type="button"
                   onclick="window.router.up('collection')">Back to your collection</button>`;
       }
@@ -116,7 +118,7 @@
             <h3 class="rank-queue__name font-display">${escapeHtml(item.game.name)}</h3>
           </div>
           <div id="rank-queue-flow" class="rank-queue__flow"></div>
-          <div id="rank-queue-foot"></div>`;
+          <div id="rank-queue-foot">${this._skipHtml(item, 1)}</div>`;
       }
       return `
         <ol class="rank-queue__list">
@@ -176,11 +178,29 @@
       foot.innerHTML = `
         <button class="btn btn-primary rank-queue__cta" type="button" onclick="window.rankQueueView._next()">
           ${next ? `Next: ${escapeHtml(next.game.name)}` : "Finish"}
+        </button>
+        ${next ? this._skipHtml(next, 2) : ""}`;
+      this.refreshIcons(foot);
+    }
+
+    // Skip leaves a game unranked and moves on; it comes back the next time
+    // the queue opens. Before this game is ranked it skips THIS game (step 1);
+    // once it is, it skips the suggested next one (step 2).
+    _skipHtml(item, step) {
+      return `
+        <button class="btn btn-ghost rank-queue__skip" type="button"
+                onclick="window.rankQueueView._skip(${step})">
+          Skip ${escapeHtml(item.game.name)} <i data-icon="chevron-right" class="w-4 h-4"></i>
         </button>`;
     }
 
-    _next() {
-      this._idx++;
+    _skip(step) {
+      this._skipped++;
+      this._next(step);
+    }
+
+    _next(step = 1) {
+      this._idx += step;
       if (this._idx >= this._items.length) this._mode = "done";
       this.render();
       window.scrollTo(0, 0);

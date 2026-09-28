@@ -22256,6 +22256,10 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   border: 1px solid var(--polaroid-line); color: var(--polaroid-muted);
 }
 .rank-queue__cta { width: 100%; min-height: 52px; }
+.rank-queue__skip {
+  width: 100%; min-height: 52px; margin-top: 8px;
+  color: var(--polaroid-muted); font-weight: 500;
+}
 .rank-queue__game { display: flex; align-items: center; gap: 14px; }
 .rank-queue__art {
   flex: none; width: 88px; height: 88px; border-radius: 4px; object-fit: cover;
