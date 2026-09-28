@@ -188,8 +188,8 @@ def queue(sb: Client, user_id: str) -> list[RankQueueItem]:
     A game you have never played has nothing to rank yet, so the Shelf of
     Shame stays out — and the rule is the shelf's own: a game counts as played
     when it has a play (logged or seated in, read through bgb_play_stats) or
-    carries the "played before joining" mark on its collection row
-    (played_before_at, set from the Shelf of Shame sheet).
+    carries the played mark on its collection row (played_before_at, any
+    status — set from the collection sheet or the Shelf of Shame sheet).
     """
     marked = page_all(
         lambda: sb.table("boardgamebuddy_collections")

@@ -55,10 +55,17 @@
     prev_owned: "Sold, gifted or donated",
     wishlist: "Games you want",
   };
-  // The statuses the picker offers, in the order it lists them. Prev. owned
-  // sits directly under Owned because it IS a kind of owned — the game stays
-  // on the Owned shelf, dimmed. See the Remove row below for the distinction.
+  // The shelf statuses the picker offers, in the order it lists them. Prev.
+  // owned sits directly under Owned because it IS a kind of owned — the game
+  // stays on the Owned shelf, dimmed. See the Remove row below for the
+  // distinction.
   const CHOICES = ["owned", "prev_owned", "wishlist"];
+  // Below the shelves, one switch for the played mark: "played it, somewhere I
+  // didn't log it" (migration 057). It is not a shelf — it rides on any of
+  // them, and it is the same mark the Stats Shelf of Shame flips, so either
+  // place shows the other's change. On a game on no shelf it is what puts the
+  // game on the Played shelf, with status "played".
+  const PLAYED = "played";
 
   /**
    * A status's CSS class suffix. The status tokens are snake_case (they come
@@ -224,12 +231,12 @@
 
     _renderPanel() {
       const cur = this._currentStatus;
+      const mark = window.Collection.isPlayedMark(this._gameId);
       const parts = [];
 
-      // "Played" is derived from logged plays — there's no collection row to
-      // set, so it can't be an option. Say so instead of silently omitting the
-      // state the user is actually in.
-      if (cur === "played") {
+      // "Played" from logged plays is not something this sheet set, and
+      // nothing here can unset it. Say where it comes from.
+      if (cur === PLAYED && !mark) {
         parts.push(`
           <div class="status-sheet__note">
             <i data-icon="${ICON.played}" class="w-4 h-4"></i>
@@ -251,15 +258,13 @@
           </button>`);
       }
 
-      // Remove is only meaningful when a real collection row exists.
-      // Played-only games have no row to delete — clearing it would mean
-      // deleting plays, which isn't what this control does.
-      //
-      // It stays a separate, rule-separated action even though "Prev. owned"
-      // now covers the common reason for reaching for it. The two claims are
-      // different and both worth keeping: Prev. owned means "I had this and
-      // let it go" and keeps the row; Remove means "this was never mine" and
-      // deletes it.
+      parts.push(`<div class="status-sheet__mark-host">${this._renderMark(mark)}</div>`);
+
+      // Remove is only meaningful when a shelf row exists. It stays a
+      // separate, rule-separated action even though "Prev. owned" covers the
+      // common reason for reaching for it: Prev. owned means "I had this and
+      // let it go" and keeps the row; Remove means "this was never mine". A
+      // played mark outlives it — the switch above is what clears that.
       if (CHOICES.includes(cur)) {
         parts.push(`<div class="status-sheet__rule"></div>`);
         parts.push(`
@@ -280,6 +285,33 @@
           <button class="status-sheet__cancel" type="button" data-action="close">Cancel</button>
         </div>
       `;
+    }
+
+    /** The played-mark switch. Its own host, so a flip repaints only it. */
+    _renderMark(on) {
+      return `
+        <div class="status-sheet__mark">
+          <span class="status-sheet__mark-text">
+            <span class="status-sheet__mark-label">Played it, not logged here</span>
+            <span class="bgb-sheet__opt-sub">You've played it, but didn't log it on BoardgameBuddy</span>
+          </span>
+          ${window.BgbSwitch.render({
+            on,
+            id: "status-sheet-mark",
+            ariaLabel: "Played it, not logged here",
+            onclick: "window.statusPicker._toggleMark()",
+          })}
+        </div>`;
+    }
+
+    _paintMark() {
+      const root = this._sheet.el;
+      const host = root && root.querySelector(".status-sheet__mark-host");
+      if (!host) return;
+      host.innerHTML = this._renderMark(window.Collection.isPlayedMark(this._gameId));
+      window.BgbIcons.render(host);
+      const sw = host.querySelector("#status-sheet-mark");
+      if (sw) sw.focus();
     }
 
     // ── Open / close ────────────────────────────────────────────────────────
@@ -347,12 +379,41 @@
       }
     }
 
+    /**
+     * Flip the played mark. The sheet stays open — the mark is not a shelf
+     * pick — and the write, its optimistic paint and rollback are
+     * Collection.setPlayedBefore's, shared with the Shelf of Shame.
+     */
+    async _toggleMark() {
+      const gameId = this._gameId;
+      if (!gameId) return;
+      const next = !window.Collection.isPlayedMark(gameId);
+      const write = window.Collection.setPlayedBefore(gameId, next);
+      this._currentStatus = viewerStatus(gameId, this._currentStatus);
+      this._paintMark();
+      try {
+        await write;
+      } catch (e) {
+        if (this._gameId === gameId) {
+          this._currentStatus = viewerStatus(gameId, this._currentStatus);
+          this._paintMark();
+        }
+        window.PolaroidPopup.alert({
+          title: "Couldn't save that",
+          body: (e && e.message) || "The played mark didn't stick — check your connection and try again.",
+        });
+      }
+    }
+
     async _remove() {
       const gameId = this._gameId;
       const prev = this._currentStatus;
+      // A marked game keeps its mark, so it leaves its shelf for the Played
+      // one (the server keeps the row as "played"); an unmarked one leaves.
+      const next = window.Collection.isPlayedMark(gameId) ? PLAYED : null;
       this.close();
       if (!gameId) return;
-      window.Collection.applyLocalStatus(gameId, null);
+      window.Collection.applyLocalStatus(gameId, next);
       try {
         await window.Collection.removeByGame(gameId);
       } catch (e) {

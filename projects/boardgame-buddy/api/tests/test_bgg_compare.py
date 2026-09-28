@@ -28,13 +28,16 @@ class _Q:
     """Just enough of the PostgREST builder to serve the two reads."""
     def __init__(self, table, store):
         self.table, self.store, self.lo, self.hi, self.ids = table, store, 0, None, None
+        self.not_eq = []
     def select(self, *_a, **_k): return self
     def eq(self, *_a, **_k): return self
+    def neq(self, col, val): self.not_eq.append((col, val)); return self
     def order(self, *_a, **_k): return self
     def in_(self, _col, ids): self.ids = ids; return self
     def range(self, lo, hi): self.lo, self.hi = lo, hi; return self
     def execute(self):
-        rows = self.store.get(self.table, [])
+        rows = [r for r in self.store.get(self.table, [])
+                if all(r.get(c) != v for c, v in self.not_eq)]
         if self.ids is not None:
             rows = [r for r in rows if r.get("bgg_id") in self.ids]
         elif self.hi is not None:
@@ -118,6 +121,21 @@ def test_only_on_bgg_is_a_clear(monkeypatch):
     assert [p.change for p in plan.push] == [K.BggPushChange.CLEAR]
     assert plan.push[0].game_name == "Monopoly"   # named from BGG, no local row
     assert plan.push[0].game_id is None
+
+
+def test_a_played_mark_is_not_pushed(monkeypatch):
+    """A 'played' row (migration 057) has no BGG flag to push, and the push
+    queue's target_status CHECK would refuse one: it must plan nothing."""
+    plan = _plan(monkeypatch, local=[_row(1, "played")], remote=[])
+    assert plan.push == [] and plan.unpushable == []
+
+
+def test_a_played_mark_compares_as_no_row(monkeypatch):
+    """With BGG flagging the game, a marked game plans exactly what a game
+    with no collection row does — the same as one with only logged plays."""
+    marked = _plan(monkeypatch, local=[_row(1, "played")], remote=[_item(1, "owned")])
+    absent = _plan(monkeypatch, local=[], remote=[_item(1, "owned")])
+    assert [p.change for p in marked.push] == [p.change for p in absent.push] == [K.BggPushChange.CLEAR]
 
 
 def test_agreement_is_counted_not_listed(monkeypatch):

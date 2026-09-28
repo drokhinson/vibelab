@@ -7,9 +7,11 @@
 // gaming predates their BoardgameBuddy account: a game played for years before
 // signing up has no play rows, so it reads as shame, and logging a fake session
 // to clear it would land in the podium, the rhythm heatmap and personal bests.
-// So every row here is a toggle
-// that writes `collections.played_before_at` (migration 059), a mark scoped to
-// the shelf block of bgb_user_stats_detail and to nothing else.
+// So every row here is a toggle for the played mark — "played it, somewhere I
+// didn't log it", `collections.played_before_at` — through
+// Collection.setPlayedBefore. It is the same mark the collection sheet's switch
+// flips (ui/status-tag.js), so either place shows the other's change; on an
+// owned game it is what clears the game off this shelf. Never a play.
 //
 // NO FETCH. The rows arrive in `detail.shelf.games`, which the Stats spoke
 // already holds — see the "everything from ONE call" note at the top of

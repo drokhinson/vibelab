@@ -590,7 +590,10 @@
 --   → JSONB
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/021_profile_and_game_detail_bundles.sql)
---   Last updated in: db/migrations/boardgamebuddy/018_unscored_plays.sql
+--   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
+--               (played_page / played_total widened exactly as
+--                bgb_collection_shelf's played shelf; marks sort last.)
+--               db/migrations/boardgamebuddy/018_unscored_plays.sql
 --               (the buddy-only `together` block counts only plays that
 --                recorded a result — same `decided` rule as
 --                bgb_user_stats_detail. shared_plays is the denominator
@@ -1019,6 +1022,10 @@
 --               (collapsed from archive/040_search_rpc.sql)
 --               db/migrations/boardgamebuddy/041_search_exclude_expansions.sql
 --                 (adds p_include_expansions)
+--   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
+--               (a mark-only 'played' row is not joined, so that game is a
+--                catalog hit with no collection_status, like a game with
+--                only logged plays.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/search_service.py
 --               (_rpc_hits — GET /search, the per-keystroke GameFinder)
 --   Purpose:    One index-backed query for the unified game picker. Catalog
@@ -1222,6 +1229,9 @@
 --   → JSONB { "items": [CollectionItem…], "total": BIGINT,
 --              "parted_total": BIGINT }
 --   Defined in: db/migrations/boardgamebuddy/024_collection_page.sql
+--   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
+--               (the 'played' branch widened exactly as
+--                bgb_collection_shelf's.)
 --   Called by:  shared-backend/routes/boardgame_buddy/collection_routes.py
 --               (GET /collection/grid), which the web game explorer and the
 --               native app page against, and which the Collection spoke falls
@@ -1263,7 +1273,13 @@
 --              "parted_total": BIGINT, "truncated": BOOLEAN }
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/049_collection_shelf.sql)
---   Last updated in: db/migrations/boardgamebuddy/069_prev_owned_status.sql
+--   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
+--               (the 'played' shelf is every game with a visible play
+--                plus the target's 'played' rows, each once; a 'played' row
+--                does not hide a game from it the way a shelf row does. A
+--                mark with no play sorts last and takes the row's added_at.
+--                Every item carries `played_before`, the played mark.)
+--               db/migrations/boardgamebuddy/069_prev_owned_status.sql
 --               (p_status='owned' matches the SET ('owned','prev_owned') —
 --                a game you sold is still on your Owned shelf, just dimmed —
 --                and `parted_total` counts how many of the returned
@@ -1327,10 +1343,16 @@
 --               Python and short-circuits with no DB call at all.
 
 -- bgb_collection_status_map(p_viewer UUID)
---   → JSONB { "status_map": {game_id: status}, "expansion_counts": {base_bgg_id: n} }
+--   → JSONB { "status_map": {game_id: status}, "expansion_counts": {base_bgg_id: n},
+--              "played_marks": [game_id…] }
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/050_ghost_rpcs_and_status_map.sql)
---   Last updated in: db/migrations/boardgamebuddy/069_prev_owned_status.sql
+--   Last updated in: db/migrations/boardgamebuddy/057_played_mark.sql
+--               (played_marks lists every game the viewer marked played
+--                without a logged play, on a row of any status. status_map
+--                alone cannot tell a mark from plays, nor see one on a
+--                shelf row.)
+--               db/migrations/boardgamebuddy/069_prev_owned_status.sql
 --               (status_map carries 'prev_owned'. expansion_counts is
 --                owned-only on purpose — an expansion you sold should not
 --                badge the base game's shelf.)

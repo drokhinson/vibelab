@@ -322,6 +322,23 @@
         this.render();
       });
       this.listenDom("ranks-changed", () => this._loadRanks());
+      // The played mark rides on shelf rows (for Most played) without moving
+      // them between shelves, so it is patched into the held rows rather than
+      // spliced. A mark that does move a game arrives as status-changed too.
+      this.listenDom("played-mark-changed", (e) => {
+        const { gameId, on } = e.detail || {};
+        if (!gameId || this._isOther()) return;
+        for (const m of FLAT_MODES) {
+          const sh = this.ctl.shelf[m];
+          if (!sh || !Array.isArray(sh.items)) continue;
+          const idx = sh.items.findIndex((it) => it.game_id === gameId);
+          if (idx === -1 || !!sh.items[idx].played_before === !!on) continue;
+          const items = sh.items.slice();
+          items[idx] = { ...items[idx], played_before: !!on };
+          this.ctl.shelf[m] = { ...sh, items };
+        }
+        if (this._isPlayedView()) this.render();
+      });
       await this._initFromParams();
       // After the shelf, never before it: ranks decorate the page (a card and
       // a few chips) and are painted from cache in the first frame anyway.
@@ -779,7 +796,7 @@
             placeholder: this._searchPlaceholder(),
             oninput: "window.collectionView._onSearchInput(this.value)",
           })}
-          ${noFilters ? `<span class="collection-ctrl-slot" aria-hidden="true"></span>` : `
+          ${noFilters ? "" : `
             <button id="collection-filter-btn" class="btn btn-ghost relative collection-ctrl-btn" title="Filters"
                     onclick="window.collectionView._toggleFilters()">
               <i data-icon="sliders-horizontal" class="w-4 h-4"></i>
@@ -814,7 +831,7 @@
       return `
         <div class="collection-picker-row">
           ${this._renderPickerButton()}
-          ${this._isOther() ? `<span class="collection-ctrl-slot" aria-hidden="true"></span>` : this._renderSortButton()}
+          ${this._isOther() ? "" : this._renderSortButton()}
         </div>
       `;
     }
@@ -822,12 +839,15 @@
     /** The active order's mark; a tap unfolds the dial of all three. */
     _renderSortButton() {
       const cur = SORTS.find((o) => o.id === (this._isAltSort() ? this._sort : SORT_AZ)) || SORTS[0];
+      // The mark pops in on the paint after a pick, and only that one.
+      const swapped = this._sortSwapped;
+      this._sortSwapped = false;
       return `
-        <button type="button" id="collection-sort-btn" class="btn btn-ghost sort-toggle collection-ctrl-btn"
+        <button type="button" id="collection-sort-btn" class="btn sort-toggle collection-ctrl-btn"
                 aria-haspopup="menu" aria-expanded="false"
                 aria-label="Order: ${escapeAttr(cur.label)}. Change order" title="${escapeAttr(cur.label)}"
                 onclick="window.collectionView._openSortDial(this)">
-          ${cur.icon}
+          <span class="sort-toggle__mark${swapped ? " is-swapped" : ""}">${cur.icon}</span>
         </button>`;
     }
 
@@ -1071,7 +1091,7 @@
       // it would be YOUR rank on THEIR game. Reads as the game page pill does
       // (Rank.badge): "#2 Family" in the top 3, then "8.6/10".
       const rankChip = other ? ""
-        : plays ? this._playsChipHtml(item.play_count || 0)
+        : plays ? this._playsChipHtml(item)
         : this._rankChipHtml(g.id, rankEntry);
       const stamp = parted
         ? `<div class="collection-tile__stamp" aria-hidden="true">Prev. owned</div>`
@@ -1120,8 +1140,11 @@
       }
     }
 
-    _playsChipHtml(n) {
-      return `<span class="collection-tile__rank">${n} ${n === 1 ? "play" : "plays"}</span>`;
+    /** "12 plays", or "Played" for a played mark with nothing logged. */
+    _playsChipHtml(item) {
+      const n = item.play_count || 0;
+      const text = n > 0 ? `${n} ${n === 1 ? "play" : "plays"}` : "Played";
+      return `<span class="collection-tile__rank">${text}</span>`;
     }
 
     _rankChipHtml(gameId, forced = null) {
@@ -1712,6 +1735,58 @@
     _setSort(sort) {
       const next = SORTS.some((o) => o.id === sort) ? sort : SORT_AZ;
       if (next === this._sort) return;
+      const before = this._tileRects();
+      this._sortSwapped = true;
+      this._applySort(next);
+      this._slideTiles(before);
+    }
+
+    /** Where each game's tile sits now, keyed by game id. */
+    _tileRects() {
+      const rects = new Map();
+      const grid = this.container && this.container.querySelector("#collection-grid-host");
+      if (!grid) return rects;
+      grid.querySelectorAll(".collection-tile[data-game-id]").forEach((t) => {
+        // Page coordinates: the pick may scroll the list back to its head.
+        const r = t.getBoundingClientRect();
+        rects.set(t.getAttribute("data-game-id"), { left: r.left + window.scrollX, top: r.top + window.scrollY });
+      });
+      return rects;
+    }
+
+    /**
+     * Slide the repainted tiles from where they were to where they are now, so
+     * a re-order reads as the same games moving rather than a new list; games
+     * new to the list grow in. Transform only, on tiles inside the grid host,
+     * so nothing is rebuilt and nothing is left behind once it settles.
+     */
+    _slideTiles(before) {
+      if (!before.size || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const grid = this.container && this.container.querySelector("#collection-grid-host");
+      if (!grid) return;
+      const tiles = [...grid.querySelectorAll(".collection-tile[data-game-id]")];
+      for (const t of tiles) {
+        const was = before.get(t.getAttribute("data-game-id"));
+        const r = t.getBoundingClientRect();
+        const now = { left: r.left + window.scrollX, top: r.top + window.scrollY };
+        t.style.transform = was
+          ? `translate(${Math.round(was.left - now.left)}px, ${Math.round(was.top - now.top)}px)`
+          : "scale(0.6)";
+        if (!was) t.style.opacity = "0";
+      }
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        for (const t of tiles) {
+          t.classList.add("is-flipping");
+          t.style.transform = "";
+          t.style.opacity = "";
+          const done = () => t.classList.remove("is-flipping");
+          t.addEventListener("transitionend", done, { once: true });
+          setTimeout(done, 400);
+        }
+      }));
+    }
+
+    _applySort(next) {
       this._sort = next;
       this._syncShelfUrl();
       this._scrollToListTop();

@@ -38,14 +38,9 @@ from .game_routes import (
 from .services._helpers import raise_for_rpc_error
 
 
-def _upsert_collection(sb: Client, user_id: str, game_id: str, status: str) -> None:
-    """Set one game's collection status for one user.
-
-    Verifies the game exists AND fetches its denormalized fields in one round
-    trip, so the upsert can populate the game_* cache columns without a second
-    select. Upsert rather than update because the row may not pre-exist — a
-    wishlist->owned bump from a surface that never added the game.
-    """
+def _game_denorm(sb: Client, game_id: str) -> dict:
+    """The game's denormalized game_* columns for a collection row; 404 if the
+    game does not exist."""
     game = (
         sb.table("boardgamebuddy_games")
         .select(COLLECTION_DENORM_GAME_FIELDS)
@@ -54,13 +49,97 @@ def _upsert_collection(sb: Client, user_id: str, game_id: str, status: str) -> N
     )
     if not game.data:
         raise HTTPException(status_code=404, detail="Game not found")
+    return collection_denormalized_from_game(game.data[0])
 
+
+def _collection_row(sb: Client, user_id: str, game_id: str) -> dict | None:
+    rows = (
+        sb.table("boardgamebuddy_collections")
+        .select("status, played_before_at")
+        .eq("user_id", user_id)
+        .eq("game_id", game_id)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    return rows[0] if rows else None
+
+
+def _upsert_collection(sb: Client, user_id: str, game_id: str, status: str) -> None:
+    """Set one game's shelf status for one user.
+
+    Verifies the game exists AND fetches its denormalized fields in one round
+    trip, so the upsert can populate the game_* cache columns without a second
+    select. Upsert rather than update because the row may not pre-exist — a
+    wishlist->owned bump from a surface that never added the game.
+
+    'played' is not a shelf and cannot be set here: it is the row that holds
+    the played mark for a game on no shelf, and only _set_played_mark writes
+    it. The upsert never names played_before_at, so a shelf change leaves the
+    mark where it is — a marked game that is then bought stays marked.
+    """
+    if status == CollectionStatus.PLAYED.value:
+        raise HTTPException(
+            status_code=400,
+            detail="'played' is not a shelf — set the played mark instead",
+        )
     sb.table("boardgamebuddy_collections").upsert({
         "user_id": user_id,
         "game_id": game_id,
         "status": status,
-        **collection_denormalized_from_game(game.data[0]),
+        **_game_denorm(sb, game_id),
     }, on_conflict="user_id,game_id").execute()
+
+
+def _set_played_mark(sb: Client, user_id: str, game_id: str, on: bool) -> None:
+    """The played mark (migration 057): "played it, somewhere I didn't log it".
+
+    One mark behind both switches — the collection sheet's and the Stats Shelf
+    of Shame's — stored as played_before_at on the game's row, whatever its
+    status. A game on no shelf gets a status 'played' row to hold it, and that
+    row goes when the mark is cleared; any other row just loses the stamp.
+    An existing stamp is kept rather than refreshed, so it still says when the
+    claim was first made.
+    """
+    row = _collection_row(sb, user_id, game_id)
+    table = sb.table("boardgamebuddy_collections")
+    if on:
+        if row is None:
+            table.insert({
+                "user_id": user_id,
+                "game_id": game_id,
+                "status": CollectionStatus.PLAYED.value,
+                "played_before_at": datetime.now(timezone.utc).isoformat(),
+                **_game_denorm(sb, game_id),
+            }).execute()
+        elif not row.get("played_before_at"):
+            (table.update({"played_before_at": datetime.now(timezone.utc).isoformat()})
+             .eq("user_id", user_id).eq("game_id", game_id).execute())
+        return
+    if row is None:
+        return
+    if row.get("status") == CollectionStatus.PLAYED.value:
+        table.delete().eq("user_id", user_id).eq("game_id", game_id).execute()
+    elif row.get("played_before_at"):
+        (table.update({"played_before_at": None})
+         .eq("user_id", user_id).eq("game_id", game_id).execute())
+
+
+def _remove_from_shelf(sb: Client, user_id: str, game_id: str) -> None:
+    """Take a game off its shelf. A marked game keeps its mark: the row stays
+    as status 'played', so the game moves to the Played shelf rather than
+    vanishing. An unmarked row is deleted."""
+    row = _collection_row(sb, user_id, game_id)
+    if row is None:
+        return
+    table = sb.table("boardgamebuddy_collections")
+    if row.get("played_before_at"):
+        if row.get("status") != CollectionStatus.PLAYED.value:
+            (table.update({"status": CollectionStatus.PLAYED.value})
+             .eq("user_id", user_id).eq("game_id", game_id).execute())
+        return
+    table.delete().eq("user_id", user_id).eq("game_id", game_id).execute()
 
 
 @router.post(
@@ -102,41 +181,25 @@ async def update_collection(
     "/collection/{game_id}/played-before",
     response_model=MessageResponse,
     status_code=200,
-    summary="Mark an owned game as played before joining",
+    summary="Mark a game as played without a logged play",
 )
 async def set_played_before(
     body: CollectionPlayedBefore,
     game_id: str = Path(..., description="Game UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Clear an owned game off the Shelf of Shame without logging a play."""
-    # An UPDATE, not the upsert _upsert_collection does: a mark must never
-    # bring a game INTO the collection, and the status filter keeps it off
-    # wishlist rows. A match of zero rows is therefore the 404 — there is
-    # nothing to mark.
-    #
-    # The game keeps reading as Owned in the status map, on its detail page
-    # and in every play count. Two readers: the 'shelf' block of
-    # bgb_user_stats_detail, and the rank queue (services/rank_service.queue),
-    # which offers only games that are played by this same rule.
-    stamp = datetime.now(timezone.utc).isoformat() if body.played_before else None
-    result = await asyncio.to_thread(
-        get_supabase()
-        .table("boardgamebuddy_collections")
-        .update({"played_before_at": stamp})
-        .eq("user_id", user.user_id)
-        .eq("game_id", game_id)
-        .eq("status", "owned")
-        .execute
+    """Set or clear the played mark — see _set_played_mark.
+
+    Readers: the Played shelf (a game on no shelf), the Shelf of Shame block of
+    bgb_user_stats_detail (an owned game), the rank queue
+    (services/rank_service.queue) and the status map's played_marks. It is
+    never a play.
+    """
+    await asyncio.to_thread(
+        _set_played_mark, get_supabase(), user.user_id, game_id, body.played_before
     )
-
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Game is not on your owned shelf")
-
     return MessageResponse(
-        message="Marked as played before you joined"
-        if body.played_before
-        else "Mark removed"
+        message="Marked as played" if body.played_before else "Mark removed"
     )
 
 
@@ -150,17 +213,8 @@ async def remove_from_collection(
     game_id: str = Path(..., description="Game UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Remove a game from the user's collection."""
-    sb = get_supabase()
-
-    await asyncio.to_thread(
-        sb.table("boardgamebuddy_collections")
-        .delete()
-        .eq("user_id", user.user_id)
-        .eq("game_id", game_id)
-        .execute
-    )
-
+    """Take a game off its shelf; a played mark survives — see _remove_from_shelf."""
+    await asyncio.to_thread(_remove_from_shelf, get_supabase(), user.user_id, game_id)
     return MessageResponse(message="Game removed from collection")
 
 
@@ -193,6 +247,7 @@ async def collection_status_map(
     return CollectionStatusMapResponse(
         status_map=data.get("status_map") or {},
         expansion_counts={str(k): int(v) for k, v in (data.get("expansion_counts") or {}).items()},
+        played_marks=[str(g) for g in (data.get("played_marks") or [])],
     )
 
 

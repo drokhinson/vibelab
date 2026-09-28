@@ -169,6 +169,10 @@ def _collection_hits(
     collection every call and substring-filter in Python. The !inner hint
     makes the embedded-game ilike apply to the parent collection rows, and
     the trigram index from migration 039 serves the ILIKE.
+
+    A 'played' row only holds the played mark (migration 057) and is not a
+    shelf, so that game is left to the catalog hits — as one with only logged
+    plays is, and as the RPC path does.
     """
     if limit <= 0:
         return []
@@ -179,6 +183,7 @@ def _collection_hits(
             f"boardgamebuddy_games!boardgamebuddy_collections_game_id_fkey!inner({game_select_clause()})"
         )
         .eq("user_id", viewer_id)
+        .neq("status", "played")
         .ilike("boardgamebuddy_games.name", f"%{query}%")
     )
     if not include_expansions:

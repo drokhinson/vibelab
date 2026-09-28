@@ -74,6 +74,7 @@ class _Table:
     def select(self, *_a, **_kw): return self
     def eq(self, *_a, **_kw): return self
     def ilike(self, *_a, **_kw): return self
+    def neq(self, *_a, **_kw): return self
     def order(self, *_a, **_kw): return self
     def limit(self, *_a, **_kw): return self
     def execute(self): return _Result(self._rows)

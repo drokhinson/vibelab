@@ -31,7 +31,12 @@
       this.listenDom("status-changed", (e) => {
         const { gameId, status } = e.detail || {};
         if (gameId) this._statusMap[gameId] = status;
-        if (this._game && gameId === this._game.id) this._status = status;
+        if (this._game && gameId === this._game.id) {
+          this._status = status;
+          // The pill beside Log a play reads the status too: Add turns into
+          // Rank it once the game is marked played, and back on a removal.
+          this._paintRank();
+        }
         this._paintStatuses();
       });
       // The rank pill reads the viewer's whole ranking (tens of rows), not a
@@ -41,6 +46,12 @@
       // so it never competes with what the screen is actually for.
       this._ranks = window.Rank.cachedSummary();
       this.listenDom("ranks-changed", () => this._loadRanks());
+      // A mark on an owned or wishlisted game moves no status, but it makes
+      // the game rankable: "Rank it" appears (or goes) beside Log a play.
+      this.listenDom("played-mark-changed", (e) => {
+        const { gameId } = e.detail || {};
+        if (this._game && gameId === this._game.id) this._paintRank();
+      });
       this.listenDom("chapters-changed", (e) => {
         // The widget may not exist yet during the initial _load, and a
         // chapter add could be for the base game OR for an active
@@ -176,19 +187,32 @@
       }
     }
 
-    // Beside Log a play and BGG. Nothing until the ranking has loaded, so an
-    // already-ranked game never flashes "Rank it" first. Expansions are ranked
-    // with their base game, so they get no pill.
+    // Beside Log a play and BGG. A game that is nowhere in the viewer's
+    // collection — no shelf, no plays — has nothing to rank, so the slot
+    // offers to add it instead, through the same sheet as the hero's status
+    // tag (which is where "Played" lives for a game played elsewhere).
+    // Otherwise nothing until the ranking has loaded, so an already-ranked
+    // game never flashes "Rank it" first. Expansions are ranked with their
+    // base game, so they get no rank pill.
     _renderRankPill() {
       const g = this._game;
-      if (!g || g.is_expansion || !this._ranks) return "";
+      if (!g) return "";
+      if (!this._status && !this._viewerStats) {
+        return `
+          <button class="btn game-detail__action game-detail__rank-btn" type="button"
+                  aria-haspopup="dialog"
+                  onclick="window.gameDetailView._openAdd(event)">
+            <i data-icon="plus" class="w-4 h-4"></i><span>Add</span>
+          </button>`;
+      }
+      if (g.is_expansion || !this._ranks) return "";
       const r = this._ranks[g.id];
       if (!r) {
         if (!this._rankable(g.id)) return "";
         return `
           <button class="btn game-detail__action game-detail__rank-btn" type="button"
                   onclick="window.gameDetailView._openRank(event)">
-            <i data-icon="list-numbers" class="w-4 h-4"></i> Rank it
+            <i data-icon="list-numbers" class="w-4 h-4"></i><span>Rank it</span>
           </button>`;
       }
       const b = window.Rank.badge(r);
@@ -203,13 +227,14 @@
 
     /**
      * Only a game you have played can be ranked — the rank queue's rule, and
-     * the Shelf of Shame's: a play, or the "played before joining" mark. The
-     * bundle knows the first (viewer_stats, or a derived "played" status); the
-     * mark is not in the bundle, but a marked game sits in the rank queue, so
-     * its cached copy covers it without asking the server again.
+     * the Shelf of Shame's: a play, or the played mark. The bundle knows the
+     * first (viewer_stats, or a "played" status); the mark is in the status
+     * map's played_marks, and a marked game also sits in the rank queue, so
+     * either cached copy answers without asking the server again.
      */
     _rankable(gameId) {
       if (this._viewerStats || this._status === "played") return true;
+      if (window.Collection.isPlayedMark(gameId)) return true;
       const queue = window.Rank.cachedQueue();
       return !!(queue && queue.some((it) => it.game && it.game.id === gameId));
     }
@@ -219,6 +244,12 @@
       if (!host) return;
       host.innerHTML = this._renderRankPill();
       this.refreshIcons(host);
+    }
+
+    _openAdd(ev) {
+      const g = this._game;
+      if (!g) return;
+      window.statusPicker.openFor(ev, g.id, "", g.name);
     }
 
     _openRank(ev) {
@@ -282,15 +313,15 @@
             <div class="game-detail__actions">
               ${g.is_expansion ? "" : `
                 <button class="btn btn-secondary game-detail__action" onclick="window.gameDetailView._startPlay()">
-                  <i data-icon="play" class="w-4 h-4"></i> Log a play
+                  <i data-icon="play" class="w-4 h-4"></i><span>Log a play</span>
                 </button>
               `}
               ${g.bggUrl() ? `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--bgg"
                                 href="${g.bggUrl()}" target="_blank" rel="noopener">
-                <i data-icon="external-link" class="w-4 h-4"></i> BGG
+                <i data-icon="external-link" class="w-4 h-4"></i><span>BGG</span>
               </a>` : `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--disabled" disabled
                                 title="No BGG link available">
-                <i data-icon="external-link" class="w-4 h-4"></i> BGG
+                <i data-icon="external-link" class="w-4 h-4"></i><span>BGG</span>
               </button>`}
               <span id="game-detail-rank" class="game-detail__rank-host">${this._renderRankPill()}</span>
               <!-- No Rulebook button here since migration 052. The link is a
