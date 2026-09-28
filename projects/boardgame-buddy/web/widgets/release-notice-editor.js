@@ -10,13 +10,13 @@
 // Inline, the editor replaces the spoke's list and the screen's own back is
 // the way out.
 //
-// The seam with views/admin-release-notices-view.js: that file owns the SCREEN
-// (route, gate, list, filter, refresh), this one owns ONE NOTICE. Same
-// host-callback contract widgets/admin-backfill-panel.js uses, so the inline
-// handlers below name window.adminReleaseNoticesView.
+// The seam with views/whats-new-view.js: that file owns the SCREEN (route,
+// list, filter, refresh), this one owns ONE NOTICE. Same host-callback
+// contract widgets/admin-backfill-panel.js uses, so the inline handlers below
+// name window.whatsNewView.
 
 (function () {
-  const HOST = "window.adminReleaseNoticesView";
+  const HOST = "window.whatsNewView";
 
   // Debounce the live preview. A preview that re-renders on every keystroke of
   // an 8000-character body is work nobody asked for, and the pause is what
