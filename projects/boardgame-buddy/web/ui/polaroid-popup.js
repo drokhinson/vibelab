@@ -17,6 +17,10 @@
 //
 // `saving` and `error` remain the honest way to render a write the user must
 // wait on, and renderInner still does — no current caller needs it.
+//
+// Under the photo, a game the viewer has not ranked yet gets a "Rate {game}"
+// stub (ui/rate-stub.js). It sits INSIDE the card so a tap on it is not a tap
+// outside, and it is about the game, not this play.
 
 // @ts-check
 
@@ -161,6 +165,8 @@
     window.BgbIcons.render(root);
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => handleClose(opts));
+    const rateHost = root.querySelector("[data-rate-host]");
+    if (rateHost && window.RateStub) window.RateStub.mount(rateHost, opts.game, root.__cardId);
     const viewBtn = root.querySelector(".polaroid-popup__view");
     if (viewBtn) {
       viewBtn.addEventListener("click", () => {
@@ -369,6 +375,8 @@
         ${warning}
         ${viewBtn}
         ${actions}
+        ${opts.game && opts.game.id && !opts.game.is_expansion && !opts.saving && !opts.error
+          ? `<div class="polaroid-popup__rate" data-rate-host hidden></div>` : ""}
       </div>
     `;
   }

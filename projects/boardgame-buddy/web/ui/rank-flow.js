@@ -25,10 +25,12 @@
 
   class RankFlow {
     /**
-     * @param {{host: HTMLElement, context: Object, onDone?: (entry: Object) => void}} opts
+     * @param {{host: HTMLElement, context: Object, onDone?: (entry: Object) => void, tier?: string}} opts
      *   context is GET /ranks/games/{id}: {game, category_label, ranked, …}.
+     *   tier skips the gut check when the caller already asked it (the
+     *   wrap-up card's "Rate {game}" stub), opening on the first question.
      */
-    constructor({ host, context, onDone }) {
+    constructor({ host, context, onDone, tier }) {
       this.host = host;
       this.ctx = context;
       this.onDone = onDone || (() => {});
@@ -41,7 +43,8 @@
       this.entry = null;
       this._onClick = (e) => this._click(e);
       host.addEventListener("click", this._onClick);
-      this.render();
+      if (tier) this._pickTier(tier);
+      else this.render();
     }
 
     destroy() {

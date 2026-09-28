@@ -17,10 +17,16 @@
       this._seq = 0;
     }
 
-    /** @param {{id:string, name:string}} game @param {{returnFocus?: Element}} [opts] */
-    open(game, { returnFocus = null } = {}) {
+    /**
+     * @param {{id:string, name:string}} game
+     * @param {{returnFocus?: Element, tier?: string}} [opts] tier: the gut
+     *   check was already answered elsewhere, so an unranked game opens on its
+     *   first "which do you prefer?".
+     */
+    open(game, { returnFocus = null, tier = null } = {}) {
       const seq = ++this._seq;
       this._game = game;
+      this._tier = tier;
       this._ctx = null;
       this._sheet.open({
         html: this._panel(`Rank ${escapeHtml(game.name)}`,
@@ -84,8 +90,12 @@
       const verb = this._ctx.rank ? "Re-rank" : "Rank";
       this._patch(`${verb} ${escapeHtml(this._game.name)}`, "", "");
       const host = this._sheet.el.querySelector("[data-rank-body]");
+      // Only the first flow of an open takes the preset tier; Re-rank asks again.
+      const tier = this._ctx.rank ? null : this._tier;
+      this._tier = null;
       this._flow = new window.RankFlow({
         host,
+        tier,
         context: { ...this._ctx, rank: null },
         onDone: () => this._patch("Ranked", null,
           `<button class="bgb-sheet__cancel" type="button" data-action="close">Done</button>`),
