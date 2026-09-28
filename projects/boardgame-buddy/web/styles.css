@@ -22151,7 +22151,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .rank-card__sub { font-size: 0.8rem; color: var(--polaroid-muted); }
 .rank-card__go { flex: none; min-height: 40px; }
 .rank-card__close {
-  position: absolute; top: 6px; right: 6px;
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
   width: 32px; height: 32px; border: none; border-radius: 50%;
   display: grid; place-items: center;
   background: transparent; color: var(--polaroid-muted); cursor: pointer;

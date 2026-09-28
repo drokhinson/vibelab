@@ -36,10 +36,11 @@
       });
       // The rank pill reads the viewer's whole ranking (tens of rows), not a
       // bundle field: a rank written in the sheet or the queue has to show here
-      // without waiting out the bundle's 30-minute cache.
-      this._ranks = null;
+      // without waiting out the bundle's 30-minute cache. The cached copy
+      // paints with the page; the fetch waits for the bundle (end of onMount)
+      // so it never competes with what the screen is actually for.
+      this._ranks = window.Rank.cachedSummary();
       this.listenDom("ranks-changed", () => this._loadRanks());
-      this._loadRanks();
       this.listenDom("chapters-changed", (e) => {
         // The widget may not exist yet during the initial _load, and a
         // chapter add could be for the base game OR for an active
@@ -59,6 +60,7 @@
         .then((m) => { if (!this._mounted) return; this._statusMap = m || {}; this._paintStatuses(); })
         .catch(() => {});
       await this._load();
+      this._loadRanks();
     }
     async onParamsChange() { await this._load(); }
 

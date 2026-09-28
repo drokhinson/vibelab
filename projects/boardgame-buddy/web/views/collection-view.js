@@ -284,8 +284,10 @@
         this.render();
       });
       this.listenDom("ranks-changed", () => this._loadRanks());
-      this._loadRanks();
       await this._initFromParams();
+      // After the shelf, never before it: ranks decorate the page (a card and
+      // a few chips) and are painted from cache in the first frame anyway.
+      this._loadRanks();
     }
 
     async onParamsChange() {
@@ -394,6 +396,8 @@
       }
 
       // Self path — paint from cache, then let SWR decide whether to refresh.
+      this._ranks = window.Rank.cachedSummary();
+      this._rankQueue = window.Rank.cachedQueue();
       this._hydrateStatusMap();
       this._hydrateFromCache();
       // Every shelf but the one on screen is lazy (see _setMode): nothing on
@@ -519,7 +523,7 @@
         // made both pop in once the first shelf landed, and moved the grid.
         this.container.innerHTML = `
           ${this._renderHead()}
-          <div id="collection-rank-host">${this._renderRankCard()}</div>
+          <div id="collection-rank-host">${this._rankCardSlot()}</div>
           ${this._renderShelfPicker()}
           ${this._renderControls(tree)}
           <div class="profile-loading">
@@ -538,7 +542,7 @@
       // for an expansion, so the tree gets the search field without it.
       this.container.innerHTML = `
         ${this._renderHead()}
-        <div id="collection-rank-host">${this._renderRankCard()}</div>
+        <div id="collection-rank-host">${this._rankCardSlot()}</div>
         ${this._renderShelfPicker()}
         ${this._renderControls(tree)}
         <div id="collection-tree-controls-host">${tree ? this._renderTreeControls() : ""}</div>
@@ -954,16 +958,13 @@
       // chip on every ranked tile would be noise, and on someone else's shelf
       // it would be YOUR rank on THEIR game. Reads as the game page pill does
       // (Rank.badge): "#2 Family" in the top 3, then "8.6/10".
-      const rank = !other && this._ranks && this._ranks[g.id];
-      const badge = rank && rank.position <= 5 ? window.Rank.badge(rank) : null;
-      const rankChip = badge
-        ? `<span class="collection-tile__rank">${escapeHtml(badge.num + badge.rest)}</span>`
-        : "";
+      const rankChip = other ? "" : this._rankChipHtml(g.id);
       const stamp = parted
         ? `<div class="collection-tile__stamp" aria-hidden="true">Prev. owned</div>`
         : "";
       return `
-        <div class="collection-tile${parted ? " is-prev-owned" : ""}" onclick="${escapeAttr(gameDetailJs(g.id, g.name))}">
+        <div class="collection-tile${parted ? " is-prev-owned" : ""}" data-game-id="${escapeAttr(g.id || "")}"
+             onclick="${escapeAttr(gameDetailJs(g.id, g.name))}">
           ${window.renderStatusTag(g.id, status, { corner: true, pending, gameName: g.name })}
           <div class="collection-tile__art">
             ${gameArtImg(g, "card")
@@ -987,10 +988,38 @@
         this._ranks = ranks;
         this._rankQueue = queue;
         this._paintRankCard();
-        this._paintList();
+        this._paintRankChips();
       } catch (_) {
         // No card and no chips is the right rendering for "could not ask".
       }
+    }
+
+    _rankChipHtml(gameId) {
+      const rank = this._ranks && this._ranks[gameId];
+      const badge = rank && rank.position <= 5 ? window.Rank.badge(rank) : null;
+      return badge
+        ? `<span class="collection-tile__rank">${escapeHtml(badge.num + badge.rest)}</span>`
+        : "";
+    }
+
+    /**
+     * Ranks landed after the shelf painted: swap each tile's chip in place.
+     * Rebuilding the grid instead replays every tile's entrance animation, so
+     * the whole page looks like it loaded a second time.
+     */
+    _paintRankChips() {
+      if (this._isOther()) return;
+      const grid = this.container && this.container.querySelector("#collection-grid-host");
+      if (!grid) return;
+      grid.querySelectorAll(".collection-tile[data-game-id]").forEach((tile) => {
+        const html = this._rankChipHtml(tile.getAttribute("data-game-id"));
+        const chip = tile.querySelector(".collection-tile__rank");
+        if ((chip ? chip.outerHTML : "") === html) return;
+        if (chip) chip.remove();
+        if (!html) return;
+        const art = tile.querySelector(".collection-tile__art");
+        if (art) art.insertAdjacentHTML("beforeend", html);
+      });
     }
 
     _renderRankCard() {
@@ -1017,8 +1046,20 @@
     _paintRankCard() {
       const host = this.container && this.container.querySelector("#collection-rank-host");
       if (!host) return;
-      host.innerHTML = this._renderRankCard();
+      // A refresh that changes nothing leaves the card alone rather than
+      // replaying its entrance.
+      const html = this._renderRankCard();
+      if (html === this._rankCardPainted) return;
+      this._rankCardPainted = html;
+      host.innerHTML = html;
       this.refreshIcons(host);
+    }
+
+    /** The card as a full render paints it, remembered so _paintRankCard can
+     *  tell whether a later refresh changed anything. */
+    _rankCardSlot() {
+      this._rankCardPainted = this._renderRankCard();
+      return this._rankCardPainted;
     }
 
     _closeRankCard() {
