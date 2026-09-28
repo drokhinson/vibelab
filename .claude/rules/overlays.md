@@ -443,6 +443,7 @@ Consumers: the sheet shell (`ui/bottom-sheet.js`, so every sheet), the whole
 `ui/polaroid-popup.js` family (splash, achievement, confirm, alert, avatar
 customizer), `widgets/add-buddies-modal.js`,
 `widgets/import-expansions-modal.js`, `widgets/outbox-modal.js`,
+`ui/sort-dial.js`,
 `widgets/play-detail-popup.js`, `widgets/onboarding-deck.js`, and the authoring
 guide plus the IN-VIEW create wizard in `views/reference-guide-add-view.js` (the
 routed wizard on the same screen deliberately arms nothing — see the bullet

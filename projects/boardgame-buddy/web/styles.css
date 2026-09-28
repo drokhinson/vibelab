@@ -439,6 +439,7 @@
      .shelf-sheet,
      .rank-sheet,
      .shelf-picker-sheet,
+     .sort-dial,
      .buddy-qr-sheet,
      .ghost-claim-sheet,
      .alias-sheet,
@@ -494,6 +495,7 @@
      .shelf-sheet,
      .rank-sheet,
      .shelf-picker-sheet,
+     .sort-dial,
      .buddy-qr-sheet,
      .ghost-claim-sheet,
      .alias-sheet,
@@ -15177,15 +15179,85 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 .collection-picker-row .shelf-picker { flex: 1 1 auto; min-width: 0; width: auto; margin: 0; }
 
-/* A plain .btn-ghost, like #collection-filter-btn beside the search field; the
-   A–Z glyph is text, so it is sized to sit where that button's icon does. */
+/* A plain .btn-ghost, like #collection-filter-btn beside the search field. It
+   shows the active order: the A–Z glyph is text, sized to sit where that
+   button's icon does; the other two are icons. Hidden while its dial is open,
+   because the dial's first choice sits exactly over it. */
 .sort-toggle { flex: none; }
+.sort-toggle.is-dial-open { visibility: hidden; }
 .sort-toggle__az {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 0.8rem;
   letter-spacing: -0.01em;
   white-space: nowrap;
+}
+
+/* ── The sort dial (ui/sort-dial.js) ─────────────────────────────────────
+   A body-level overlay on the modal rung of the z-index ladder. The scrim greys
+   and dims the page; the column is pinned to the anchor's measured rect, so
+   its first choice covers the anchor and the rest unfold below it. Each choice
+   rises in on a --i stagger and its label slides out to its left after it. */
+.sort-dial { position: fixed; inset: 0; z-index: 95; }
+.sort-dial__scrim {
+  position: absolute; inset: 0;
+  background: color-mix(in srgb, var(--bg-0) 62%, transparent);
+  -webkit-backdrop-filter: blur(2px) grayscale(0.7);
+  backdrop-filter: blur(2px) grayscale(0.7);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.sort-dial__col {
+  position: absolute;
+  box-sizing: border-box;
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+.sort-dial__opt { display: flex; align-items: center; gap: 10px; }
+.sort-dial__fab {
+  width: max(48px, var(--fab, 48px)); height: max(48px, var(--fab, 48px));
+  display: grid; place-items: center;
+  border-radius: 14px;
+  border: 1.5px solid var(--line-strong);
+  background: var(--bg-2);
+  color: var(--ink);
+  box-shadow: var(--sh-2);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(calc(var(--i) * -58px)) scale(0.9);
+  transition: opacity 0.14s ease, transform 0.18s ease;
+}
+.sort-dial__fab:active { background: color-mix(in srgb, var(--accent) 18%, var(--bg-2)); }
+.sort-dial__fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sort-dial__fab.is-on { background: var(--accent-fill); color: var(--on-accent); border-color: transparent; }
+.sort-dial__label {
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  box-shadow: var(--sh-2);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(14px);
+  transition: opacity 0.12s ease, transform 0.16s ease;
+}
+.sort-dial.is-open .sort-dial__scrim { opacity: 1; }
+.sort-dial.is-open .sort-dial__fab {
+  opacity: 1; transform: none;
+  transition: opacity 0.16s ease, transform 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  transition-delay: calc(var(--i) * 45ms);
+}
+.sort-dial.is-open .sort-dial__label {
+  opacity: 1; transform: none;
+  transition: opacity 0.18s ease, transform 0.22s ease;
+  transition-delay: calc(var(--i) * 45ms + 110ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sort-dial__scrim, .sort-dial__fab, .sort-dial__label { transition: none !important; }
 }
 
 /* Cross-shelf search results: one group per shelf, headed by its name and
