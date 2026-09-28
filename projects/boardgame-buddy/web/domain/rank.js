@@ -6,7 +6,9 @@
 //
 //   summary()  every ranked game's place and score, held whole (tens of rows). The
 //              game page pill and the Collection top-5 chips read it.
-//   queue()    played games with no rank yet, A to Z.
+//   queue()    played games with no rank yet, A to Z, then the ones parked
+//              with "Rank after next play" (`deferred`, migration 058), A to Z.
+//              countable() is the part that counts toward "N unranked".
 //   context()  one game's category, current rank, and the list it is ranked
 //              against. localContext() builds the same thing from the cached
 //              summary (whose entries carry their game), so the sheet and the
@@ -15,6 +17,10 @@
 //              REPLACES the cached summary (and the game leaves the cached
 //              queue), then `ranks-changed` fires — so every surface repaints
 //              from cache and nothing refetches.
+//   defer()    park an unranked game until its next play: flags it in the
+//              cached queue first, then writes. The server lapses the flag by
+//              itself once the game is played, which the queue sees because a
+//              saved play drops it (invalidateQueue()).
 //
 // Both reads are seeded at boot from /bootstrap (seed()), so they are cache
 // hits from the first screen. That, and place() writing the cache itself, is
@@ -124,12 +130,43 @@
       return data ? data.items || [] : null;
     }
 
-    /** @returns {Promise<Array<{game:Object, category:string, category_label:string}>>} */
+    /** @returns {Promise<Array<{game:Object, category:string, category_label:string, deferred?:boolean}>>} */
     static async queue({ force = false } = {}) {
       if (force) window.bgbCache.delete(NS, QUEUE_KEY);
       const data = await window.bgbCache.swr(NS, QUEUE_KEY,
         () => window.api.get("/ranks/queue"), TTLS[QUEUE_KEY]);
       return (data && data.items) || [];
+    }
+
+    /** The queue items that count toward "N unranked": all but the deferred. */
+    static countable(items) {
+      return (items || []).filter((it) => !it.deferred);
+    }
+
+    /**
+     * "Rank after next play". Optimistic: the cached queue flags the game and
+     * re-sorts (deferred last, as the server orders it) and `ranks-changed`
+     * fires before the request; a failure puts the queue back and rethrows.
+     */
+    static async defer(gameId) {
+      const queued = window.bgbCache.peek(NS, QUEUE_KEY);
+      const before = queued && Array.isArray(queued.items) ? queued.items : null;
+      if (before) {
+        const items = before.map((it) => (it.game && it.game.id === gameId ? { ...it, deferred: true } : it));
+        const byName = (a, b) => String(a.game && a.game.name).localeCompare(String(b.game && b.game.name));
+        items.sort((a, b) => (a.deferred ? 1 : 0) - (b.deferred ? 1 : 0) || byName(a, b));
+        window.bgbCache.setWithTtls(NS, QUEUE_KEY, { items }, TTLS[QUEUE_KEY]);
+      }
+      const fire = () => document.dispatchEvent(new CustomEvent("ranks-changed", { detail: { gameId } }));
+      fire();
+      try {
+        await window.api.put(`/ranks/games/${encodeURIComponent(gameId)}/defer`, {});
+      } catch (err) {
+        if (before) window.bgbCache.setWithTtls(NS, QUEUE_KEY, { items: before }, TTLS[QUEUE_KEY]);
+        else window.bgbCache.delete(NS, QUEUE_KEY);
+        fire();
+        throw err;
+      }
     }
 
     /** @param {{current?: boolean}} [opts] current: the list for the category

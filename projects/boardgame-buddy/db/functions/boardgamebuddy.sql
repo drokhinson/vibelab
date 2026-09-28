@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 056_game_ranks.sql (adds bgb_rank_game / bgb_unrank_game — the two
+-- Last updated: 058_rank_deferrals.sql (adds bgb_rank_deferrals_active — which
+--               "Rank after next play" deferrals still hold, i.e. which parked
+--               games have not been played since. db/tests/058_rank_deferrals.sql
+--               is the behavioural test.)
+--               Before that: 056_game_ranks.sql (adds bgb_rank_game / bgb_unrank_game — the two
 --               writes behind "rank your games". Positions within a
 --               (user, category, tier) are dense, so each write is close a gap,
 --               open a gap, insert, and has to land as one statement.
@@ -1661,6 +1665,18 @@
 --   Called by:  services/rank_service.remove (DELETE /ranks/games/{game_id})
 --   Purpose:    Remove a game from the ranking and close the gap in its tier.
 --               A second call is {removed: false}, not an error.
+
+-- bgb_rank_deferrals_active(p_viewer UUID)
+--   → JSONB [game_id, ...]
+--   Defined in: db/migrations/058_rank_deferrals.sql
+--   Called by:  services/rank_service.queue (GET /ranks/queue + the /bootstrap
+--               seed)
+--   Purpose:    The games p_viewer parked with "Rank after next play" that are
+--               still waiting: no play the viewer can see (logged or seated,
+--               the bgb_play_stats rule) was created after deferred_at AND
+--               played on or after its date. The date half keeps an import of
+--               old plays from lapsing it. SECURITY DEFINER, REVOKEd from
+--               anon/authenticated.
 
 -- bgb_notifications(p_viewer UUID, p_limit INT DEFAULT 20,
 --                   p_before TIMESTAMPTZ DEFAULT NULL,

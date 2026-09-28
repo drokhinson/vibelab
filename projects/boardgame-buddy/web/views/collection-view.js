@@ -1184,7 +1184,7 @@
     }
 
     _renderRankCard() {
-      const left = this._rankQueue ? this._rankQueue.length : 0;
+      const left = this._rankQueue ? window.Rank.countable(this._rankQueue).length : 0;
       if (this._isOther() || !left || this._rankCardClosed) return "";
       const ranked = Object.keys(this._ranks || {}).length;
       const pct = Math.round((ranked / (ranked + left)) * 100);

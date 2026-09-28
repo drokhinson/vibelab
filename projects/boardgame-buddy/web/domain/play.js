@@ -697,7 +697,8 @@
     // and takes its game off "Back on the shelf".
     if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
     // A play is what makes a game rankable (and deleting its last one what
-    // stops it), so the unranked list has to be asked again.
+    // stops it), and it ends a "Rank after next play" wait, so the unranked
+    // list has to be asked again.
     if (window.Rank && window.Rank.invalidateQueue) window.Rank.invalidateQueue();
     // Profile.invalidate() above drops the cached bundle; this is the SAME
     // payload published to the store by views/profile-self-view.js, and the

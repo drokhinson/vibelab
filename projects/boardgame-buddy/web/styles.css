@@ -22236,6 +22236,15 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 .rank-flow__tier--love .rank-flow__tier-dot { color: var(--accent-ink); }
 .rank-flow__tier--not .rank-flow__tier-dot { color: var(--rust); }
+/* Not a verdict, so it reads quieter than the three that are: a dashed
+   outline, no fill, and a line saying what it does. */
+.rank-flow__tier--later {
+  border-style: dashed;
+  background: transparent;
+  padding-block: 8px;
+}
+.rank-flow__tier-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rank-flow__tier-sub { font-size: 0.8rem; font-weight: 500; color: var(--polaroid-muted); }
 
 .rank-flow__q { margin: 4px 0 0; font-size: 1.15rem; font-weight: 700; color: var(--polaroid-ink); }
 .rank-flow__vs {
@@ -22480,6 +22489,13 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   border: 1px solid var(--polaroid-line); color: var(--polaroid-muted);
 }
 .rank-queue__cta { width: 100%; min-height: 52px; }
+.rank-queue__sec {
+  display: flex; align-items: center; gap: 6px;
+  margin: 10px 0 -6px; padding: 0 8px;
+  font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--polaroid-muted);
+}
+.rank-queue__list--later .rank-queue__row-name { color: var(--polaroid-muted); }
 .rank-queue__skip {
   width: 100%; min-height: 52px; margin-top: 8px;
   color: var(--polaroid-muted); font-weight: 500;

@@ -1,6 +1,8 @@
 // widgets/rank-sheet.js — the game page's rank pill opens this.
 //
 // Unranked: the ranking questions (ui/rank-flow.js), then the game's new place.
+// Its gut check also offers "Rank after next play", which parks the game and
+// closes the sheet.
 // Ranked: the category's whole list with the game highlighted, and Re-rank,
 // which runs the questions again. The category is the server's, from
 // BoardGameGeek, and the sheet only ever names it.
@@ -140,11 +142,29 @@
         continueLabel: "Done",
         onContinue: () => this._sheet.close(),
         onRankings: () => this._sheet.close(),
+        onDefer: rerank || this._parked() ? null : () => this._defer(),
         onStep: (step) => {
           const title = step === "result" ? "Ranked" : `${verb} ${escapeHtml(this._game.name)}`;
           const el = this._sheet.el && this._sheet.el.querySelector("[data-rank-title]");
           if (el && el.innerHTML !== title) el.innerHTML = title;
         },
+      });
+    }
+
+    /** Already waiting on its next play: the gut check does not offer it again. */
+    _parked() {
+      const queued = (window.Rank.cachedQueue() || []).find((it) => it.game && it.game.id === this._game.id);
+      return !!(queued && queued.deferred);
+    }
+
+    // "Rank after next play" ends the sheet: there is nothing to show for a
+    // game that stays unranked. Rank.defer is optimistic, so only a failure
+    // speaks.
+    _defer() {
+      const game = this._game;
+      this._sheet.close();
+      window.Rank.defer(game.id).catch(() => {
+        window.showToast(`Couldn't park ${escapeHtml(game.name)} just now.`, "error");
       });
     }
 

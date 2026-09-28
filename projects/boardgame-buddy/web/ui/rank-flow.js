@@ -12,6 +12,11 @@
 // result carries Undo (back one question), the caller's Continue, and Go to
 // rankings (the collection sorted by rank, on this game's category).
 //
+// An unranked game's gut check can carry a fourth answer, "Rank after next
+// play", when the host passes onDefer: the game is parked (Rank.defer) rather
+// than placed, and what happens next — the next game, closing the sheet — is
+// the host's.
+//
 // Lifecycle only — it owns one host element's markup and clicks. Whatever sits
 // around it (the queue's Skip) is the caller's.
 
@@ -43,9 +48,11 @@
      *   its own chrome when the result is up. continueLabel + onContinue put
      *   the result screen's primary button ("Next: Azul", "Done").
      *   onRankings runs before Go to rankings routes, so a host can close
-     *   whatever the flow sits in first.
+     *   whatever the flow sits in first. onDefer adds "Rank after next play"
+     *   to the gut check and runs when it is picked; a host passes it only
+     *   for a game that is unranked and not already parked.
      */
-    constructor({ host, context, onDone, onStep, tier, continueLabel, onContinue, onRankings, ready, reload, placeOpts }) {
+    constructor({ host, context, onDone, onStep, tier, continueLabel, onContinue, onRankings, onDefer, ready, reload, placeOpts }) {
       this.host = host;
       this.ctx = context;
       this.onDone = onDone || (() => {});
@@ -53,6 +60,7 @@
       this.continueLabel = continueLabel || null;
       this.onContinue = onContinue || null;
       this.onRankings = onRankings || null;
+      this.onDefer = onDefer || null;
       this.step = "tier";
       this.tier = null;
       this.list = [];
@@ -109,6 +117,7 @@
       if (!el || !this.host.contains(el)) return;
       const act = el.getAttribute("data-rank-act");
       if (act === "tier") this._pickTier(el.getAttribute("data-tier"));
+      else if (act === "defer" && this.onDefer) this.onDefer();
       else if (act === "new") this._answer(true);
       else if (act === "old") this._answer(false);
       else if (act === "tie") {
@@ -244,6 +253,14 @@
                 <span class="rank-flow__tier-dot"><i data-icon="${t.icon}" class="w-4 h-4"></i></span>
                 <span>${t.label}</span>
               </button>`).join("")}
+            ${this.onDefer ? `
+              <button type="button" class="rank-flow__tier rank-flow__tier--later" data-rank-act="defer">
+                <span class="rank-flow__tier-dot"><i data-icon="hourglass" class="w-4 h-4"></i></span>
+                <span class="rank-flow__tier-text">
+                  <span>Rank after next play</span>
+                  <span class="rank-flow__tier-sub">Stays unranked and off your count until you play it again</span>
+                </span>
+              </button>` : ""}
           </div>`;
       }
       if (this.step === "wait") {
