@@ -196,7 +196,7 @@
           <button class="btn game-detail__action game-detail__rank-btn" type="button"
                   aria-haspopup="dialog"
                   onclick="window.gameDetailView._openAdd(event)">
-            <i data-icon="plus" class="w-4 h-4"></i> Add
+            <i data-icon="plus" class="w-4 h-4"></i><span>Add</span>
           </button>`;
       }
       if (g.is_expansion || !this._ranks) return "";
@@ -206,7 +206,7 @@
         return `
           <button class="btn game-detail__action game-detail__rank-btn" type="button"
                   onclick="window.gameDetailView._openRank(event)">
-            <i data-icon="list-numbers" class="w-4 h-4"></i> Rank it
+            <i data-icon="list-numbers" class="w-4 h-4"></i><span>Rank it</span>
           </button>`;
       }
       const b = window.Rank.badge(r);
@@ -306,15 +306,15 @@
             <div class="game-detail__actions">
               ${g.is_expansion ? "" : `
                 <button class="btn btn-secondary game-detail__action" onclick="window.gameDetailView._startPlay()">
-                  <i data-icon="play" class="w-4 h-4"></i> Log a play
+                  <i data-icon="play" class="w-4 h-4"></i><span>Log a play</span>
                 </button>
               `}
               ${g.bggUrl() ? `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--bgg"
                                 href="${g.bggUrl()}" target="_blank" rel="noopener">
-                <i data-icon="external-link" class="w-4 h-4"></i> BGG
+                <i data-icon="external-link" class="w-4 h-4"></i><span>BGG</span>
               </a>` : `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--disabled" disabled
                                 title="No BGG link available">
-                <i data-icon="external-link" class="w-4 h-4"></i> BGG
+                <i data-icon="external-link" class="w-4 h-4"></i><span>BGG</span>
               </button>`}
               <span id="game-detail-rank" class="game-detail__rank-host">${this._renderRankPill()}</span>
               <!-- No Rulebook button here since migration 052. The link is a

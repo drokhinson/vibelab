@@ -10585,8 +10585,42 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .game-detail__name { font-size: 1.85rem; margin: 0; line-height: 1.1; color: var(--game-accent); }
 .game-detail__meta { display: flex; gap: 0.6rem; font-size: 0.85rem; opacity: 0.75; margin: 0.35rem 0 0.75rem; }
 .game-detail__actions {
-  display: flex; align-items: stretch; gap: 0.4rem; flex-wrap: wrap;
+  display: flex; align-items: stretch; gap: 0.4rem;
   margin-bottom: 1rem;
+}
+/* The pills share the row equally — Log a play, BGG and the rank / Add slot
+   (whose host is display: contents, so its button is a flex item here too) —
+   so the row reads as one evenly spaced set whatever each label says. With
+   the slot empty, the other two split the row. A label longer than its third
+   truncates rather than wrapping the row. */
+.game-detail__actions .game-detail__action {
+  flex: 1 1 0;
+  min-width: 0;
+  flex-wrap: nowrap;             /* DaisyUI's .btn wraps; the label must stay beside its icon */
+  justify-content: center;
+  padding-inline: 0.6rem;
+}
+.game-detail__actions .game-detail__action > svg { flex: none; }
+/* A ranked pill leads with its number, which already says what it is, so it
+   gives its icon's width to the category name ("#1 Strategy"). */
+.game-detail__actions .game-detail__rank-btn.is-ranked > svg { display: none; }
+/* A third of a narrow phone is tight for "Log a play". Sized off the row
+   itself, not the viewport: the row is what the thirds are cut from. */
+.game-detail__actions { container-type: inline-size; }
+@container (max-width: 345px) {
+  .game-detail__actions .game-detail__action {
+    font-size: 0.8rem;
+    gap: 0.3rem;
+    padding-inline: 0.45rem;
+  }
+}
+@container (max-width: 300px) {
+  .game-detail__actions .game-detail__action > svg { display: none; }
+}
+.game-detail__actions .game-detail__action > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Vertical sizing parity: every action button matches the
    btn-secondary "Log a play" height. */
@@ -10599,7 +10633,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   border-radius: 0.5rem;
   white-space: nowrap;
 }
-.game-detail__link-btn { border: none; color: #fff8ec; }
+/* A transparent border rather than none: the row shares its width out after
+   borders, so a borderless pill would come out 2px narrower than the others. */
+.game-detail__link-btn { border: 1px solid transparent; color: #fff8ec; }
 .game-detail__link-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .game-detail__link-btn--bgg {
   /* BGG brand orange — keeps the external-link visually distinct from
