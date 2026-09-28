@@ -27,6 +27,12 @@
     { id: "not", label: "Not for me", icon: "chevron-down" },
   ];
 
+  function _byGame(data) {
+    const map = {};
+    for (const r of (data && data.ranks) || []) map[r.game_id] = r;
+    return map;
+  }
+
   function _changed(gameId) {
     window.bgbCache.delete(NS, SUMMARY_KEY);
     window.bgbCache.delete(NS, QUEUE_KEY);
@@ -67,9 +73,20 @@
       const data = await window.bgbCache.swr(NS, SUMMARY_KEY,
         () => window.api.get("/ranks"),
         { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS });
-      const map = {};
-      for (const r of (data && data.ranks) || []) map[r.game_id] = r;
-      return map;
+      return _byGame(data);
+    }
+
+    /** Synchronous peek for a first-frame paint; null when nothing is cached.
+     *  The pages that show ranks paint from this and fetch AFTER their own
+     *  data, so the ranking never holds up the screen it decorates. */
+    static cachedSummary() {
+      const data = window.bgbCache.peek(NS, SUMMARY_KEY);
+      return data ? _byGame(data) : null;
+    }
+
+    static cachedQueue() {
+      const data = window.bgbCache.peek(NS, QUEUE_KEY);
+      return data ? data.items || [] : null;
     }
 
     /** @returns {Promise<Array<{game:Object, category:string, category_label:string}>>} */
