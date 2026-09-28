@@ -105,8 +105,8 @@ function initSupabase() {
   // Kick session restoration directly off getSession()'s own result instead
   // of only reacting to !session — onAuthStateChange firing for a restored
   // session is a separate async path on the same client with no guarantee
-  // it lands (version/timing dependent), which previously left a valid
-  // session unresolved until the 3s cap, with `authed` never set true.
+  // it lands (version/timing dependent), which can leave a valid session
+  // unresolved until the 3s cap, with `authed` never set true.
   supabaseClient.auth.getSession().then(({ data }) => {
     if (data?.session) {
       session = data.session;
