@@ -7,9 +7,9 @@
 // LiveScores channel, and when the host moves to Settle Up they get a
 // polaroid popup announcing the wrap-up.
 //
-// Nothing on this screen is editable. Joiners used to own their own column
-// in the grid; the host is the only person who scores now (RLS enforces it
-// as of migration 053), which is what lets this view be a plain mirror —
+// Nothing on this screen is editable. The host is the only person who
+// scores (RLS enforces it — migration 053), which is what lets this view be
+// a plain mirror —
 // no per-column edit mode, no caret to preserve across a repaint, no write
 // path at all.
 //
@@ -46,11 +46,10 @@
       // One feed re-pull per session watched — see _handlePhaseSideEffects.
       this._feedRefreshed = false;
       // Poll-gating state: tick counter for the play/settle fallback cadence.
-      // "Is Realtime carrying this?" is NOT tracked here any more — it is read
-      // off the channels themselves (LiveScores.lastEventAt() and the phase
-      // channel's status), because this view cannot distinguish its own
-      // poll-driven repaints from a Realtime delivery and used to count them
-      // as evidence the channel was alive.
+      // "Is Realtime carrying this?" is NOT tracked here — it is read off the
+      // channels themselves (LiveScores.lastEventAt() and the phase channel's
+      // status), because this view cannot distinguish its own poll-driven
+      // repaints from a Realtime delivery.
       this._pollTick = 0;
       // Set from either channel's subscribe status. A channel Supabase has
       // reported broken will never deliver, so polling stops being a fallback
@@ -191,8 +190,8 @@
     /**
      * Is this session one WE host? Only ever true on a session actually read
      * back from the server — an unanswered fetch says nothing about who hosts
-     * what, and treating silence as "mine" is the bug this pair of checks
-     * exists to close.
+     * what, and treating silence as "mine" is what this pair of checks
+     * exists to prevent.
      *
      * @param {Object|null} session
      * @returns {boolean}
@@ -206,7 +205,7 @@
      * The session bundle, registering this account as a viewer on the way.
      *
      * POST /sessions/{code}/watch returns exactly what GET /sessions/{code}
-     * returns, so this is the same one round trip the screen always paid — it
+     * returns, so this costs the same one round trip a plain read does — it
      * just also leaves a viewer row behind, which is what makes the live-score
      * table and its Realtime channel readable (migration 027). Without it a
      * spectator spends the whole game on the bundle's baked-in grid and a 4s
@@ -250,7 +249,7 @@
       // Self-heal the live-scores channel. _subscribePhase() starts it when
       // the Realtime phase event lands, but a phase change the poll caught
       // instead (dropped socket, backgrounded tab, a channel that never
-      // reached READY) used to leave the spectator on the Play screen with no
+      // reached READY) would leave the spectator on the Play screen with no
       // score channel at all — an empty grid and a frozen 0 total for the
       // rest of the game, because the fallback refresh below is itself gated
       // on _liveScores existing. Starting it here costs one guard per tick
@@ -414,7 +413,7 @@
           this.render();
           this._handlePhaseSideEffects(this._session);
           // Scroll the joiner to the new section now that the phase has
-          // actually changed (render() no longer does this on every paint).
+          // actually changed (render() deliberately doesn't, on every paint).
           if (phase !== prevPhase) this._scrollToCurrentPhase(phase);
           // Lazy-start the live-scores channel when entering Play, lazy-
           // stop when leaving it (we don't need a live socket during Gather).
@@ -442,14 +441,14 @@
       // (see _readSession) it is the only copy of the grid this screen gets.
       this._seedLiveScores(this._session);
       // Subscribe BEFORE start(). start() backfills the table and _emit()s
-      // once when it's done; subscribing afterwards missed that emit, so a
-      // spectator who arrived after the host had already scored kept staring
+      // once when it's done; subscribing afterwards misses that emit, so a
+      // spectator who arrives after the host has already scored keeps staring
       // at the empty grid its first render painted until some later event
-      // (the next host keystroke, or the 10s poll fallback) happened to fire.
+      // (the next host keystroke, or the 10s poll fallback) happens to fire.
       // No "Realtime is alive" stamp here. This fires for every repaint,
       // including the two emits start() makes off its own backfill and the one
-      // our poll's refresh() triggers — so stamping it told the poll to stand
-      // down on the strength of the poll's own work. LiveScores now records
+      // our poll's refresh() triggers — so stamping it would tell the poll to
+      // stand down on the strength of the poll's own work. LiveScores records
       // when the CHANNEL delivered (lastEventAt), which is the only thing that
       // answers the question the gate is asking.
       this._liveOff = this._liveScores.subscribe(() => this._onLiveScoresChange());
@@ -541,9 +540,8 @@
         if (this._popupShown && session.finalized_play_id) {
           if (window.PolaroidPopup) window.PolaroidPopup.update({ playId: session.finalized_play_id });
         } else if (session.finalized_play_id) {
-          // The legacy /play-detail page is gone. Pop the saved play
-          // in-place; the user stays on the session viewer (or whatever
-          // surface they were on) until they close the modal.
+          // Pop the saved play in-place; the user stays on the session viewer
+          // (or whatever surface they were on) until they close the modal.
           if (window.PlayDetailPopup) window.PlayDetailPopup.show(session.finalized_play_id);
         }
         this._stopPolling();
@@ -575,9 +573,9 @@
       // The host's grid hasn't been finalized yet (settle isn't finalized),
       // so we don't have a server-side winner. Use the highest live total as
       // a best-guess; the popup updates with the real saved play once
-      // phase=finalized arrives. Guests are in the running now that scores
-      // are keyed by participant — skipping them used to hand the win to
-      // whoever came second.
+      // phase=finalized arrives. Guests are in the running: scores are keyed
+      // by participant, and skipping them would hand the win to whoever came
+      // second.
       if (!this._liveScores || !session) return null;
       const parts = session.participants || [];
       let best = null;
@@ -622,9 +620,9 @@
       const phase = s.phase || "gather";
       // Lock every non-active screen to height: 0 (.is-locked) so the cascade
       // snaps to one screen at a time — mirrors the host's render() lock in
-      // play-flow-view.js. Previously only the Play/Settle screens locked, so
-      // during Play both Gather (step 1) and Play (step 2) were visible and
-      // the joiner scrolled between them.
+      // play-flow-view.js. Locking only the Play/Settle screens would leave
+      // both Gather (step 1) and Play (step 2) visible during Play, for the
+      // joiner to scroll between.
       const lockGather = phase !== "gather";
       const lockPlay = phase !== "play";
       const lockSettle = phase !== "settle" && phase !== "finalized";
@@ -653,7 +651,7 @@
       if (this._pager) this._pager.sync();
       // NOTE: do NOT call _scrollToCurrentPhase() here. At a 2s poll cadence
       // a render-time scroll yanks the user back to the top of the section
-      // on every tick. Scroll is now invoked explicitly from onMount,
+      // on every tick. Scroll is invoked explicitly from onMount,
       // onParamsChange, and _subscribePhase when the phase actually changes.
       this._renderStatusBanner(s);
     }
@@ -683,8 +681,8 @@
     // Same three-column grid the host's screen header uses, so the two sides of
     // a session read as the same screen. The host's left slot rolls the phase
     // backwards; the spectator doesn't own the phase, so theirs leaves the
-    // session — which is also why this view no longer carries a separate crumb
-    // bar above the cascade (the session code has its own card now).
+    // session — which is also why this view carries no separate crumb bar
+    // above the cascade (the session code has its own card).
     _renderHeaderRow(title, step, hint) {
       return `
         <header class="cascade-screen__header cascade-screen__header--read">
@@ -736,9 +734,9 @@
 
     // Session code on Gather, in the same card the host reads it off
     // (play-flow-view's _renderInviteCard). The spectator's copy is what lets
-    // them pass the code on to somebody else at the table — and it's why the
-    // crumb bar that used to carry the code above the cascade is gone. Play
-    // carries the code on the game-info strip instead.
+    // them pass the code on to somebody else at the table — and it's why no
+    // crumb bar carries the code above the cascade. Play carries the code on
+    // the game-info strip instead.
     _renderInviteCard(s) {
       const code = (s && s.code) || this._code || null;
       if (!code) return "";
@@ -758,9 +756,9 @@
     /**
      * The Play step's header strip — the same widget the host renders
      * (play-flow-view's _renderGameInfoBar), so both sides of a session read
-     * the game and the code off an identical line. On this side it replaces a
-     * PAIR of cards: the "Now playing" game card and the session-code card
-     * that used to sit under it.
+     * the game and the code off an identical line. On this side it stands in
+     * for a PAIR of cards: the game card and the session-code card under it
+     * that Gather shows.
      *
      * The spectator arrived by code, so the host-only offline / minting /
      * mint-failed states can't happen here — the bundle always carries one.
@@ -1025,7 +1023,7 @@
         getCellValue: (p, r) => this._cellValue(p, r),
       });
       // No "Scoring" label over the table, for the same reason the host's card
-      // dropped its own (play-flow-view#_renderScoringSection): the card holds
+      // carries none (play-flow-view#_renderScoringSection): the card holds
       // one thing and the column headers already say whose each column is.
       // The two cards are meant to be the same scoreboard seen from two
       // phones, so a heading on one and not the other would be a difference
@@ -1049,8 +1047,8 @@
      * appearance in the roster it is handed, and both screens are handed the
      * same roster in the same order, so the host's Red is the spectator's Red
      * without either side being told which slot that is. Absent on a lobby
-     * whose host hasn't deployed the write yet, which reads as a play with no
-     * sides — the plain per-seat grid this screen showed before.
+     * whose host's client doesn't write it, which reads as a play with no
+     * sides — the plain per-seat grid.
      *
      * Cell values come from the live-scores overlay, never from here, so the
      * roundScores array is deliberately empty.
@@ -1074,7 +1072,7 @@
      * (widgets/round-score-grid.js#roundGridColumns).
      *
      * Both patchers below walk this rather than `participants`, because in a
-     * team play those are no longer the same list — the cells and the Total
+     * team play those are not the same list — the cells and the Total
      * spans on screen are one per column, and indexing them by participant
      * would write the fourth player's score into the second side's cell.
      */
@@ -1150,7 +1148,7 @@
             The host ended the session.
           </div>
         `;
-        // The cascade no longer has an inner scroll wrapper — drop the
+        // The cascade has no inner scroll wrapper — drop the
         // banner above the first cascade-screen so it reads at the top.
         const firstScreen = this.container.querySelector(".cascade-screen");
         if (firstScreen) firstScreen.insertAdjacentHTML("beforebegin", banner);

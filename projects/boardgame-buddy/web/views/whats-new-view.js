@@ -9,11 +9,9 @@
 // Reached from the top row of Settings' "What's new & what's next" card, above
 // Feedback & bugs. The two read in time order — what landed, then what you make
 // of it — which is why the archive shares that section rather than carrying one
-// of its own: they are one errand, talking to whoever builds this. (There were
-// three rows until the feedback board's two shortcuts collapsed into one; the
-// time order is what survived, not the count.)
+// of its own: they are one errand, talking to whoever builds this.
 //
-// It is still its own SPOKE rather than a card rendered inline there, for three
+// It is its own SPOKE rather than a card rendered inline there, for three
 // reasons: settings-view.js is already 1258 lines (4x the CLAUDE.md cap),
 // Settings' entire vocabulary is the one-line .set-card__row while this is a
 // list of cards with rendered markdown in them, and it needs its own loading /

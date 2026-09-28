@@ -14,8 +14,8 @@
 //     building a marketing surface at all.
 //   • .claude/rules/overlays.md §8b: only arm a back guard on something with
 //     no history entry of its own. A routed screen already has one, and arming
-//     over it is the double-entry bug the chapter wizard shipped. So this deck
-//     arms NOTHING, and back leaves the tour because the router says so.
+//     over it stacks two entries on one url. So this deck arms NOTHING, and
+//     back leaves the tour because the router says so.
 //
 // The ~15 lines of track geometry below are the same shape as the onboarding
 // deck's, on purpose rather than as an extraction waiting to happen: what
@@ -101,8 +101,8 @@
      * then mount() calls render() again once onMount() resolves. The second
      * paint replaces the container's innerHTML and detaches whatever the
      * lazily-loaded scenes had just been mounted into. Without this, every
-     * chapter showed its loading frame forever: _mountScenes skips a slug it
-     * has already seen, so nothing re-mounted and nothing reported an error.
+     * chapter shows its loading frame forever: _mountScenes skips a slug it
+     * has already seen, so nothing re-mounts and nothing reports an error.
      */
     _destroyScenes() {
       Object.values(this._scenes).forEach((s) => { try { s.destroy(); } catch (_) {} });
@@ -219,10 +219,10 @@
      * render() runs TWICE on a cold mount — renderLoading() paints the deck,
      * then View.mount() calls render() again once onMount() resolves — and
      * these two go on the CONTAINER, which innerHTML does not replace. Bound
-     * from render() they stacked: two identical click handlers on the first
-     * visit, so one tap on Next ran _go(step + 1) twice and the deck skipped a
-     * chapter. Nothing removed them on unmount either, so the second visit
-     * jumped four.
+     * from render() they would stack: two identical click handlers on the
+     * first visit, so one tap on Next runs _go(step + 1) twice and the deck
+     * skips a chapter — and with nothing removing them on unmount, the second
+     * visit jumps four.
      *
      * Hence the latch, and hence the remover going into _unsubs: _reset()
      * clears the latch on unmount, View.unmount() runs the removers before it,

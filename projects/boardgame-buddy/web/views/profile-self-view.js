@@ -8,9 +8,9 @@
 // /profile/bundle call; Achievements paints from its own cached payload and
 // refreshes in the background, so first paint still costs exactly one call.
 //
-// The account card (identity + "Edit profile") used to live in Settings.
-// It sits here instead so the hub's own identity block is the thing you
-// edit, rather than a read-only echo of a card one screen away.
+// The account card (identity + "Edit profile") sits here rather than in
+// Settings, so the hub's own identity block is the thing you edit, rather
+// than a read-only echo of a card one screen away.
 
 (function () {
   const PREVIEW_COVERS = 4;
@@ -87,8 +87,8 @@
       // An edit changes one row's CONTENTS and nothing about which plays
       // exist, so it takes the row and the card it sits in — not the hub. The
       // stats block can still drift (a win toggled off, the date of the most
-      // recent play moved) and is left to the next mount, exactly as it was
-      // before this: none of it is answerable from one play.
+      // recent play moved) and is left to the next mount: none of it is
+      // answerable from one play.
       if (kind !== "update") return;
       const rows = this._bundle && this._bundle.recent_plays;
       if (!window.Play.applyToRows(rows, play)) return;
@@ -155,7 +155,7 @@
     }
 
     // ── Account card ──────────────────────────────────────────────────────────
-    // Same .set-card markup Settings used to render — the hub is not a
+    // The .set-card markup Settings' cards use — the hub is not a
     // .bgb-spoke-screen, but .set-card reads the --polaroid-* tokens directly,
     // which is what .statsblock and .preview-card below already use.
     _renderAccountCard(me) {
@@ -252,10 +252,10 @@
     }
 
     // ── Stats block ───────────────────────────────────────────────────────────
-    // One card, one destination. This used to be four separate tiles routing
-    // to four different places (Games→Collection, Plays→Plays, Buddies→
-    // Buddies, Top game→Game detail), which put four small tap targets in a
-    // row that read as one control. Games and Buddies are not lost: the
+    // One card, one destination. Four separate tiles routing to four
+    // different places (Games→Collection, Plays→Plays, Buddies→Buddies, Top
+    // game→Game detail) would put four small tap targets in a row that reads
+    // as one control. Games and Buddies are not lost: the
     // Collection and Buddies preview cards below already print those totals in
     // their own sub-heads, and every number here is shown in fuller form on the
     // Stats spoke.
@@ -430,9 +430,9 @@
         // has to show the first faces that screen shows, under the names that
         // screen uses. The bundle RPC neither joins the alias nor sorts by it
         // (it orders on the raw display_name), which is why both happen here.
-        // Skipping this was how the stack ended up printing initials off names
-        // the viewer had renamed away from — including two buddies who share
-        // real initials but not the aliases they are known by.
+        // Skipping this prints initials off names the viewer has renamed away
+        // from — including two buddies who share real initials but not the
+        // aliases they are known by.
         const named = buddies
           .map((bud) => ({
             bud,

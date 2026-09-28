@@ -17,11 +17,10 @@
 // Step 2 stays here because it is not a pure function of state — the toolbar
 // reads and writes the live textarea's selection.
 //
-// A SCORING GRID walks the same three. It used to skip step 1 — there was no
-// grid drafter, and that step drafts markdown against an authoring guide a grid
-// has no use for — but the drafter now exists (Chapter.generateGrid → the
-// backend's services/chapter_grid_ai.py), so the question the step asks is a
-// real one for a grid too: rough the rows out, or start from one blank row.
+// A SCORING GRID walks the same three. Step 1 has a grid drafter of its own
+// (Chapter.generateGrid → the backend's services/chapter_grid_ai.py), so the
+// question the step asks is a real one for a grid too: rough the rows out, or
+// start from one blank row.
 // Only the copy and the handler differ (ChapterWizardSteps.draft's `grid` flag,
 // and _onGenerateGrid in place of _onGenerateAi).
 //
@@ -144,7 +143,7 @@ components above.
       // directly too — and there nothing about the route's shape says so.
       // Authoritative, from the games row (`is_expansion`), because a scoring
       // grid's mode hangs off it (migration 032) and guessing from the route
-      // is what made the question disappear on exactly that screen.
+      // makes the question disappear on exactly that screen.
       this._gameIsExpansion = false;
       // That game's name with its base game's stripped off ("Everdell:
       // Pearlbrook" → "Pearlbrook"), for the mode question's own label. The
@@ -219,8 +218,8 @@ components above.
       this._formTitle = "";
       this._formContent = "";
       this._formType = "";
-      // Migration 018. Which BODY this chapter has: "text" (markdown, the
-      // original) or "scoring_grid" (labelled rows the play screen fills in).
+      // Migration 018. Which BODY this chapter has: "text" (markdown) or
+      // "scoring_grid" (labelled rows the play screen fills in).
       // Only the `scoring` type offers the choice; every other type is text.
       this._formLayout = "text";
       this._formRows = [];           // [{label, color, note}] — scoring_grid only
@@ -232,8 +231,7 @@ components above.
       this._formLinkUrl = "";
       // The review switch (migration 053) — whether to ask an admin to publish
       // this link to everyone, or keep it between the author and their
-      // buddies. ON by default: sharing is what most authors mean, and it is
-      // what Save meant before the switch existed.
+      // buddies. ON by default: sharing is what most authors mean.
       this._formLinkReview = true;
       // The URL this link was loaded with — see _loadChapterIntoForm. Empty on
       // a create, where nothing has been saved to differ from.
@@ -302,8 +300,8 @@ components above.
     // a singleton view's prior state is still on `this` at this point. Without
     // this override, the container's innerHTML would show the previous
     // render's edit form while onMount awaits its Promise.all of fetches —
-    // which is exactly the "Add a chapter opened the previously-edited
-    // chapter" bug the user hit on re-auth.
+    // "Add a chapter" would open the previously-edited chapter, e.g. after a
+    // re-auth.
     renderLoading() {
       // Runs before onMount, so a re-entry could otherwise paint this loading
       // chip inside a shell still locked by the previous edit session.
@@ -472,10 +470,10 @@ components above.
         // game that has no scoring grid at all, offers "tap to build one" and
         // routes here.
         //
-        // It lands on the HEAD START — not on step 0, and no longer on the row
+        // It lands on the HEAD START — not on step 0, and not on the row
         // editor. Step 0 picks a chapter type, which is the very thing the
-        // caller has already said, so that one is still a forced tap on an
-        // answered question and is still skipped. Step 1 is not: this route is
+        // caller has already said, so that one is a forced tap on an
+        // answered question and is skipped. Step 1 is not: this route is
         // reached from "No scoring template yet", so there is nothing to build
         // on, which is exactly when a drafted set of rows is worth ten seconds
         // — and Skip sits right beside it for an author who would rather type
@@ -491,13 +489,13 @@ components above.
         // press closes the mode instead of walking the screen underneath it —
         // which is exactly right for the in-view create, a mode of the Browse
         // screen. A ROUTED wizard is not a mode: router.go already pushed an
-        // entry for it, and arming here put a second one on top of the same
-        // screen. Leaving then had to unwind two entries by two different
-        // mechanisms — release()'s deferred history.back() and router.back()'s
-        // — and nothing orders a 0ms timer against a history traversal, so
-        // which ran first decided whether the user landed on the game page or
-        // back on this screen's own entry, where mode=create re-opened the
-        // wizard they had just closed. One entry, one pop, no race.
+        // entry for it, and arming here would put a second one on top of the
+        // same screen. Leaving would then have to unwind two entries by two
+        // different mechanisms — release()'s deferred history.back() and
+        // router.back()'s — and nothing orders a 0ms timer against a history
+        // traversal, so which ran first would decide whether the user lands on
+        // the game page or back on this screen's own entry, where mode=create
+        // re-opens the wizard they have just closed. One entry, one pop, no race.
       }
       // else: fresh mount stays on browse — _resetFormState() at the top of
       // onMount already set _tab = "browse" and cleared the form buffer.
@@ -632,11 +630,11 @@ components above.
       // Preserve horizontal/vertical scroll positions across re-renders so
       // toggling a filter chip doesn't reset the chip row to the start, and
       // the chapter list doesn't jump to the top either. The editor needs the
-      // same treatment now that it scrolls inside .chapter-edit__scroll rather
-      // than scrolling the document — document scroll survived an innerHTML
+      // same treatment because it scrolls inside .chapter-edit__scroll rather
+      // than scrolling the document — document scroll survives an innerHTML
       // replace, an inner scroller's does not.
       const prevChipScroll = this.container.querySelector(".chapter-add__filter-chips")?.scrollLeft || 0;
-      // `.chapter-add__pool-scroll` is a query hook now — its CSS block is one
+      // `.chapter-add__pool-scroll` is a query hook — its CSS block is one
       // margin. The pool deliberately takes no .scroll-paper wrapper and no rolls
       // (see styles.css): it is always open, so there is nothing to roll, and
       // nothing here ever writes the max-height the widget's JS owns.
@@ -695,7 +693,7 @@ components above.
       // open, to keep the DOM cheap on first paint).
       if (this._activePop === "table") this._buildTableGrid();
 
-      // Popovers are position:absolute inside .chapter-edit__write, which now
+      // Popovers are position:absolute inside .chapter-edit__write, which
       // sits in a scroller — so one opened with the toolbar near the bottom of
       // the viewport would render below the fold. Pull it in.
       if (this._activePop) {
@@ -785,8 +783,8 @@ components above.
     }
 
     // FAB → create. Clears any leftover form buffer so the wizard always
-    // opens clean (the prior flow let create-tab state persist across
-    // browse/create toggles, which made entering Create feel stale).
+    // opens clean (create-tab state persisting across browse/create toggles
+    // makes entering Create feel stale).
     _enterCreate() {
       this._resetFormState();
       this._tab = "create";
@@ -808,9 +806,9 @@ components above.
       if (!window.BgbBackGuard) return;
       // Only the in-view wizard is guarded — a routed one owns the screen's own
       // history entry and must not push a second (see the routed-create branch
-      // in onMount). Belt and braces: an entry armed over a routed entry is the
-      // race that shipped, and it is cheaper to refuse it here than to find it
-      // again from a bug report.
+      // in onMount). Belt and braces: an entry armed over a routed entry is
+      // exactly the race described there, and it is cheaper to refuse it here
+      // than to find it from a bug report.
       if (this._arrivedByRoute) return;
       // Idempotent: entering create twice without leaving must not stack two
       // guards, or back would need two presses to move one step.
@@ -864,10 +862,9 @@ components above.
      *
      * Two for a rulebook link, three for everything else. The middle step is
      * the AI head start, and a link has nothing to draft — the author is
-     * pasting a URL they already have, and no model can guess it. This is not
-     * the asymmetry migration 021 removed from the grid wizard: a grid's rows
-     * CAN be drafted and now are, where a link step 1 would be a screen
-     * offering to invent somebody else's web address.
+     * pasting a URL they already have, and no model can guess it. A grid
+     * keeps the step because its rows CAN be drafted, where a link step 1
+     * would be a screen offering to invent somebody else's web address.
      */
     _wizardSteps() {
       return this._isLinkLayout() ? 2 : 3;
@@ -968,7 +965,7 @@ components above.
       // sentence. "Yet" claims nobody has written one, which is a lie when the
       // viewer has turned every chapter down — and the fix for that case is
       // the section below, not the Create button, so say which it is. The
-      // filter case is unchanged and asked first: a needle that matches
+      // filter case is asked first: a needle that matches
       // nothing is about the needle, whatever else is in the pool.
       const emptyLine = (this._search || this._typeFilter)
         ? "No chapters available for this filter."
@@ -1074,9 +1071,9 @@ components above.
       // mirrors exactly that — an admin browsing the pool can clear a bad
       // chapter without going through the reports queue.
       const canDelete = isOwner || !!(me && me.is_admin);
-      // Reserved column, not just a dot: the per-chapter glyph that used to sit
-      // beside it is gone (the section header already carries the type's), so an
-      // undotted row would start 17px left of a dotted one. Only while the pool
+      // Reserved column, not just a dot: there is no per-chapter glyph beside
+      // it (the section header already carries the type's), so an undotted
+      // row would start 17px left of a dotted one. Only while the pool
       // is actually merged — on a single game no row has a dot and the column
       // would be 17px of nothing on every row. Mirrors _renderChapter in
       // widgets/reference-guide-scroll.js, which draws the same row.
@@ -1319,8 +1316,8 @@ components above.
     // and Save return to browse instead of popping the router stack.
     // Load an existing chapter into the editor's form buffer. Both edit entry
     // points go through here — the in-view "Edit" on an expanded pool row, and
-    // the mode=edit route the reference-guide scroll takes — because they had
-    // already drifted once and a scoring grid gives them two more fields to
+    // the mode=edit route the reference-guide scroll takes — so the two
+    // cannot drift apart, and a scoring grid gives them two more fields to
     // drift on. `grid` is read defensively: a stale localStorage row cached
     // before migration 018 can carry a layout with no rows, and that has to
     // open as text rather than as a broken grid editor.
@@ -1363,7 +1360,7 @@ components above.
       this._tmplNoteOpen = null;
       this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
       // A grid written before migration 032 stores no mode at all, and an
-      // expansion's grid that stored none has always behaved as an add-on —
+      // expansion's grid that stored none behaves as an add-on —
       // so that is what the control opens on, matching the backend's own
       // default rather than presenting the author with an empty question.
       this._formGridMode = (c.grid && c.grid.mode === window.ScoringTemplateEditor.MODE_REPLACE)
@@ -1482,9 +1479,8 @@ components above.
     _renderEditor(isEditing) {
       // Edit is not a wizard — no step bar, and the editor is the only body.
       const step = isEditing ? 2 : this._step;
-      // Three steps whatever the layout. The grid wizard used to count two,
-      // because it skipped the AI head start; it visits that step now
-      // (_onGenerateGrid), so a two-step bar would be undercounting.
+      // Three steps for markdown and grids alike: the grid wizard visits the
+      // AI head start too (_onGenerateGrid).
       // A rulebook link's wizard is two steps, not three (see _wizardSteps).
       // Its editor step is index 2 internally — the shared shell's step slot —
       // so the BAR is told index 1 of 2 rather than 2 of 3, which is what the
@@ -1553,10 +1549,10 @@ components above.
      * The create / edit shell is `position: fixed` with the global header and
      * the bottom nav hidden under it (`.chapter-edit-locked`), so the only
      * exits it has are the ones it draws itself — and the footer draws one per
-     * step, except on step 1, whose pair is Skip and Generate. That step had no
-     * visible exit at all: leaving it meant the device back gesture, which a
-     * desktop browser's back button is a poor stand-in for and which nothing on
-     * screen mentions.
+     * step, except on step 1, whose pair is Skip and Generate. Without the ×
+     * that step has no visible exit at all: leaving it means the device back
+     * gesture, which a desktop browser's back button is a poor stand-in for
+     * and which nothing on screen mentions.
      *
      * So the × rides beside the chip instead of in the footer, where it is
      * present on every step and in Edit, and where it does not have to compete
@@ -1660,7 +1656,7 @@ components above.
       }
 
       // Step 2 — the editor. Save is blocked until there is something to save;
-      // the type can no longer be missing (step 0 gated on it).
+      // the type cannot be missing (step 0 gates on it).
       const label = this._saving ? "Saving…" : "Save chapter";
       return `
         <div class="chapter-edit__footer">
@@ -1696,12 +1692,11 @@ components above.
      * mirror of the URL, so there is exactly one thing here to type.
      *
      * THE REVIEW SWITCH (migration 053). Saving a rulebook link and asking an
-     * admin to publish it used to be one act, so an author who just wanted the
+     * admin to publish it are separate questions: an author who just wants the
      * PDF their own table reads from — the printing they own, a fan
-     * translation — submitted a queue item they never wanted and the admin got
-     * a decision nobody asked for. The two are separate questions now and the
-     * switch is the second one, defaulted ON because "share it" is what most
-     * people mean and because that is what a Save meant before this existed.
+     * translation — must not submit a queue item they never wanted, nor hand
+     * the admin a decision nobody asked for. The switch is the second
+     * question, defaulted ON because "share it" is what most people mean.
      *
      * The note under it is not decoration. This is the one chapter an author
      * writes that does not appear for everybody the moment they save it, and
@@ -2077,8 +2072,7 @@ components above.
     _pickCreateTarget(id) {
       this._createTargetGameId = id;
       // The mode question appears and disappears with this choice (a base
-      // game's grid has no mode), so a full render is what the target picker
-      // has always done and is what it still needs to do.
+      // game's grid has no mode), so the target picker needs a full render.
       this.render();
     }
 
@@ -2133,7 +2127,7 @@ components above.
      * rather than the `#tmpl-rows-host` patch the row handlers use: the control
      * is above the row list, not inside it.
      *
-     * The control now also rides on the head-start step, where the focus prompt
+     * The control also rides on the head-start step, where the focus prompt
      * IS a text field — so the full render can land while one holds a caret.
      * That is safe rather than merely tolerable: the textarea writes through to
      * `_genPrompt` on every keystroke and re-renders from it, so the words
@@ -2308,7 +2302,7 @@ components above.
       this.render();
     }
 
-    // ── Formatting helpers (ported from the Option C mock) ─────────────────────
+    // ── Formatting helpers ─────────────────────────────────────────────────────
     _getTextarea() {
       return this.container.querySelector("#chapter-form-content");
     }
@@ -2719,14 +2713,13 @@ components above.
      * EVERY exit goes through here — the footer's Cancel, the × in the chip
      * row, backing off the front of step 0, and the device back gesture — so
      * the four cannot mean four different things
-     * (.claude/rules/ui-object-design.md §3b). Before this, the device gesture
-     * and the footer disagreed: the gesture always went to Browse, so a viewer
-     * who opened the grid builder from a game's reference guide and pressed
-     * back twice landed on a chapter-browse screen they had never asked for,
-     * with the screen they came from another press away.
+     * (.claude/rules/ui-object-design.md §3b). A gesture that always went to
+     * Browse would land a viewer who opened the grid builder from a game's
+     * reference guide on a chapter-browse screen they never asked for, with
+     * the screen they came from another press away.
      *
-     * Discards without confirming, which is what Cancel has always done — the
-     * × is the same action with a visible affordance, not a new one.
+     * Discards without confirming, like Cancel — the × is the same action
+     * with a visible affordance, not a new one.
      */
     async _exitEditor() {
       if (this._arrivedByRoute) {
@@ -2747,10 +2740,10 @@ components above.
      * nothing about it is how somebody concludes the link is broken when a
      * stranger cannot see it.
      *
-     * Reads the SWITCH, not the author's role. Since migration 053 nobody's
-     * link is born approved — an admin's own goes through the queue like
-     * everyone else's — so there is no longer a role branch here, only the
-     * question the author just answered.
+     * Reads the SWITCH, not the author's role. Nobody's link is born approved
+     * (migration 053) — an admin's own goes through the queue like everyone
+     * else's — so there is no role branch here, only the question the author
+     * just answered.
      *
      * The branch this function exists for is the DECIDED link, where the
      * switch is not on screen and the gate moves only if the URL moved
@@ -2866,10 +2859,9 @@ components above.
         this.render();
         return;
       }
-      // Both writes carry the layout. This used to be `layout: "text"` hardcoded
-      // on create and absent entirely on update, which was invisible while
-      // 'text' was the only value the column's CHECK allowed and is a hard error
-      // the moment it isn't.
+      // Both writes carry the layout. The column's CHECK allows more than
+      // 'text', so hardcoding it on create or leaving it off an update would
+      // save the wrong layout.
       const layout = isGrid ? "scoring_grid" : (isLink ? LINK_LAYOUT : "text");
       // The mode rides on the document but is only MEANINGFUL for an
       // expansion's grid, and the backend is the authority on which games those

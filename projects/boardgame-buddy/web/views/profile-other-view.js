@@ -6,11 +6,10 @@
 // collection / plays views, parameterized by ?userId=<them>. Seeded from one
 // /profile/bundle round trip so first paint is instant.
 //
-// The four tiles used to mirror the hub's. The hub has since collapsed its
-// own into one tappable .statsblock opening /profile/stats, which is
-// self-only — those numbers are about you, not a stranger — so this screen
-// is now the sole owner of the .profile-stat-card family rather than a copy
-// of it.
+// The hub draws its stats as one tappable .statsblock opening
+// /profile/stats, which is self-only — those numbers are about you, not a
+// stranger — so this screen is the sole owner of the .profile-stat-card
+// family.
 //
 // TWO AUDIENCES. What this screen draws depends on whether the viewer is
 // actually a buddy of the person they are looking at:
@@ -28,9 +27,9 @@
 // top_games for a stranger), so the client gate is presentation rather than
 // the enforcement — GET /plays?user_id= is 403 for a stranger too.
 //
-// SHARED PLAYS, NOT THEIR LOG. The plays card used to preview the bundle's
+// SHARED PLAYS, NOT THEIR LOG. The plays card does not preview the bundle's
 // `recent_plays` — their whole history, most of which the viewer had nothing
-// to do with. It shows the pair's shared history instead: the same card, the
+// to do with. It shows the pair's shared history: the same card, the
 // same rows, filtered to plays the viewer was at the table for. That set does
 // not ride the bundle, so it comes from GET /plays?user_id=<them>&buddy_id=<me>
 // — `p_buddy` is "this person appears in play_players", so the id passed is
@@ -81,7 +80,7 @@
      * the one the card owns cannot put two numbers for one fact on screen.
      * (The profile hub's own card shares its number with a stat tile, which is
      * why views/profile-self-view.js refetches on a removal instead.) The
-     * tiles are left to the next mount, as they were before this.
+     * tiles are left to the next mount.
      *
      * @param {{playId?: string, kind?: string, play?: any}} detail
      */
@@ -148,8 +147,8 @@
       // The alias pencil is gated on Buddy.edgeIdFor(), which answers off the
       // /play-partners bundle. Nothing else on this screen needs that bundle,
       // and bootstrap does not seed it — so a cold deep link straight to
-      // /u/:userId found an empty map and showed no pencil at all on the one
-      // screen that is ABOUT a person. SWR-cached 24h/7d, so on a warm app this
+      // /u/:userId would find an empty map and show no pencil at all on the
+      // one screen that is ABOUT a person. SWR-cached 24h/7d, so on a warm app this
       // resolves without a round trip; it never gates the first paint, and a
       // failure simply leaves the pencil off.
       const buddiesPromise = window.Buddy.allBuddies()
@@ -342,9 +341,9 @@
     // ── Relation mutations ────────────────────────────────────────────────────
     //
     // All three paint first and reconcile behind (.claude/rules/web-frontend.md,
-    // "Mutations feel instantaneous"). They used to await the write and then
-    // re-run _load(), which drops the profile AND the bundle back to null — so
-    // tapping "Buddy up" threw the whole screen back to its loader for a round
+    // "Mutations feel instantaneous"). Awaiting the write and then re-running
+    // _load() would drop the profile AND the bundle back to null — so tapping
+    // "Buddy up" would throw the whole screen back to its loader for a round
     // trip. The button is the only thing that changes, so only it needs to.
 
     // Snapshot just the four relation fields, so a background bundle refresh
@@ -409,8 +408,8 @@
       });
       this.render();
       try {
-        // A profile fetched before the API carried pending_request_id still
-        // needs the list lookup to find the edge.
+        // A profile payload without pending_request_id needs the list lookup
+        // to find the edge.
         let id = requestId;
         if (!id) {
           const requests = await window.Buddy.requests();
