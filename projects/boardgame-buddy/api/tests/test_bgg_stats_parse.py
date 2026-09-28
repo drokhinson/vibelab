@@ -44,6 +44,7 @@ def test_reads_geek_rating_boardgame_rank_weight_and_owned():
         "bgg_rank": 42,          # the boardgame subtype row, NOT the family's 9
         "bgg_weight": 2.45,
         "bgg_owned_count": 12345,
+        "bgg_family": "strategygames",
     }
 
 
@@ -59,7 +60,35 @@ def test_not_ranked_is_none():
 
 def test_item_without_statistics_yields_all_none():
     got = thing_item_stats(ET.fromstring("<item type='boardgame' id='3'><name value='x'/></item>"))
-    assert got == {"bgg_rating": None, "bgg_rank": None, "bgg_weight": None, "bgg_owned_count": None}
+    assert got == {
+        "bgg_rating": None, "bgg_rank": None, "bgg_weight": None,
+        "bgg_owned_count": None, "bgg_family": None,
+    }
+
+
+def test_family_is_the_list_the_game_ranks_highest_in():
+    # Wingspan-shaped: listed in two families. The smaller rank number wins,
+    # and a family the game is "Not Ranked" in loses to any ranked one.
+    ranks = (
+        "<rank type='subtype' id='1' name='boardgame' value='30'/>"
+        "<rank type='family' id='5497' name='strategygames' value='40'/>"
+        "<rank type='family' id='5499' name='familygames' value='3'/>"
+        "<rank type='family' id='5498' name='partygames' value='Not Ranked'/>"
+    )
+    assert thing_item_stats(ET.fromstring(_item(4, ranks=ranks)))["bgg_family"] == "familygames"
+
+
+def test_family_listed_but_unranked_still_counts():
+    ranks = (
+        "<rank type='subtype' id='1' name='boardgame' value='Not Ranked'/>"
+        "<rank type='family' id='5498' name='partygames' value='Not Ranked'/>"
+    )
+    assert thing_item_stats(ET.fromstring(_item(5, ranks=ranks)))["bgg_family"] == "partygames"
+
+
+def test_no_family_rank_is_none():
+    ranks = "<rank type='subtype' id='1' name='boardgame' value='900'/>"
+    assert thing_item_stats(ET.fromstring(_item(6, ranks=ranks)))["bgg_family"] is None
 
 
 def test_batched_response_is_keyed_by_bgg_id():

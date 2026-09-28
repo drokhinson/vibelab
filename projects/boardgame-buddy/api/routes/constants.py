@@ -650,6 +650,21 @@ BGG_MECHANIC_TO_MODE: list[tuple[str, PlayMode]] = [
 ]
 
 
+class RankTier(StrEnum):
+    """The gut-check tier a ranked game sits in (migration 056).
+
+    Declared best first: a category's ranking stacks the tiers in this order,
+    so a game in LOVE always outranks one in GOOD however the questions went.
+    """
+
+    LOVE = "love"    # "Love it"
+    GOOD = "good"    # "It's a good game"
+    NOT = "not"      # "Not for me"
+
+
+RANK_TIER_ORDER: list[RankTier] = [RankTier.LOVE, RankTier.GOOD, RankTier.NOT]
+
+
 def derive_play_mode(mechanics: list[str] | None) -> PlayMode:
     """Map a BGG mechanics array to its default PlayMode."""
     mset = set(mechanics or [])

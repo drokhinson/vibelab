@@ -1,0 +1,137 @@
+// widgets/rank-sheet.js — the game page's rank pill opens this.
+//
+// Unranked: the ranking questions (ui/rank-flow.js), then the game's new place.
+// Ranked: the category's whole list with the game highlighted, and Re-rank,
+// which runs the questions again. The category is the server's, from
+// BoardGameGeek, and the sheet only ever names it.
+
+(function () {
+  class RankSheet {
+    constructor() {
+      this._sheet = new window.BgbBottomSheet({
+        id: "bgb-rank-sheet",
+        className: "rank-sheet",
+        label: "Rank this game",
+      });
+      this._flow = null;
+      this._seq = 0;
+    }
+
+    /** @param {{id:string, name:string}} game @param {{returnFocus?: Element}} [opts] */
+    open(game, { returnFocus = null } = {}) {
+      const seq = ++this._seq;
+      this._game = game;
+      this._ctx = null;
+      this._sheet.open({
+        html: this._panel(`Rank ${escapeHtml(game.name)}`,
+          window.buddyLoader({ size: 64, label: "Opening…" }), ""),
+        label: `Rank ${game.name}`,
+        returnFocus,
+        onClick: (e) => this._click(e),
+        onOpen: (root) => {
+          const panel = root.querySelector(".bgb-sheet__panel");
+          if (panel) panel.focus();
+        },
+        onClose: () => this._teardown(),
+      });
+      this._load(seq);
+    }
+
+    _load(seq) {
+      window.Rank.context(this._game.id).then((ctx) => {
+        if (seq !== this._seq || !this._sheet.isOpen) return;
+        this._ctx = ctx;
+        if (ctx.rank) this._showList();
+        else this._startFlow();
+      }).catch(() => {
+        if (seq !== this._seq || !this._sheet.isOpen) return;
+        this._patch(null, `
+          <div class="rank-flow__error">
+            <p>Couldn't load your ranking just now.</p>
+            <button type="button" class="btn btn-primary btn-sm" data-rank-sheet="retry">Try again</button>
+          </div>`, "");
+      });
+    }
+
+    _teardown() {
+      this._seq++;
+      if (this._flow) this._flow.destroy();
+      this._flow = null;
+    }
+
+    _panel(title, body, foot) {
+      return `
+        <div class="bgb-sheet__panel" tabindex="-1">
+          <div class="bgb-sheet__grip" aria-hidden="true"></div>
+          <h3 class="bgb-sheet__title" data-rank-title>${title}</h3>
+          <div class="bgb-sheet__list rank-sheet__body" data-rank-body>${body}</div>
+          <div class="rank-sheet__foot" data-rank-foot>${foot}</div>
+        </div>`;
+    }
+
+    /** Patch the title, body and foot hosts in place; null leaves one alone. */
+    _patch(title, body, foot) {
+      const root = this._sheet.el;
+      if (!root) return;
+      if (title != null) root.querySelector("[data-rank-title]").innerHTML = title;
+      if (body != null) root.querySelector("[data-rank-body]").innerHTML = body;
+      if (foot != null) root.querySelector("[data-rank-foot]").innerHTML = foot;
+      window.BgbIcons.render(root);
+    }
+
+    _startFlow() {
+      if (this._flow) this._flow.destroy();
+      const verb = this._ctx.rank ? "Re-rank" : "Rank";
+      this._patch(`${verb} ${escapeHtml(this._game.name)}`, "", "");
+      const host = this._sheet.el.querySelector("[data-rank-body]");
+      this._flow = new window.RankFlow({
+        host,
+        context: { ...this._ctx, rank: null },
+        onDone: () => this._patch("Ranked", null,
+          `<button class="bgb-sheet__cancel" type="button" data-action="close">Done</button>`),
+      });
+    }
+
+    _showList() {
+      const ctx = this._ctx;
+      const rows = ctx.ranked.map((r) => r.game);
+      rows.splice(ctx.rank.position - 1, 0, ctx.game);
+      const list = `
+        <p class="rank-sheet__sub">
+          ${escapeHtml(ctx.game.name)} is #${ctx.rank.position} of ${rows.length}
+        </p>
+        <ol class="rank-flow__list">
+          ${rows.map((g, i) => `
+            <li class="rank-flow__row${g.id === ctx.game.id ? " is-me" : ""}">
+              <span class="rank-flow__row-n">${i + 1}</span>
+              ${gameArtImg(g, "chip", { cls: "rank-flow__thumb" })
+                || `<span class="rank-flow__thumb rank-flow__art-empty"><i data-icon="dice-6" class="w-4 h-4"></i></span>`}
+              <span class="rank-flow__row-name">${escapeHtml(g.name)}</span>
+            </li>`).join("")}
+        </ol>`;
+      this._patch(`Your ${escapeHtml(ctx.category_label)} games`, list, `
+        <button class="bgb-sheet__cancel rank-sheet__rerank" type="button" data-rank-sheet="rerank">
+          <i data-icon="rotate-ccw" class="w-4 h-4"></i> Re-rank ${escapeHtml(ctx.game.name)}
+        </button>`);
+    }
+
+    _click(e) {
+      const el = e.target.closest("[data-rank-sheet]");
+      if (!el) return;
+      const act = el.getAttribute("data-rank-sheet");
+      if (act === "rerank") this._startFlow();
+      else if (act === "retry") {
+        this._patch(null, window.buddyLoader({ size: 64, label: "Opening…" }), null);
+        this._load(++this._seq);
+      }
+    }
+  }
+
+  let _instance = null;
+  window.RankSheet = {
+    open(game, opts) {
+      if (!_instance) _instance = new RankSheet();
+      _instance.open(game, opts);
+    },
+  };
+})();

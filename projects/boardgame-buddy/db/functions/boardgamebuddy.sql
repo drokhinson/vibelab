@@ -1,6 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 055_usage_exclude_admins.sql (re-emits bgb_admin_usage_stats
+-- Last updated: 056_game_ranks.sql (adds bgb_rank_game / bgb_unrank_game — the two
+--               writes behind "rank your games". Positions within a
+--               (user, category, tier) are dense, so each write is close a gap,
+--               open a gap, insert, and has to land as one statement.
+--               db/tests/056_game_ranks.sql is the behavioural test.)
+--               Before that: 055_usage_exclude_admins.sql (re-emits bgb_admin_usage_stats
 --               with p_exclude_admins BOOLEAN DEFAULT false — leaves is_admin
 --               accounts out of every per-account figure; screen views are
 --               filtered on metadata.admin, which web/domain/api.js stamps on
@@ -1697,6 +1702,26 @@
 --               zeros. SECURITY DEFINER and REVOKEd from anon/authenticated,
 --               which matters more here than anywhere — its only argument is
 --               the account to destroy.
+
+-- bgb_rank_game(p_user UUID, p_game UUID, p_category TEXT, p_tier TEXT,
+--               p_index INTEGER)
+--   → JSONB {category, tier, position} | {error: invalid_tier | game_not_found}
+--   Defined in: db/migrations/056_game_ranks.sql
+--   Called by:  services/rank_service.place (PUT /ranks/games/{game_id})
+--   Purpose:    Insert a game into the player's ranking, or move it: remove any
+--               existing row and close the gap it leaves, clamp p_index to the
+--               target tier's size (a list that shrank since the client read it
+--               cannot open a hole), shift the rows at or after it, insert.
+--               p_category is decided by the service (services/rank_category.py),
+--               never by the client. SECURITY DEFINER, REVOKEd from
+--               anon/authenticated.
+
+-- bgb_unrank_game(p_user UUID, p_game UUID)
+--   → JSONB {removed: boolean}
+--   Defined in: db/migrations/056_game_ranks.sql
+--   Called by:  services/rank_service.remove (DELETE /ranks/games/{game_id})
+--   Purpose:    Remove a game from the ranking and close the gap in its tier.
+--               A second call is {removed: false}, not an error.
 
 -- bgb_notifications(p_viewer UUID, p_limit INT DEFAULT 20,
 --                   p_before TIMESTAMPTZ DEFAULT NULL,

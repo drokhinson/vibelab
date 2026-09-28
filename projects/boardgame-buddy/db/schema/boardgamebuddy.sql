@@ -1,6 +1,12 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 054_bgg_image_links.sql (boardgamebuddy_games grows
+-- Last updated: 056_game_ranks.sql (boardgamebuddy_games grows bgg_family —
+--               the BGG family rank list a game ranks highest in, which decides
+--               the category it is ranked in — and the new
+--               boardgamebuddy_game_ranks table; hand-added below. 056 also
+--               clears bgg_meta_synced_at on synced base games so the metadata
+--               backfill fills bgg_family in.)
+--               Before that: 054_bgg_image_links.sql (boardgamebuddy_games grows
 --               bgg_image_url / bgg_thumbnail_url / bgg_images_synced_at plus
 --               idx_bgb_games_images_synced — BGG's own image URLs kept next
 --               to the re-hosted ones — and the new
@@ -119,6 +125,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   bgg_image_url TEXT,
   bgg_thumbnail_url TEXT,
   bgg_images_synced_at TIMESTAMPTZ,
+  -- The BGG family rank list this game ranks highest in, raw
+  -- (strategygames, familygames, partygames, …) (migration 056). NULL = not
+  -- synced yet, or in none. Decides the category a game is ranked in.
+  bgg_family TEXT,
   CONSTRAINT boardgamebuddy_games_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_games_bgg_id_key UNIQUE (bgg_id),
   CONSTRAINT boardgamebuddy_games_play_mode_check CHECK ((play_mode = ANY (ARRAY['competitive'::text, 'coop'::text, 'team'::text])))
@@ -483,6 +493,29 @@ CREATE INDEX IF NOT EXISTS idx_bgb_collections_game_user ON public.boardgamebudd
 CREATE INDEX IF NOT EXISTS idx_bgb_collections_user_status ON public.boardgamebuddy_collections USING btree (user_id, status, added_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bgb_collections_user_status_name ON public.boardgamebuddy_collections USING btree (user_id, status, game_name);
 GRANT SELECT ON public.boardgamebuddy_collections TO boardgamebuddy_role;
+
+-- ── Game ranks ────────────────────────────────────────────────────────────────
+-- A player's ranking of the games they own or have played (migration 056). Per
+-- category, tiers stacked love → good → not; position is dense 0..n-1 within a
+-- tier and the player-facing "#3 Family" is computed on read. The category is
+-- stored rather than re-derived so a later BGG answer never moves a ranked
+-- game. Written only through bgb_rank_game / bgb_unrank_game.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_game_ranks (
+  user_id UUID NOT NULL,
+  game_id UUID NOT NULL,
+  category TEXT NOT NULL,
+  tier TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  ranked_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT boardgamebuddy_game_ranks_pkey PRIMARY KEY (user_id, game_id),
+  CONSTRAINT boardgamebuddy_game_ranks_user_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT boardgamebuddy_game_ranks_game_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE CASCADE,
+  CONSTRAINT bgb_game_ranks_tier_chk CHECK ((tier = ANY (ARRAY['love'::text, 'good'::text, 'not'::text]))),
+  CONSTRAINT bgb_game_ranks_position_chk CHECK ((position >= 0))
+);
+ALTER TABLE public.boardgamebuddy_game_ranks ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_bgb_game_ranks_list ON public.boardgamebuddy_game_ranks USING btree (user_id, category, tier, "position");
+GRANT SELECT ON public.boardgamebuddy_game_ranks TO boardgamebuddy_role;
 
 
 -- ── Owned expansions ──────────────────────────────────────────────────────────

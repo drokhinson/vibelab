@@ -182,6 +182,7 @@
           extract: (m) => ({ gameId: decodeURIComponent(m[1]) }),
           build: (p) => `/game/${encodeURIComponent(p.gameId || "")}` },
         { name: "collection",          pattern: /^\/profile\/collection\/?$/,     build: () => "/profile/collection" },
+        { name: "rank-queue",          pattern: /^\/profile\/collection\/rank\/?$/, build: () => "/profile/collection/rank" },
         // Match-only alias. The wishlist is a shelf of the collection spoke now
         // (?shelf=wishlist), but the standalone path was bookmarkable for long
         // enough that dropping it would strand real links and home-screen
