@@ -176,7 +176,7 @@
       // Monotonic token for phase-change PATCHes. After a call's PATCH
       // resolves it only reconciles state if it is still the latest — a
       // stale earlier PATCH resolving after a newer navigation must not yank
-      // the phase back (the rapid-tap "jump back to a previous screen" bug).
+      // the phase back to a previous screen.
       this._phaseSeq = 0;
       // Counts in-flight phase PATCHes. While > 0 the lobby poll skips its
       // tick so it can't clobber this._lobby (incl. a stale phase) mid
@@ -196,7 +196,7 @@
       // Monotonic token for save runs, bumped by _resetRunState. Paired with
       // the PlaySession the run's snapshot was built from, it answers "has the
       // host moved on?" — see _isStaleSave. The wrap-up card is dismissible
-      // from frame one now, so a write can resolve two screens later.
+      // from frame one, so a write can resolve two screens later.
       this._saveSeq = 0;
       // Resolves when the CURRENT save's write settles — success, failure or
       // queued — and deliberately not when _runSave returns, which is after the
@@ -309,8 +309,8 @@
           // The probe failed, so we do NOT know whose session this is — and
           // this code came out of the URL, not out of this device's draft
           // (the `_ps.code !== urlCode` guard above). Adopting it as our own
-          // was the one answer that can be actively wrong: it put a joiner who
-          // tapped a friend's link during a network blip onto the HOST
+          // is the one answer that can be actively wrong: it would put a joiner
+          // who tapped a friend's link during a network blip onto the HOST
           // cascade, where _ensureLobbyOpen would then either adopt someone
           // else's lobby wholesale or — if the retry came back 404/410 — mint
           // a brand-new session in their name. A failed probe is exactly when
@@ -377,8 +377,8 @@
       }
 
       // Start the mint BEFORE the first paint. The invite card reads "no code
-      // and nothing in flight" as a failed mint, so painting first showed the
-      // wifi-off "No session code" card until the code arrived.
+      // and nothing in flight" as a failed mint, so painting first would show
+      // the wifi-off "No session code" card until the code arrived.
       const lobbyStarted = this._lobbyReady();
 
       this.render();
@@ -424,7 +424,7 @@
       const expansionsPromise = this._loadExpansionsIfNeeded();
       // The session code is the one thing the Gather screen visibly lacks, so
       // it gets its own repaint rather than riding the slowest of the three
-      // preloads — a slow buddy fetch used to leave the invite card showing
+      // preloads — a slow buddy fetch would leave the invite card showing
       // "— — — — —" long after the code had arrived.
       const lobbyPromise = lobbyStarted.then(() => {
         this.render();
@@ -433,9 +433,9 @@
       await Promise.all([this._buddyPreloadPromise, expansionsPromise, lobbyPromise]);
 
       this.render();
-      // Initial scroll to the live phase's section — render() no longer
-      // does this on every paint (the poll-driven re-renders would yank
-      // scroll back continuously), so do it here once on mount instead.
+      // Initial scroll to the live phase's section — render() does not
+      // do this on every paint (the poll-driven re-renders would yank
+      // scroll back continuously), so do it here once on mount.
       this._scrollToCurrentPhase();
       await this._startLiveScores();
       if (this._guideWidget) this._guideWidget.refresh();
@@ -469,18 +469,18 @@
      * Tear down everything that belonged to the PREVIOUS run of the cascade.
      *
      * This view is a singleton (init.js), so every field on it outlives the
-     * session it was set for. `_lobby` in particular used to survive a
-     * finalize: the host saved, went back to the Play tab, tapped Host a game,
-     * and _lobbyReady() short-circuited on the finished session's code — so
-     * _ensureLobbyOpen() never ran, the freshly prefetched lobby was never
-     * consumed, and every write went to a session the server had already
-     * closed. The invite card showed a code that could not be joined and
-     * Continue bounced off a 404.
+     * session it was set for. `_lobby` in particular must not survive a
+     * finalize: a host who saves, goes back to the Play tab and taps Host a
+     * game would have _lobbyReady() short-circuit on the finished session's
+     * code — so _ensureLobbyOpen() never runs, the freshly prefetched lobby is
+     * never consumed, and every write goes to a session the server has
+     * already closed. The invite card shows a code that cannot be joined and
+     * Continue bounces off a 404.
      *
-     * Called from _startAnotherRound (which has always done this inline),
-     * conditionally from onMount, and from both terminal branches of _runSave —
-     * the run a saved or queued play belongs to is over, and leaving its lobby
-     * handles live is what let a finished session mint a replacement for itself.
+     * Called from _startAnotherRound, conditionally from onMount, and from
+     * both terminal branches of _runSave — the run a saved or queued play
+     * belongs to is over, and leaving its lobby handles live would let a
+     * finished session mint a replacement for itself.
      */
     _resetRunState() {
       // Live wiring — mirrors onUnmount.
@@ -571,8 +571,8 @@
     /**
      * Resolves to this run's lobby code, minting one if we don't have it yet.
      *
-     * Single-flight on purpose: now that Continue no longer waits for the code
-     * (see render()), _advancePhase can want the lobby at the same moment
+     * Single-flight on purpose: Continue does not wait for the code
+     * (see render()), so _advancePhase can want the lobby at the same moment
      * onMount is already opening it, and a second _ensureLobbyOpen() would POST
      * /sessions twice — minting a lobby whose stale-abandon sweep closes the
      * first one out from under the host.
@@ -615,7 +615,7 @@
      * Only 404 and 410. Every session endpoint gates on `status = 'open'`
      * (bgb_session_gate), so a finalized, abandoned or expired session answers
      * `not_found` → 404 or `expired` → 410 whatever you asked it to do. That is
-     * the same test _ensureLobbyOpen has always used.
+     * the same test _ensureLobbyOpen uses.
      *
      * Deliberately NOT the other 4xx, even though they also come from
      * services/_helpers.py's session map. 409 `roster_locked` means the roster
@@ -823,12 +823,12 @@
 
     async _ensureLobbyOpen() {
       // A closed-out draft never gets a lobby. This is the last line of defence
-      // against the resurrection this change fixes: an in-flight poll tick that
+      // against resurrecting a finished session: an in-flight poll tick that
       // 404s on the just-finalized session would otherwise read that as a dead
       // lobby and POST a replacement — a phantom open session that shows up in
       // every buddy's Join chooser for a game that is already saved.
       if (this._ps.isDone()) return;
-      // Token the phase the host is on right now. Continue no longer waits for
+      // Token the phase the host is on right now. Continue does not wait for
       // the lobby, so they can be on Play by the time this resolves — and both
       // branches below otherwise adopt the server's phase wholesale, which
       // would yank them back to Gather (a freshly minted lobby is always
@@ -953,10 +953,10 @@
           // A lobby minted for a run that ALREADY has a roster. "Another
           // round?" on the Play tab (log-play-view._anotherRound) seeds one
           // straight from the last play, and a resumed draft can carry one
-          // too. POST /sessions seats only the host, and nothing here used to
-          // push the rest: priorCode is null on a fresh draft, so the
-          // _onLobbyReplaced branch above never fired and a six-player game
-          // reached spectators as a one-column grid with no scores in it.
+          // too. POST /sessions seats only the host, and priorCode is null on
+          // a fresh draft, so the _onLobbyReplaced branch above never fires —
+          // without this push a six-player game reaches spectators as a
+          // one-column grid with no scores in it.
           // Fire-and-forget, like every other roster write.
           this._syncRosterToLobby();
         }
@@ -974,9 +974,9 @@
 
     // A game can be picked before the lobby exists: onMount mounts the finder
     // (live and pickable) before _ensureLobbyOpen() resolves. That first pick
-    // sets _ps.gameId, but _applyGamePick's push was skipped because _ps.code
-    // was still null — so the game never reached the server and only the
-    // SECOND pick "stuck". Once the lobby is open, push the pending pick so
+    // sets _ps.gameId, but _applyGamePick's push is skipped while _ps.code
+    // is still null — so the game would never reach the server and only a
+    // SECOND pick would stick. Once the lobby is open, push the pending pick so
     // the session row + joiners' mirrors catch up. No-op in the common case
     // where the lobby already carries the picked game (opened WITH a gameId,
     // or nothing picked yet).
@@ -1064,8 +1064,8 @@
         // Every guard above was read BEFORE the fetch, and what came back is a
         // snapshot of the lobby as it was when the fetch started. Read them
         // again: a removal, a phase change or a heal that landed in between
-        // makes this bundle stale, and merging a stale bundle is precisely how a
-        // seat the host removed got seated again.
+        // makes this bundle stale, and merging a stale bundle would seat again
+        // a player the host removed.
         if (!this._lobby || this._lobby.code !== code) return;
         if (this._pendingDeletes > 0 || this._pendingPhase > 0) return;
         if (this._ps.phase !== "gather") return;
@@ -1083,7 +1083,7 @@
           // Account players are matched on user_id first. Names are the only
           // handle a guest has, but for someone with an account they're a
           // weaker key than the id we already hold — and participant_id is
-          // now what live scoring is mirrored under (migration 053), so a
+          // what live scoring is mirrored under (migration 053), so a
           // row that fails to acquire one has its column stop streaming to
           // spectators, not just lose its DELETE affordance.
           const byUserId = new Map(
@@ -1113,7 +1113,7 @@
             }
             if (!key) continue;
             // A seat the host has taken off stays off. This is the last line of
-            // the fix and the load-bearing one: the counter above only covers a
+            // defence and the load-bearing one: the counter above only covers a
             // DELETE that is in flight, and a DELETE can also have failed, or
             // never have been issued, or have been issued by a previous page
             // load. Reaped so the spectators' list catches up too.
@@ -1129,9 +1129,8 @@
               avatar: part.avatar || null,
               participant_id: part.id,
               // Same-length array as everyone else, exactly like _addPlayer.
-              // Promoted joiners used to arrive with no roundScores at all,
-              // which is how a column ended up showing more cells than its
-              // Total counted.
+              // A promoted joiner with no roundScores at all would show a
+              // column with more cells than its Total counts.
               roundScores: Array(this._maxRoundCount()).fill(null),
             });
             byName.set(key, this._ps.players.length - 1);
@@ -1140,18 +1139,18 @@
           }
           if (playersChanged) this._ps.persist();
         }
-        // The poll runs every 2s and used to fire a full render() on any
-        // participant change. That rebuilt the cascade DOM via
-        // innerHTML, causing a visible repaint pulse and a brief
-        // sticky/scroll glitch. Instead, the only thing a poll can
+        // The poll runs every 2s, and a full render() on any participant
+        // change would rebuild the cascade DOM via innerHTML, causing a
+        // visible repaint pulse and a brief sticky/scroll glitch. The only
+        // thing a poll can
         // change in the host UI is the players list (and only during
         // Gather, when new joiners get auto-promoted to player rows).
         // Patch just that subtree — scroll position survives.
         if (playersChanged) this._refreshPlayersList();
         this._reconcileRosterToLobby();
       } catch (e) {
-        // A dead lobby 404s here every 2s. Swallowing that forever left the
-        // invite card advertising a code nobody could join for the rest of the
+        // A dead lobby 404s here every 2s. Swallowing that forever would leave
+        // the invite card advertising a code nobody can join for the rest of the
         // game. Drop it so the next lobby write mints a replacement; a blip
         // (offline / 5xx) is still swallowed, because re-minting on one would
         // abandon a session that is merely unreachable.
@@ -1333,13 +1332,12 @@
     /**
      * Mirror the local team tags into the lobby roster.
      *
-     * Until migration 050 the tags lived only in this draft: the host's own
-     * grid banded its columns into sides (widgets/round-score-grid.js reads
-     * `p.team` off the roster it is handed) and every spectator's mirror,
-     * built from the lobby's participants, had nothing to band by. A team
-     * night therefore looked like six identical columns to everyone but the
-     * host, and the pairings only became visible once the play was saved and
-     * the game was over.
+     * The host's own grid bands its columns into sides
+     * (widgets/round-score-grid.js reads `p.team` off the roster it is
+     * handed), but every spectator's mirror is built from the lobby's
+     * participants (migration 050) — kept only in this draft, the tags would
+     * leave a team night looking like six identical columns to everyone but
+     * the host until the play was saved.
      *
      * Debounced for the same reason the order write is, and best-effort in the
      * same way: losing it costs the spectators a tint, not the host their play.
@@ -1470,8 +1468,8 @@
       this._liveOff = this._liveScores.subscribe(() => this._onLiveScoresChange());
       // Publish the grid the host is actually looking at. start() only read
       // the table; a resumed draft (or a row whose participant_id landed late)
-      // can hold cells the table has never seen, and spectators are read-only
-      // now, so nobody else would ever fill them in. Fire-and-forget — the
+      // can hold cells the table has never seen, and spectators are read-only,
+      // so nobody else would ever fill them in. Fire-and-forget — the
       // host's screen already shows this state.
       //
       // This runs on every mount, including the one where the lobby was minted
@@ -1491,10 +1489,10 @@
     // resolve through the live overlay (_resolvedScore), so this tick is the
     // moment a cell's value actually becomes current — every path that changes
     // a number ends up here, and the crown has to be re-derived from the same
-    // numbers the totals row is about to show. It used to be re-derived only
-    // where the host typed, and always one keystroke before the overlay caught
-    // up, so a player who overtook the leader kept showing the old crown until
-    // the next keystroke nudged it.
+    // numbers the totals row is about to show. Re-derived only where the host
+    // types, it would always run one keystroke before the overlay caught up,
+    // so a player who overtook the leader would keep showing the old crown
+    // until the next keystroke nudged it.
     _onLiveScoresChange() {
       this._patchScoringCells();
       this._autoSelectWinners();
@@ -1573,7 +1571,7 @@
             // Deliberately NOT gated on the lobby. Minting a code is a
             // multi-second round-trip (Railway → Supabase → bgb_create_session)
             // and nothing on the Play screen needs it, so making the host watch
-            // a greyed-out button for it was pure dead time. _advancePhase
+            // a greyed-out button for it would be pure dead time. _advancePhase
             // paints the transition immediately and parks its PATCH on
             // _lobbyReady() instead. A game pick is the only real prerequisite;
             // _advanceToPlay still checks the roster.
@@ -1600,16 +1598,16 @@
       if (this._pager) this._pager.sync();
       // NOTE: do NOT call _scrollToCurrentPhase() here. render() runs every
       // 2s via the lobby poll and on every player edit — yanking the scroll
-      // to the top of the active section made long Gather screens feel
-      // un-scrollable. _scrollToCurrentPhase() is now only called when the
+      // to the top of the active section would make long Gather screens feel
+      // un-scrollable. _scrollToCurrentPhase() is only called when the
       // active phase actually changes (onMount, _advancePhase, _phaseBack).
     }
 
     /**
-     * The unpicked Game card. Recently-played games are tappable right here —
-     * they used to be invisible until the search input took focus, which hid
+     * The unpicked Game card. Recently-played games are tappable right here
+     * rather than hidden until a search input takes focus, which would put
      * the shortcut for the commonest case behind a gesture — and search itself
-     * moves into a sheet (widgets/game-search-sheet.js).
+     * lives in a sheet (widgets/game-search-sheet.js).
      * @returns {string}
      */
     _renderGameChooser() {
@@ -1712,11 +1710,11 @@
      * The Play screen's docked bar, and the two moves it offers: score another
      * round, or stop scoring. The host presses one or the other all evening.
      *
-     * "Next round" is the "+ Round" button that used to live under the grid,
-     * in the widget's own .scoring-actions row. That put the one control the
-     * host reaches for every few minutes at the BOTTOM of a table that grows a
-     * row every time they use it — by round eight it was below the fold, under
-     * the Total, behind a scroll. It is also the exact alternative to "Wrap
+     * "Next round" lives here rather than under the grid, in the widget's own
+     * .scoring-actions row: there the one control the host reaches for every
+     * few minutes would sit at the BOTTOM of a table that grows a row every
+     * time they use it — by round eight below the fold, under the Total,
+     * behind a scroll. It is also the exact alternative to "Wrap
      * up" ("we're going again" / "we're done"), and those two belong on the
      * same strip rather than 400px apart. The strip is already pinned, so
      * neither can scroll away.
@@ -1726,7 +1724,7 @@
      * pressed six or ten times a night rather than the one pressed once at the
      * end — the host is reaching for it in the middle of a conversation, on a
      * phone lying flat on a table, without looking. Wrap up takes the quiet
-     * treatment for the same reason it always deserved it: it ENDS the thing
+     * treatment because it ENDS the thing
      * the screen is for, so an accidental press costs more than a missed one.
      *
      * The play-detail popup keeps the in-card button: it has no docked bar to
@@ -1779,7 +1777,7 @@
       // nothing for one to follow along with.
       //
       // This card and the game-info strip on the Play step are the only two
-      // places left in the app that render being offline. Everywhere else an
+      // places in the app that render being offline. Everywhere else an
       // action is attempted and reports its own failure — see helpers.js
       // #notifyRequestError. Here it is worth saying up front, because the
       // cascade still runs and the host needs to know what it will and won't
@@ -1801,7 +1799,7 @@
         `;
       }
       // Session code surface, Gather only. The lobby stays effectively open
-      // past Gather (PR #274 admits late joiners as spectators), so the code
+      // past Gather (late joiners are admitted as spectators), so the code
       // still has to be readable on Play — but there it rides the game-info
       // strip below rather than a card of its own, because by then the game
       // is the fact worth top billing. Settle Up drops it — the game is over.
@@ -2087,7 +2085,7 @@
 
     /**
      * The Play step's header strip: the game being played and the code to
-     * join it, on one line. Replaces the standalone invite card there —
+     * join it, on one line. Stands in for the standalone invite card there —
      * see widgets/game-info-bar.js for why the two steps diverge.
      *
      * Code resolution matches _renderInviteCard exactly, including the fall
@@ -2320,7 +2318,7 @@
       // No "Scoring" label and no ± pill above the table. The card holds one
       // thing, the scorepad bar underneath already names which scorepad it is,
       // and the column headers say who each column belongs to — a heading
-      // repeating the word "Scoring" over all of that was a row of vertical
+      // repeating the word "Scoring" over all of that would be a row of vertical
       // space spent on the phone screen the host stares at all evening.
       return `
         <section class="cascade-card cascade-card--scoring" data-kp-round>
@@ -2336,25 +2334,25 @@
      * expansions are folded into it. Silent in the common case — with no
      * scoring-grid chapter adopted for this game and nothing applied to the
      * draft there is nothing to name and nothing to pick, and the scoring card
-     * looks exactly as it always has.
+     * looks like a plain scoring card.
      *
      * TWO ROWS, AND THE FIRST ONE IS ALSO THE ON/OFF CONTROL.
      *
      * Row one is the scorepad pills: the base game's grid, then each
      * replace-mode expansion on the table (domain/scoring-template.js#split).
      * Exactly one is on, or none — and tapping the one that IS on takes the
-     * template off. That is why there is no switch beside them any more: a
+     * template off. That is why there is no switch beside them: a
      * switch and a pill row are two controls answering one question, and they
      * could disagree about it ("off" plus a lit pill). Deselecting reads as
      * "score on plain rounds" without the bar having to spell it out, and the
      * pills stay on screen saying exactly what a tap would turn back on.
      *
      * Row two is the add-ons: the expansions whose grids APPEND rows to
-     * whichever pill is chosen, each as its own colour-dotted chip. It used to
-     * be a "+" run inside the composition's title ("Everdell score sheet +
-     * Pearlbrook"), which put three different things — the base grid, the
-     * expansions, and the fact that they had been joined — into one ellipsised
-     * line on a 390px phone. As chips they carry the expansion's own colour,
+     * whichever pill is chosen, each as its own colour-dotted chip. A "+" run
+     * inside the composition's title ("Everdell score sheet + Pearlbrook")
+     * would put three different things — the base grid, the expansions, and
+     * the fact that they had been joined — into one ellipsised line on a
+     * 390px phone. As chips they carry the expansion's own colour,
      * which is the colour of the rule their rows draw down the right edge of
      * the label cells, so the strip and the table say the same thing in the
      * same ink.
@@ -2397,11 +2395,10 @@
      * no flip and no keyboard to dodge, the same standing the scoring editor's
      * colour swatches have.)
      *
-     * A ROW OF ONE IS STILL A CONTROL, which is why this no longer bails on a
-     * single candidate. It used to: a lone pill was a label pretending to be a
-     * button while the switch beside it did the work. The switch is gone and
-     * the pill does that work now, so the commonest shape of all — one grid,
-     * on or off — is exactly the shape that needs it.
+     * A ROW OF ONE IS STILL A CONTROL, which is why this does not bail on a
+     * single candidate: with no switch beside it, the pill is what turns the
+     * grid on and off, so the commonest shape of all — one grid, on or off —
+     * is exactly the shape that needs it.
      *
      * Add-ons are NOT pills. They are not alternatives to anything; they fold
      * into whichever pill is chosen, and they get their own row underneath
@@ -2491,7 +2488,7 @@
      *     the composition actually on the table: auto-apply reaches that state
      *     with candidates present too (preferredBase declines to guess between
      *     two community grids, but the add-ons still go on), and a lit
-     *     composition with no pill to unlight it is the hole this closes.
+     *     composition with no pill to unlight it would be a hole in the strip.
      *   * a GHOST, for a scorepad that is on the table but no longer among the
      *     candidates: the host removed the chapter from their guide, its author
      *     deleted it, or the guide simply has not answered yet on a resumed
@@ -2547,8 +2544,7 @@
         );
       }
       // A ghost has no chapter left to read a name off, so it takes the
-      // composition's own title — which is the string the bar used to print on
-      // its own line, and still the truest description of those rows.
+      // composition's own title — the truest description of those rows.
       if (!o.chapter) {
         return (this._ps.scoringTemplate || {}).title || "Custom rows";
       }
@@ -2625,7 +2621,7 @@
      * Everything on this screen that walks the grid positionally — the cell
      * patcher, the totals row, the winner arithmetic — goes through here
      * rather than through `_ps.players`, because in a team play those two are
-     * no longer the same list. Derived rather than cached: the merge depends
+     * not the same list. Derived rather than cached: the merge depends
      * on the numbers, and the numbers change on every keystroke.
      */
     _gridColumns() {
@@ -2641,11 +2637,11 @@
     // round range, through the same helper the widget itself uses — so the
     // Total is the visible cells added up, by construction.
     //
-    // This used to stop at `player.roundScores.length` while the grid rendered
-    // `max(length)` rows. A player whose array was short (a joiner promoted by
-    // the lobby poll arrived with no array at all) showed six live cells under
-    // a total that counted two of them. _normalizeRoundArrays() now keeps the
-    // arrays in step as well, but the total no longer depends on it.
+    // It runs to the grid's `max(length)` rows, not `player.roundScores.length`:
+    // a player whose array is short (a joiner promoted by the lobby poll can
+    // arrive with no array at all) would show six live cells under a total that
+    // counted two of them. _normalizeRoundArrays() keeps the arrays in step as
+    // well, but the total does not depend on it.
     _playerTotal(player) {
       return window.roundGridTotal(
         player,
@@ -2684,10 +2680,9 @@
       );
     }
 
-    // Delegates to the grid widget's own totals-cell renderer. This used to be
-    // a hand-copied duplicate of it, which is how a patched row and a freshly
-    // rendered one get to disagree — the same failure mode this change is
-    // about, one level up.
+    // Delegates to the grid widget's own totals-cell renderer. A hand-copied
+    // duplicate of it is how a patched row and a freshly rendered one get to
+    // disagree.
     _renderTotalsCell(col, mode) {
       // The total comes from the widget too, off the column's own cells — not
       // from _playerTotal, which answers for ONE SEAT and would count a merged
@@ -2720,8 +2715,8 @@
       const ps = this._ps;
       // Two panes on the tablet and wide tiers — date and place left, the photo
       // right — with the notes spanning both underneath; on a phone the
-      // wrappers are display:contents and this is the stacked order it always
-      // was (styles.css, "Cascade panes").
+      // wrappers are display:contents and this is a plain stacked order
+      // (styles.css, "Cascade panes").
       return `
         <div class="cascade-cols">
         <div class="cascade-col">
@@ -2958,8 +2953,7 @@
         // is behind. _withLobby mints a replacement when the lobby is
         // definitively gone and resolves null when it can't; either way the
         // host keeps playing. Bouncing them back to Gather with "Session not
-        // found" — which is what this used to do — blocked the one thing that
-        // has to work.
+        // found" would block the one thing that has to work.
         await this._withLobby(async (code) => {
           // Superseded while we waited for the code. Bail BEFORE the PATCH: a
           // Continue → back → Continue burst issued while the code was in
@@ -3015,8 +3009,9 @@
      * the SESSION ROW says phase='play'. Everything else about the phase here
      * is local and optimistic: _advancePhase flips _ps.phase, repaints, and
      * lets a background PATCH catch the server up. So there are three windows
-     * where the host's browser holds a grid the database will refuse, and all
-     * three were being discovered by sending a write and reading the 42501:
+     * where the host's browser holds a grid the database will refuse, and
+     * without this gate all three are discovered by sending a write and
+     * reading the 42501:
      *
      *   1. Gather. _startLiveScores runs on mount, in whatever phase the host
      *      is in, and syncGrid publishes the draft's cells — which a session
@@ -3282,13 +3277,13 @@
      *   seating several players at once so the screen paints once, not N times.
      */
     _addPlayer({ name, user_id, avatar }, opts = {}) {
-      // Seated identity, not seated SPELLING. The name test alone let one
+      // Seated identity, not seated SPELLING. The name test alone would let one
       // account take two seats: the buddy list spells someone by their display
       // name and "search all of BoardgameBuddy" by whatever the search
       // matched, and a seat renamed from the roster (_renameSeat) keeps its
       // user_id under a name the picker no longer recognises. Migration 023's
       // unique index refuses a play that seats the same account twice, so a
-      // double seat is now a rejected save rather than an odd scoreboard.
+      // double seat would be a rejected save rather than an odd scoreboard.
       const exists = this._ps.players.some(
         (p) => (user_id && p.user_id === user_id)
           || (p.name || "").toLowerCase() === (name || "").toLowerCase()
@@ -3322,9 +3317,8 @@
     // The local row is NOT rolled back when this fails. A player the host typed
     // is part of the play they are recording; the roster row only exists so
     // spectators can see them. Deleting someone out of the host's own roster
-    // because a lobby write 404'd — which is what this used to do, with a toast
-    // blaming the session — took a failure in the nice-to-have and spent it on
-    // the must-have. _withLobby re-mints a dead lobby and retries, and
+    // because a lobby write 404'd would take a failure in the nice-to-have and
+    // spend it on the must-have. _withLobby re-mints a dead lobby and retries, and
     // _syncRosterToLobby re-pushes the roster whenever a new lobby is opened.
     async _pushParticipantToBackend(player) {
       const bundle = await this._withLobby((code) =>
@@ -3466,20 +3460,20 @@
       // yank focus out of the initials input mid-typing.
       // Addressed by SEAT rather than by header position. A team play's
       // headers are one per side, not one per player, so the i-th header
-      // stopped being the i-th seat's the moment a side could hold two of
+      // is not the i-th seat's once a side holds two of
       // them — and the badge inside a merged header is still this seat's.
       const head = this.container.querySelector(`[data-head-seat="${i}"]`);
       // Off the RESOLVED name, matching what _renderPlayerRow's placeholder and
-      // the grid's own header derive from. Clearing the field otherwise painted
-      // the account-name initials over the aliased ones until the next render.
+      // the grid's own header derive from. Clearing the field would otherwise
+      // paint the account-name initials over the aliased ones until the next render.
       const label = p.initials || computeInitials(window.Buddy.nameFor(p.user_id, p.name));
       const span = head && head.querySelector(".user-badge__initials");
       if (span) span.textContent = label;
     }
 
     // The tag joins this seat to a side, and PlaySession.applyTeamTag settles
-    // what that does to the side's win flag — including the case this used to
-    // get backwards, where naming a team AFTER crowning it wiped the win. The
+    // what that does to the side's win flag — including naming a team AFTER
+    // crowning it, which must not wipe the win. The
     // rule lives on the draft (and is covered by tools/check-play-outcome.mjs)
     // because it is a fact about the roster, not about this screen.
     _setTeam(i, value) {
@@ -3650,12 +3644,11 @@
      * ONE QUESTION PER GAME. A play is the base game plus the expansions on the
      * table, and each of those is a separate box with its own grids — so the
      * offer is a queue the sheet cycles through ("2 of 3"), built by
-     * domain/scoring-template.js#groupByGame. It used to be one merged sample
-     * of three drawn from every game's grids at once, which asked the host to
-     * choose between scorepads without saying which box each came out of, and
-     * it used to give up entirely the moment the host owned ANY grid — so a
-     * host with Everdell's grid in their guide was never once offered
-     * Pearlbrook's.
+     * domain/scoring-template.js#groupByGame. One merged sample drawn from
+     * every game's grids at once would ask the host to choose between
+     * scorepads without saying which box each came out of, and the offer does
+     * not give up the moment the host owns ANY grid — a host with Everdell's
+     * grid in their guide is still offered Pearlbrook's.
      *
      * Deliberately not on Gather. Gather is a roster, and a scorepad the host
      * has not reached yet is not a question worth interrupting it with; by the
@@ -3671,8 +3664,8 @@
      *     play: a base grid in the guide is not an answer about an expansion;
      *   * every scorepad pill deliberately deselected (`scoringTemplateOff`)
      *     is a choice made — the same field _maybeAutoApplyTemplate refuses to
-     *     answer over. A template already ON the table is NOT such a choice
-     *     any more: "do you also want the rows this box brings" is exactly
+     *     answer over. A template already ON the table is NOT such a
+     *     choice: "do you also want the rows this box brings" is exactly
      *     what this offer is for, and _adoptTemplate composes them in;
      *   * rounds or scores already on the table mean restructuring it now is
      *     worse than never offering at all, exactly as it is for auto-apply;
@@ -3798,9 +3791,8 @@
      * than throwing the base rows away.
      *
      * The composition is built from the adopted set PLUS this queue's earlier
-     * answers (`_offerAdopted`). The offer no longer fires only when nothing is
-     * adopted — that was the bug that hid every expansion's grid from anyone
-     * who owned the base game's — and within one pass the guide reload each
+     * answers (`_offerAdopted`). The offer fires even when something is
+     * already adopted, and within one pass the guide reload each
      * adoption kicks off lands frames after the next question is answered. So
      * `_templates` alone would still be describing the table as it was two
      * taps ago, and composing against it would take the rows of the grid just
@@ -3866,8 +3858,8 @@
      * A host who has deselected every scorepad pill has chosen, and auto-apply
      * must not answer for them again — which is why the off state is a
      * persisted field of the draft rather than the absence of one. Without it,
-     * coming back to a still-empty grid re-applied the template the host had
-     * just taken off, and the pill appeared to light itself back up.
+     * coming back to a still-empty grid would re-apply the template the host
+     * had just taken off, and the pill would appear to light itself back up.
      *
      * @param {any|null} base the scorepad grid, or null for add-ons alone
      */
@@ -4008,8 +4000,8 @@
     /**
      * Tap a scorepad pill.
      *
-     * The pill that is already on turns the template OFF, which is the whole
-     * reason the switch could go: one control, one question, and no way for
+     * The pill that is already on turns the template OFF, which is why there
+     * is no separate switch: one control, one question, and no way for
      * the two of them to disagree about the answer. Off is immediate and never
      * asks — it takes the labels off and leaves every row and every score
      * exactly where it was. Turning one ON goes through the confirm, because
@@ -4071,8 +4063,8 @@
      * The rows are MATERIALIZED into every player's roundScores rather than
      * left for the renderer to infer, because _maxRoundCount, _addRound and
      * _removeRoundAt all read that array: a grid painting rows the model has
-     * never heard of is the disagreement this file's history is made of (see
-     * the notes at _normalizeRoundArrays and _playerTotal).
+     * never heard of is the cells-vs-Total disagreement _normalizeRoundArrays
+     * and _playerTotal guard against.
      *
      * @param {any|null} base the scorepad grid, or null for add-ons alone
      * @param {any[]} [addOns] defaults to the expansions currently on the table
@@ -4092,9 +4084,7 @@
      *
      * Nothing is remembered on the way out, because the pills ARE the memory:
      * they stay on screen with none of them lit, each one still naming the
-     * grid it would put back. That is what the old "last template on the
-     * table" field existed to reconstruct for a switch that had no way of
-     * saying which grid it was about.
+     * grid it would put back.
      *
      * `scoringTemplateOff` is the host's choice recorded as one, read by
      * _maybeAutoApplyTemplate so a guide reload cannot answer it for them a
@@ -4190,10 +4180,10 @@
     /**
      * Put Round 1 on an empty grid.
      *
-     * The table used to open on a header, a Total row and nothing between
-     * them, which made "press + Round" a step every single play began with and
-     * made the first thing the host saw look like a grid that had failed to
-     * load. A scorepad has a first row.
+     * A table opening on a header, a Total row and nothing between them would
+     * make "press + Round" a step every single play began with, and the first
+     * thing the host saw would look like a grid that had failed to load. A
+     * scorepad has a first row.
      *
      * MODEL ONLY, and idempotent by construction — it fires exactly once,
      * because after it the round count is 1. That is what makes it safe to
@@ -4249,11 +4239,11 @@
     }
 
     // Give every player a dense roundScores array of exactly _maxRoundCount()
-    // entries. Three paths used to leave columns at different lengths — the
+    // entries. Three paths can leave columns at different lengths — the
     // lobby poll pushing a promoted joiner with no array, _setRoundScore
     // writing a sparse index into a short one, and _removeRoundAt skipping
-    // players whose array didn't reach the removed round — and every one of
-    // them showed up as a column whose cells and Total disagreed.
+    // players whose array didn't reach the removed round — and each one shows
+    // up as a column whose cells and Total disagree.
     _normalizeRoundArrays() {
       const players = (this._ps && this._ps.players) || [];
       const n = this._maxRoundCount();
@@ -4318,7 +4308,7 @@
       // on one member and save the rest as zeroes. Asked of the same arguments
       // the grid rendered from, so the fan-out can never cover a different set
       // of seats than the cell on screen does. Outside team mode this is
-      // always [playerIndex] and the loop below is the line it used to be.
+      // always [playerIndex] and the loop below is a single write.
       const seats = window.roundGridSeatsFor(
         this._ps.players,
         this._resolvePlayMode(),
@@ -4337,7 +4327,7 @@
       }
       this._normalizeRoundArrays();
       // The text input doesn't auto-reject stray characters the way type=number
-      // did — write the sanitized value back when they differ (e.g. a pasted
+      // does — write the sanitized value back when they differ (e.g. a pasted
       // letter), preserving the caret.
       const input = this.container.querySelector(`input[data-score-cell="${playerIndex}-${roundIndex}"]`);
       if (input && input.value !== clean) {
@@ -4353,12 +4343,12 @@
       //
       // This has to run BEFORE the repaint below, and it does not wait on the
       // network to do so: setAnyScore applies the value to the overlay and
-      // emits synchronously, and only the upsert behind it is async. Ordering
-      // it after the repaint is what made the crown lag. Totals and winners
-      // both resolve through _resolvedScore, which prefers the overlay, so
-      // repainting first read the digit typed BEFORE this one — the totals row
-      // got a second, corrected pass from the emit, but the winner did not and
-      // stayed a keystroke behind.
+      // emits synchronously, and only the upsert behind it is async. Ordered
+      // after the repaint, the crown would lag: totals and winners both
+      // resolve through _resolvedScore, which prefers the overlay, so
+      // repainting first would read the digit typed BEFORE this one — the
+      // totals row gets a second, corrected pass from the emit, but the winner
+      // does not and would stay a keystroke behind.
       if (this._liveScores) {
         // One write per seat the cell covers. A spectator's grid merges the
         // same side the host's does, and its merged cell shows the first
@@ -4376,10 +4366,10 @@
         }
       }
       // Never wait on the network to repaint. This method is an oninput
-      // handler: awaiting the live-scores upsert before refreshing meant that
-      // on a flaky connection (or with the request simply hung) the cell showed
-      // the digit the host had just typed while the Total below it still showed
-      // the sum from before it — the "sometimes the maths is wrong" report.
+      // handler: awaiting the live-scores upsert before refreshing would mean
+      // that on a flaky connection (or with the request simply hung) the cell
+      // shows the digit the host has just typed while the Total below it still
+      // shows the sum from before it.
       // The write above is fire-and-forget; the Realtime echo reconciles later.
       this._autoSelectWinners();
       this._refreshTotalsCells();
@@ -4426,7 +4416,7 @@
         // game to whichever side had three people on it. Split (a play scored
         // seat by seat, before merged cells or after a tag landed on an
         // already-scored seat), the side is its seats and the sum is exactly
-        // what it has always been.
+        // theirs.
         const groupKey = (p, i) => {
           const tag = (p.team || "").trim().toLowerCase();
           return tag || `__solo_${i}`;
@@ -4514,8 +4504,7 @@
      *
      * bgb_game_detail_bundle carries the same ExpansionListItem[] the endpoint
      * returns, key for key, and Bootstrap.warmGameBundles() has it for every
-     * owned game. This used to be read only when BgbNet reported offline,
-     * which had it backwards the same way the game picker did before 46fba90:
+     * owned game. Read whatever BgbNet reports, not only offline:
      * a host on Gather is reaching for a game they own whether or not there is
      * signal, and the ticks come from _ps.expansionIds rather than the rows,
      * so a cached paint shows the right selections immediately.
@@ -4597,9 +4586,9 @@
       }
       this._expansionsLoadedFor = gameId;
       // Drop picks the game no longer offers — but ONLY against a list we
-      // actually fetched. This used to run unconditionally, so any blip on
-      // the expansions request silently wiped every expansion the host had
-      // ticked: the catch set the list to [], and the filter then removed
+      // actually fetched. Run unconditionally, any blip on the expansions
+      // request would silently wipe every expansion the host had ticked: the
+      // catch sets the list to [], and the filter would then remove
       // everything for not being in it.
       if (!authoritative) return;
       const valid = new Set(this._expansions.map((e) => e.expansion_game_id));
@@ -4700,8 +4689,8 @@
     _renderExpansionRows(list, baseName) {
       if (!list.length) {
         // Only say there are none once someone has actually looked. With a
-        // request still in the air this asserted "none" and then contradicted
-        // itself a round trip later.
+        // request still in the air, "none" would be contradicted a round trip
+        // later.
         if (this._expansionsInflightFor && this._expansionsInflightFor === (this._ps && this._ps.gameId)) {
           return `
             <li class="cascade-card__hint cascade-exp-loading">
@@ -4811,7 +4800,7 @@
       this._refreshExpansionRow(expansionGameId);
       this._refreshExpansionCount();
       // The guide lives in the (locked) Play screen but reads expansionIds,
-      // so keep it in sync — render() used to do this for us.
+      // so keep it in sync — this path skips render().
       this._mountReferenceGuide();
     }
 
@@ -4956,11 +4945,11 @@
 
     // ── Player picker ──────────────────────────────────────────────────────
     //
-    // The roster is edited through widgets/player-picker-sheet.js. It replaced
-    // an inline combo whose dropdown was position:absolute inside the Players
-    // card — the lowest card on Gather — so ui/dropdown-fit.js had to squeeze
-    // it to a ~132px keyhole over the docked Continue CTA once a few players
-    // were seated. The sheet is position:fixed and sized off --bgb-vv-h, so
+    // The roster is edited through widgets/player-picker-sheet.js rather than
+    // an inline combo: a position:absolute dropdown inside the Players card —
+    // the lowest card on Gather — would be squeezed by ui/dropdown-fit.js to a
+    // ~132px keyhole over the docked Continue CTA once a few players are
+    // seated. The sheet is position:fixed and sized off --bgb-vv-h, so
     // there is no fit pass, no flip, and no z-index race with the CTA bar.
 
     /**
@@ -4971,7 +4960,7 @@
      * play with?" — and Gather normally does not need it to, because
      * _ensureSelfIncluded seats the host by construction. But that seat has an
      * × like every other, and once it is tapped nothing in the bundle can give
-     * it back: the host was left looking at a list of everyone they have ever
+     * it back: the host would be left looking at a list of everyone they have ever
      * played with except themselves.
      *
      * Named exactly as _ensureSelfIncluded spells the seeded seat, so the row
@@ -5006,13 +4995,13 @@
     // Deliberately not Buddy.toPlayerCandidates(): Gather holds the three
     // lists separately because `recent` is its own SECTION here, and every row
     // is filtered against the seated roster. Note the `other_*` keys, though —
-    // `accounts` are buddy EDGES, and reading them as profiles is what made
-    // the play importer's picker show nothing but ghosts.
+    // `accounts` are buddy EDGES, and reading them as profiles leaves a picker
+    // showing nothing but ghosts.
     _buddyCandidates() {
       const already = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
       // Accounts are deduped BY USER ID, not by name. Two buddies really can
       // share a display name — that is precisely the case private aliases exist
-      // for — and a name-keyed Set silently dropped the second of them, so the
+      // for — and a name-keyed Set would silently drop the second of them, so the
       // picker could not offer the person the alias was set to distinguish.
       const seenIds = new Set();
       const seen = new Set();
@@ -5152,8 +5141,8 @@
      *
      * Gather is where a club night gets logged, and a club night is full of
      * people you have never added and never played with — they are in neither
-     * `accounts` nor `recent`, so before this the only thing the picker could
-     * offer for them was a guest seat. A guest seat is a dead end: the play
+     * `accounts` nor `recent`, so without this the only thing the picker could
+     * offer for them would be a guest seat. A guest seat is a dead end: the play
      * never reaches their history, their win never counts, and the two of you
      * end up with one evening recorded as two different people.
      *
@@ -5210,7 +5199,7 @@
       }
       // The same bar the Gather step sets, re-checked here because the seats
       // can be removed after it: a play with nobody at it counts towards
-      // nobody's record, and since migration 023 bgb_log_play refuses it. Said
+      // nobody's record, and bgb_log_play refuses it (migration 023). Said
       // on this screen, where the fix is, rather than as a failed write the
       // outbox parks in `failed` a moment later.
       if (this._ps.players.length === 0) {
@@ -5222,9 +5211,9 @@
 
       // Fold the live overlay into the draft before the payload is built.
       // toPlayCreate() sums roundScores, and a joiner's own cells only ever
-      // lived in the live-scores table — without this the play was recorded
-      // with those rounds blank, so the saved score didn't match the grid the
-      // host had just been looking at.
+      // lived in the live-scores table — without this the play would be
+      // recorded with those rounds blank, so the saved score wouldn't match the
+      // grid the host had just been looking at.
       this._commitResolvedScores();
       // After the commit, so it sees the settled scores rather than the
       // pre-overlay draft.
@@ -5264,7 +5253,7 @@
       this._error = null;
       this.render();
 
-      // Retire the DISK copy of the draft at the tap. The card no longer holds
+      // Retire the DISK copy of the draft at the tap. The card does not hold
       // the host here, so they can reach the Play tab before the write lands —
       // where _resumableSession() would offer to resume the game they just
       // saved. _ps stays intact in memory: a failed save still has to leave a
@@ -5278,14 +5267,14 @@
       this._savePromise = new Promise((res) => { settleWrite = res; });
 
       if (!window.PolaroidPopup) {
-        // No splash available — fall back to the old blocking shape.
+        // No splash available — fall back to the blocking shape.
         this._runSave(snap, settleWrite).then(() => window.router.go("feed"));
         return;
       }
       // Same wrap-up splash non-host joiners get, plus the host-only "Another
       // round?" CTA. No `saving` — see the note above _save: with it unset the
       // card renders that CTA and its corner X immediately. `onRetry` is passed
-      // anyway; it only renders once `error` is set, which now happens on the
+      // anyway; it only renders once `error` is set, which happens only on the
       // single unrecoverable path in _runSave (the queue write itself failing).
       this._cardId = window.PolaroidPopup.show({
         headline: "Well played!",
@@ -5386,7 +5375,7 @@
         }
       } catch (e) {
         // Every failure goes to the queue, not just a network one. The card is
-        // dismissible, so there is no longer a surface guaranteed to be there
+        // dismissible, so there is no surface guaranteed to be there
         // to carry a Retry — and no draft behind it to fall back to once the
         // host has started another round. The queue is that surface: the play
         // is recorded, the header indicator says so, and the flush is safe
@@ -5448,7 +5437,7 @@
           //
           // _resetRunState() first, for the same staleness reason: the run this
           // save belongs to is over, so its lobby handles and live wiring have
-          // to go before the draft does. Leaving _lobby set is what let the
+          // to go before the draft does. Leaving _lobby set would let the
           // visibilitychange catch-up tick keep firing against a finished
           // session — see _lobbyPollTick's phase guard.
           //
@@ -5511,7 +5500,7 @@
       }
       // Re-pull the feed's first page NOW, behind the still-up wrap-up card,
       // so the X lands on a feed that already contains this play.
-      // store.invalidate("feed") used to sit here and did nothing for this —
+      // store.invalidate("feed") would do nothing for this —
       // it only re-fires subscribers with the unchanged value. Fire-and-forget:
       // if the host taps through before it settles, Feed.fetchPage() joins the
       // same in-flight request via bgbCache's single-flight map.
@@ -5532,7 +5521,7 @@
       //
       // Deliberately no `playId` — the saved card is one CTA, "Another
       // round?", and the corner X out to the feed. The play is one tap away
-      // on that feed, so a "View play" button only crowded the wrap-up. (The
+      // on that feed, so a "View play" button would only crowd the wrap-up. (The
       // joiner splash in session-viewer still sets playId; that card has no
       // other affordance.)
       if (popup) popup.update({ error: null }, cardId);
@@ -5578,10 +5567,10 @@
      * that the photo didn't make it — and only while the card is still up
      * (PolaroidPopup.update no-ops once it's dismissed).
      *
-     * PATCH /plays/{id}/photo writes the one column. The old path re-sent the
-     * whole play through PUT /plays/{id}, which full-replaces the nested
-     * lists — twelve round trips, and every player row destroyed and
-     * recreated, to set a URL.
+     * PATCH /plays/{id}/photo writes the one column. Re-sending the whole
+     * play through PUT /plays/{id} would full-replace the nested lists —
+     * twelve round trips, and every player row destroyed and recreated, to
+     * set a URL.
      */
     async _attachPhoto(uploadPromise, savedId, cardId) {
       let ok = false;
@@ -5657,7 +5646,7 @@
 
       // POST /sessions runs bgb_create_session, which abandons every OTHER open
       // session this host owns. The finalize for the round being left may still
-      // be in flight — the wrap-up card no longer waits for it — so minting now
+      // be in flight — the wrap-up card does not wait for it — so minting now
       // could close the lobby that finalize is about to write to. The play
       // itself survives (_runSave falls back to Play.create on the 404/410 via
       // _isLobbyGone), but every spectator's mirror would end on 'abandoned'
@@ -5669,8 +5658,8 @@
       // arrives late. _lobbyReady() consumes the gate.
       //
       // Bounded, because domain/api.js sets no fetch timeout: after
-      // LOBBY_GATE_MAX_WAIT_MS the mint goes ahead and we accept the old
-      // behaviour rather than leave the round with no lobby at all.
+      // LOBBY_GATE_MAX_WAIT_MS the mint goes ahead and we accept the abandoned
+      // mirror rather than leave the round with no lobby at all.
       //
       // Skipped offline: the request can only fail, and _ensureLobbyOpen will
       // discard the record rather than consume it — leaving prefetchLobby's
@@ -5715,7 +5704,7 @@
       await lobbyStarted;
       // Repaint and arm the poll the moment the code exists. The roster sync
       // below is deliberately NOT awaited: it is one POST per carried-over
-      // player, and making the invite card wait on all of them held the screen
+      // player, and making the invite card wait on all of them would hold the screen
       // stale for round-trips it never needed. Each _pushParticipantToBackend
       // is best-effort, and the poll backfills participant_id within ~2s —
       // the same fire-and-forget contract _addPlayer uses.
@@ -5767,7 +5756,7 @@
      * that rides the Gather poll so the roster heals itself instead of
      * depending on every individual write having landed. It has to, because
      * _withLobby swallows everything that isn't a definitive 404/410 — one
-     * dropped POST used to cost that player their column for the entire game,
+     * dropped POST would otherwise cost that player their column for the entire game,
      * since live scores are keyed by participant_id and the host's cells for a
      * row without one are never mirrored anywhere.
      *

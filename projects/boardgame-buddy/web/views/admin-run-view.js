@@ -152,7 +152,7 @@
      *
      *  Reached by opening the run page directly. Coming from a panel's Sync now
      *  the run is already started before this could paint, which is why there
-     *  is no longer a paragraph here explaining that you may leave and come
+     *  is no paragraph here explaining that you may leave and come
      *  back: the pill on the way out says it better than a sentence nobody
      *  reads twice. */
     _renderIdle(tool) {

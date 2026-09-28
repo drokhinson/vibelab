@@ -1,11 +1,9 @@
 // views/imports-view.js — every import this account has run.
 //
 // The index of the imports spoke; views/import-detail-view.js is its
-// drill-down. Both used to be one static card in the middle of Settings: a row
-// per batch, a play count, up to four game names and a trash can, and no way at
-// all to see what the thing you were about to delete had written.
+// drill-down.
 //
-// It moved out for the same three reasons the What's new archive did
+// It lives outside Settings for the same three reasons the What's new archive does
 // (views/whats-new-view.js): settings-view.js is already past 1250 lines,
 // Settings' whole vocabulary is the one-line .set-card__row, and a list that
 // grows every time the user imports something wants its own windowed surface
@@ -15,7 +13,7 @@
 // NO TRASH CAN HERE. Deleting a whole import is on the detail screen, which is
 // the one that has actually shown the user its plays — a confirm has to say
 // what will be lost (.claude/rules/web-frontend.md), and "12 plays" on a screen
-// that never showed them is a worse gate than the one this replaces.
+// that never showed them is no gate at all.
 
 (function () {
   class ImportsView extends window.View {

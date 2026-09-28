@@ -5,23 +5,21 @@
 // they are a parameter, not two screens (ui-object-design.md §2), and since the
 // parameter is the only thing that differs they are not two SPOKES either:
 // "Missing images" and "Missing BGG data" are not two errands, they are one
-// errand ("the catalog is short some BGG data") filed under two nouns, and
-// Settings was once carrying four rows to say it.
+// errand ("the catalog is short some BGG data") filed under two nouns.
 //
-// IT WAS FOUR PANELS. Descriptions, BGG stats and publishers each had a queue,
-// an endpoint and a panel, and all three asked BoardGameGeek the same question:
-// one /thing?stats=1 response carries the blurb, the stats, the publisher links
-// AND the year. Three panels over one document is three sweeps of the catalog
-// and a badge that counted a game twice for being short of two fields.
+// Descriptions, BGG stats and publishers share ONE panel because all three ask
+// BoardGameGeek the same question: one /thing?stats=1 response carries the
+// blurb, the stats, the publisher links AND the year. Three panels over one
+// document would be three sweeps of the catalog and a badge that counted a
+// game twice for being short of two fields.
 //
 // Images stays separate because it is genuinely different work — one BGG call
 // plus two downloads and two uploads per game, which is why its pass is a tenth
 // the size (domain/admin-run-tools.js).
 //
-// This is NOT a return to the old combined /admin screen. That one was reached
-// through a row labelled "Chapter reports", so the backfills were unreachable
-// by name and one badge had to stand in for three queues. Here the row says
-// what the screen holds and the badge counts what is behind it.
+// The Settings row says what the screen holds and its badge counts only what
+// is behind it, so the backfills are reachable by name and no badge stands in
+// for another queue.
 //
 // All the behaviour lives in the AdminBackfillPanel widget; this view is the
 // route, the header, and the count refresh.
@@ -91,7 +89,7 @@
       return panel.refreshOne(gameId).then(() => window.AdminReview.refresh());
     }
 
-    /** The bulk button. It no longer runs anything here — it confirms and
+    /** The bulk button. It runs nothing here — it confirms and
      *  hands off to /admin/run/:tool, which owns the drain and the log. The
      *  counts are refreshed on the way back in by onMount, not here: there is
      *  nothing to refresh yet at the moment of the tap. */

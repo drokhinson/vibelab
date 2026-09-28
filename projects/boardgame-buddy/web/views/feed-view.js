@@ -5,7 +5,7 @@
 //   - Mixed cards from /feed: plays (spine) + hot games / suggested buddies
 //     (first page only)
 //   - "Load more" tail when next_cursor is set
-//   Game search lives on the Host/Join landing now (Find a Game that fits).
+//   Game search lives on the Host/Join landing (Find a Game that fits).
 
 (function () {
   // Game ids are UUIDs so this is belt-and-braces, but a selector built from
@@ -77,14 +77,14 @@
       // fetch: /bootstrap carries feed_first_page and publishes it here on
       // every launch (domain/bootstrap.js#_seedStore). On a cold cache that
       // regularly lands BEFORE the /feed call _load fired a moment earlier —
-      // and ignoring it is what left the feed sitting on its loader over data
-      // the app already had, until a tab switch remounted the view and read
+      // and ignoring it would leave the feed sitting on its loader over data
+      // the app already has, until a tab switch remounts the view and reads
       // the now-warm cache. Adopt it instead; _load splices its own answer in
       // when it finally arrives.
       //
       // On a warm cache it lands AFTER the cached paint, carrying what the
       // database says now. Splice it over page one: repainting the cached copy
-      // here threw the fresh rows away and rebuilt every card for nothing.
+      // here would throw the fresh rows away and rebuild every card for nothing.
       this.listen("feed", (page) => {
         if (!page || !Array.isArray(page.cards) || page === this._page) this.render();
         else if (!this._page) this._adoptPage(page);
@@ -144,8 +144,8 @@
      * open play card back over. Mirrors _syncCardStatus in
      * views/game-explorer-view.js.
      *
-     * Only the hot-games rail is patched: the play card carries no status pill
-     * any more, so the feed's only owned/played/wishlist surface is that rail.
+     * Only the hot-games rail is patched: the play card carries no status
+     * pill, so the feed's only owned/played/wishlist surface is that rail.
      *
      * Nothing to patch is not a problem: _statusMap is already updated above,
      * so a game that isn't on screen picks the new status up on the next paint.
@@ -476,8 +476,8 @@
       // to find one card. Rewritten on every render, so it cannot go stale.
       this._grouped = cards;
       // The date is a heading above each day's group, not an eyebrow on every
-      // session — a game night split across two sets of buddies used to print
-      // "Today" twice.
+      // session — so a game night split across two sets of buddies prints
+      // "Today" once.
       //
       // A SEEN-DAYS SET, not a "did the day change from the previous card"
       // check: /feed is cursor-paginated by created_at, not played_at (see
@@ -491,7 +491,7 @@
       // .feed-shell--split). A play card is a photograph and should not
       // stretch to a wider column, so the stream stays one column and the
       // rails are what the extra width goes to. On a phone everything stays
-      // in the one stream, in the server's order, exactly as before. The
+      // in the one stream, in the server's order. The
       // `layout` listener in onMount re-renders across a tier change.
       const split = !!(window.BgbLayout && window.BgbLayout.current() !== "phone");
       const isRail = (c) => c.kind === "hot_games" || c.kind === "suggested_buddies";
@@ -508,8 +508,8 @@
         }
         return heading + withMorphKey(this._renderCard(c), cardMorphKey(c));
       }).join("");
-      // Search pill + avatar moved into the global app header — feed now
-      // jumps straight to the resume chip and the card timeline.
+      // Search pill + avatar live in the global app header — the feed goes
+      // straight to the resume chip and the card timeline.
       const html = `
         <div class="feed-shell${split ? " feed-shell--split" : ""}">
           ${this._error ? `<div class="alert alert-error mb-3">${escapeHtml(this._error)}</div>` : ""}
@@ -529,8 +529,8 @@
       `;
       // Patch, never rebuild, once the feed is on screen. The cached paint is
       // followed a moment later by the database's answer, and an innerHTML
-      // swap there re-decoded every photo and replayed every card's entrance —
-      // the whole feed blinked to show, at most, one changed number. morph()
+      // swap there re-decodes every photo and replays every card's entrance —
+      // the whole feed blinks to show, at most, one changed number. morph()
       // touches only the nodes that differ; cards are keyed by play / session
       // so a new play at the top slots in without sliding every card below it
       // into its neighbour's images. Identical markup (a collection-map
@@ -673,8 +673,8 @@
         // months later reads as a claim about tonight.
         verb: card.is_import ? "imported" : "played",
       });
-      // Every play is a tile of one of two widths now, so the rail needs no
-      // size hint. `isSingle` survives only to centre a lone tile.
+      // Every play is a tile of one of two widths, so the rail needs no
+      // size hint. `isSingle` only centres a lone tile.
       const isSingle = card.plays.length === 1;
       const cards = railOrder(card.plays)
         .map((p) => withMorphKey(window.renderPlayCard(p), cardMorphKey(p)))
@@ -869,10 +869,8 @@
     }
 
     // Shared game-rail component — a heading plus a horizontal strip of game
-    // tiles. It used to back two rails ("Hot this week" and the since-removed
-    // "Time to revisit"), so it stays parameterised by heading and meta line.
-    // The rail itself lives in ui/game-rail.js — extracted the day the
-    // Discover tab became its second consumer, with this markup unchanged.
+    // tiles, parameterised by heading and meta line. The rail itself lives in
+    // ui/game-rail.js, which the Discover tab renders too.
     // Tiles delegate to the canonical Game component per
     // .claude/rules/ui-object-design.md §2.
     /**
@@ -1095,11 +1093,11 @@
   // a game night keys on (played_at, sorted-participant-set), an IMPORT on
   // (played_at, logger).
   //
-  // Before: a strict consecutive walk fragmented sessions whenever the
-  // backend interleaved a non-play card between two same-key plays — a
-  // common case since feed_service.py inserts Suggested-Buddies after the
-  // first play on page 1, splitting any game-night whose plays land in the
-  // top two slots.
+  // Bucketed rather than walked: a strict consecutive walk fragments
+  // sessions whenever the backend interleaves a non-play card between two
+  // same-key plays — a common case since feed_service.py inserts
+  // Suggested-Buddies after the first play on page 1, splitting any
+  // game-night whose plays land in the top two slots.
 
   function groupCards(rawCards) {
     const out = [];
@@ -1186,10 +1184,10 @@
   }
 
   function sessionKey(card) {
-    // An IMPORT is not a game night, and keying it like one is what made a
+    // An IMPORT is not a game night, and keying it like one makes a
     // single afternoon's paste take five screens. A pasted notebook writes a
     // play per line and the rosters differ line to line — Marco and Lachie for
-    // two, Marco alone for the next four — so the roster key gave every
+    // two, Marco alone for the next four — so the roster key would give every
     // permutation its own bordered section, its own header and its own footer,
     // all under one date. Imports key on (day, LOGGER) instead: one person's
     // import of one day is one section, headed "Marco imported 19 games", with
@@ -1258,8 +1256,8 @@
       who = `${tokens[0].html}, ${tokens[1].html}, and ${others} others`;
     }
     // Single-play sessions surface the game name; multi-play sessions
-    // count games. The session header is the only place either appears
-    // now that the card front dropped its "User played Game" line.
+    // count games. The session header is the only place either appears:
+    // the card front carries no "User played Game" line.
     const word = verb || "played";
     const trailing = gameNameForSingle
       ? `${word} ${escapeHtml(gameNameForSingle)}`
@@ -1276,9 +1274,9 @@
     const isViewer = viewer && participant.user_id === viewer.id;
     // Under the viewer's private alias when they set one. This line is the
     // most-read sentence in the app — "Mick D and David R played 500" sits
-    // directly above every polaroid — and it was the last place still naming
-    // people by the account's own display name while the card beneath it used
-    // the alias. Paint-only: nothing here is written back.
+    // directly above every polaroid — and naming people there by the account's
+    // own display name would contradict the card beneath it, which uses the
+    // alias. Paint-only: nothing here is written back.
     const label = isViewer
       ? "You"
       : window.Buddy.nameFor(participant.user_id, participant.display_name) || "Someone";

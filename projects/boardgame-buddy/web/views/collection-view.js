@@ -6,12 +6,9 @@
 // every shelf is a real bookmarkable place and the Profile hub's Wishlist card
 // deep-links straight into one.
 //
-// Wishlist used to be its own spoke at /wishlist, a copy of this file with the
-// toggle removed and status pinned — right down to a byte-identical
-// _renderFilters(). That path survives as a match-only alias in the router's
-// table (domain/view.js) and nothing else is left of it. The native app had
-// already collapsed the two into one screen with a status param
-// (app/src/screens/CollectionScreen.js); this is the web catching up.
+// /wishlist is a match-only alias for this screen in the router's table
+// (domain/view.js). The native app is the same one screen with a status param
+// (app/src/screens/CollectionScreen.js).
 //
 // Typing in the search box widens it to every flat shelf at once — Owned,
 // Wishlist and Played — because "do I have this?" is asked without knowing
@@ -81,9 +78,7 @@
   const FLAT_MODES = [MODE_OWNED, MODE_WISHLIST, MODE_PLAYED];
 
   // One table drives the shelf picker, the header count and the count noun, so
-  // adding a shelf can't leave a row wired to nothing. An earlier hand-written
-  // pair indexed the counts positionally and guarded on `pills.length === 2`,
-  // which silently stopped updating every count the moment a third arrived.
+  // adding a shelf can't leave a row wired to nothing.
   //
   // `selfOnly` is the wishlist's privacy rule, held in one place:
   // bgb_collection_shelf returns an empty shelf to a non-owner by design
@@ -520,7 +515,7 @@
       if (!tree && this.ctl.isColdLoad(this._mode)) {
         // The picker and the bar come up with the spinner rather than a frame
         // after it. They are chrome, not content: emitting only the header here
-        // made both pop in once the first shelf landed, and moved the grid.
+        // would make both pop in once the first shelf lands, and move the grid.
         this.container.innerHTML = `
           ${this._renderHead()}
           <div id="collection-rank-host" class="rank-banner">${this._rankCardSlot()}</div>
@@ -1152,7 +1147,7 @@
      * rather than inside the body, for two reasons: _paintTree() rewrites the
      * body wholesale, which would tear the pinned row down under the user's
      * thumb, and the body has three separate return paths that would each have
-     * had to remember to prepend it (the cold-load one didn't).
+     * to remember to prepend it.
      */
     _renderTreeControls() {
       const on = this._treeShowAll;
@@ -1232,7 +1227,7 @@
     }
 
     _setTreeRows(items, truncated) {
-      // The owned shelf now carries prev_owned rows (migration 069), and this
+      // The owned shelf carries prev_owned rows (migration 069), and this
       // shelf is specifically about the expansions you HAVE — its tally is the
       // same number the status map's expansion_counts reports, which excludes
       // them. So they are dropped here rather than in expansion-tree.js, which
