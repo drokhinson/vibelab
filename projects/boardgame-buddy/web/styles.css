@@ -10588,39 +10588,44 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   display: flex; align-items: stretch; gap: 0.4rem;
   margin-bottom: 1rem;
 }
-/* The pills share the row equally — Log a play, BGG and the rank / Add slot
-   (whose host is display: contents, so its button is a flex item here too) —
-   so the row reads as one evenly spaced set whatever each label says. With
-   the slot empty, the other two split the row. A label longer than its third
-   truncates rather than wrapping the row. */
+/* Log a play and the rank / Add slot (whose host is display: contents, so its
+   button is a flex item here too) are sized to their full labels; BGG takes
+   whatever the row has left between them, never less than its own label. So
+   every pill shows its whole text and the row still spans edge to edge. Only
+   when even that cannot fit does the rank pill, the longest and least central
+   label, give way and truncate. */
 .game-detail__actions .game-detail__action {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: none;
   flex-wrap: nowrap;             /* DaisyUI's .btn wraps; the label must stay beside its icon */
   justify-content: center;
-  padding-inline: 0.6rem;
+  padding-inline: 0.7rem;
+}
+.game-detail__actions .game-detail__link-btn--bgg,
+.game-detail__actions .game-detail__link-btn--disabled {
+  flex: 1 0 auto;
+}
+.game-detail__actions .game-detail__rank-btn {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .game-detail__actions .game-detail__action > svg { flex: none; }
-/* A ranked pill leads with its number, which already says what it is, so it
-   gives its icon's width to the category name ("#1 Strategy"). */
-.game-detail__actions .game-detail__rank-btn.is-ranked > svg { display: none; }
-/* A third of a narrow phone is tight for "Log a play". Sized off the row
-   itself, not the viewport: the row is what the thirds are cut from. */
+.game-detail__actions .game-detail__rank-btn > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Narrow phones: tighter type and padding first, then no icons, before any
+   label has to give. Sized off the row itself, not the viewport. */
 .game-detail__actions { container-type: inline-size; }
 @container (max-width: 345px) {
   .game-detail__actions .game-detail__action {
     font-size: 0.8rem;
     gap: 0.3rem;
-    padding-inline: 0.45rem;
+    padding-inline: 0.5rem;
   }
 }
 @container (max-width: 300px) {
   .game-detail__actions .game-detail__action > svg { display: none; }
-}
-.game-detail__actions .game-detail__action > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 /* Vertical sizing parity: every action button matches the
    btn-secondary "Log a play" height. */
@@ -10633,8 +10638,8 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   border-radius: 0.5rem;
   white-space: nowrap;
 }
-/* A transparent border rather than none: the row shares its width out after
-   borders, so a borderless pill would come out 2px narrower than the others. */
+/* A transparent border rather than none, so BGG stands the same height as
+   its bordered neighbours. */
 .game-detail__link-btn { border: 1px solid transparent; color: #fff8ec; }
 .game-detail__link-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .game-detail__link-btn--bgg {
