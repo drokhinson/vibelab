@@ -29,6 +29,14 @@ class RankEntry(BaseModel):
     score: float
 
 
+class RankPlaced(RankEntry):
+    """PUT /ranks/games/{id}: the game's new entry, plus the viewer's whole
+    ranking after the write — every other game in the category may have moved
+    — so the client can replace its cached copy rather than refetch it."""
+
+    ranks: list[RankEntry]
+
+
 class RanksResponse(BaseModel):
     """Every game the viewer has ranked. Small — tens of rows — so the client
     holds it whole and reads the game page pill and the top-5 chips off it."""

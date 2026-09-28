@@ -255,6 +255,9 @@ def test_place_sends_the_server_decided_category_and_returns_the_new_number(sb):
     })
     assert (entry.position, entry.category_label) == (1, "Family")
     assert {e.game_id: e.position for e in run(R.list_ranks(user=USER)).ranks} == {"new": 1, "x": 2}
+    # The whole ranking after the write rides the echo, so the client replaces
+    # its cache rather than refetching: Azul moved to #2 under the new game.
+    assert {e.game_id: e.position for e in entry.ranks} == {"new": 1, "x": 2}
 
 
 def test_rerank_moves_within_the_original_category(sb):

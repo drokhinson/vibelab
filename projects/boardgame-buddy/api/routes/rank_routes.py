@@ -16,7 +16,7 @@ from . import router
 from .dependencies import CurrentUser, get_current_user
 from .rank_models import (
     RankContext,
-    RankEntry,
+    RankPlaced,
     RankQueueResponse,
     RankRemoveResponse,
     RanksResponse,
@@ -62,7 +62,7 @@ async def rank_context(
 
 @router.put(
     "/ranks/games/{game_id}",
-    response_model=RankEntry,
+    response_model=RankPlaced,
     status_code=200,
     summary="Rank a game, or move it",
 )
@@ -70,7 +70,7 @@ async def rank_game(
     body: RankWrite,
     game_id: str = Path(..., description="Game UUID"),
     user: CurrentUser = Depends(get_current_user),
-) -> RankEntry:
+) -> RankPlaced:
     return await asyncio.to_thread(
         rank_service.place, get_supabase(), user.user_id, game_id, body.tier, body.index
     )

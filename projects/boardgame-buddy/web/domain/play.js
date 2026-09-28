@@ -698,6 +698,9 @@
     // A play moves the taste profile the Discover picks are scored against,
     // and takes its game off "Back on the shelf".
     if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
+    // A play is what makes a game rankable (and deleting its last one what
+    // stops it), so the unranked list has to be asked again.
+    if (window.Rank && window.Rank.invalidateQueue) window.Rank.invalidateQueue();
     // Profile.invalidate() above drops the cached bundle; this is the SAME
     // payload published to the store by views/profile-self-view.js, and the
     // Plays and Collection spokes fall back to it when the cache misses. Left

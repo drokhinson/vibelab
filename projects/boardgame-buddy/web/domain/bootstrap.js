@@ -74,6 +74,7 @@
     }
 
     static async _load() {
+      const startedAt = Date.now();
       const payload = await window.api.get("/bootstrap");
       if (!payload || typeof payload !== "object") {
         throw new Error("bootstrap: empty payload");
@@ -86,7 +87,7 @@
         window.bgbCache.clear();
       }
 
-      Bootstrap._seedCaches(payload);
+      Bootstrap._seedCaches(payload, startedAt);
       Bootstrap._seedStore(payload);
       return payload;
     }
@@ -147,7 +148,7 @@
       await Promise.all(ps);
     }
 
-    static _seedCaches(payload) {
+    static _seedCaches(payload, startedAt = 0) {
       if (!window.bgbCache) return;
       const cache = window.bgbCache;
       const me = payload.current_user;
@@ -269,6 +270,14 @@
       if (pb && pb.status_map && pb.expansion_counts &&
           window.Collection && window.Collection.seedFromBundle) {
         window.Collection.seedFromBundle(pb.status_map, pb.expansion_counts);
+      }
+
+      // Ranking: the Collection chips and banner and the game page pill read
+      // it, so it is a cache hit from the first screen rather than a round
+      // trip after it. Absent from a server that predates it — no-op then.
+      if (window.Rank && window.Rank.seed &&
+          (Array.isArray(payload.ranks) || Array.isArray(payload.rank_queue))) {
+        window.Rank.seed({ ranks: payload.ranks, queue: payload.rank_queue }, { startedAt });
       }
     }
 
