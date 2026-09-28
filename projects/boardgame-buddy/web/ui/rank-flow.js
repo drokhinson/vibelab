@@ -9,7 +9,8 @@
 //
 // The moment the questions find the spot, the result shows — worked out here,
 // not waited for — and the save runs behind it (chained, latest wins). The
-// result carries Undo (back one question) and the caller's Continue.
+// result carries Undo (back one question), the caller's Continue, and Go to
+// rankings (the collection sorted by rank, on this game's category).
 //
 // Lifecycle only — it owns one host element's markup and clicks. Whatever sits
 // around it (the queue's Skip) is the caller's.
@@ -41,14 +42,17 @@
      *   server's entry. onStep fires after every paint, so a host can swap
      *   its own chrome when the result is up. continueLabel + onContinue put
      *   the result screen's primary button ("Next: Azul", "Done").
+     *   onRankings runs before Go to rankings routes, so a host can close
+     *   whatever the flow sits in first.
      */
-    constructor({ host, context, onDone, onStep, tier, continueLabel, onContinue, ready, reload, placeOpts }) {
+    constructor({ host, context, onDone, onStep, tier, continueLabel, onContinue, onRankings, ready, reload, placeOpts }) {
       this.host = host;
       this.ctx = context;
       this.onDone = onDone || (() => {});
       this.onStep = onStep || (() => {});
       this.continueLabel = continueLabel || null;
       this.onContinue = onContinue || null;
+      this.onRankings = onRankings || null;
       this.step = "tier";
       this.tier = null;
       this.list = [];
@@ -115,6 +119,7 @@
       else if (act === "retry") this._save(this._placedIndex);
       else if (act === "reload" && this._reload) { this._await(this._reload()); this.render(); }
       else if (act === "continue" && this.onContinue) this.onContinue();
+      else if (act === "rankings") this._goRankings();
     }
 
     _pickTier(tier) {
@@ -200,6 +205,12 @@
           this._saveState = "error";
           this._paintSaveLine();
         });
+    }
+
+    _goRankings() {
+      const category = this.entry && this.entry.category;
+      if (this.onRankings) this.onRankings();
+      window.router.go("collection", { sort: "rank", type: category || null });
     }
 
     _saveLineHtml() {
@@ -305,7 +316,10 @@
             <button type="button" class="btn btn-primary rank-flow__continue" data-rank-act="continue">
               ${escapeHtml(this.continueLabel || "Continue")}
             </button>` : ""}
-        </div>`;
+        </div>
+        <button type="button" class="btn btn-ghost rank-flow__rankings" data-rank-act="rankings">
+          <i data-icon="list-numbers" class="w-4 h-4"></i> Go to rankings
+        </button>`;
     }
   }
 
