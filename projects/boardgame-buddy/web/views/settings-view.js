@@ -535,21 +535,10 @@
           title: "Missing BGG data",
           sub: "Backfill missing photos, descriptions, stats, publishers, years and image links from BGG.",
         },
-        // The one admin tool that AUTHORS rather than moderates — the other
-        // two work a queue somebody else filled. So it carries no count and
-        // no row in domain/notifications.js: an unpublished draft is not work
-        // waiting, and forAdminTool("releaseNotices") matching no signal
-        // returns zero, which renders no badge. That is the wanted behaviour,
-        // noted because every other row here has one.
-        {
-          route: "admin-release-notices",
-          tool: "releaseNotices",
-          icon: "sparkles",
-          title: "Release notices",
-          sub: "Write the what's-new note everyone sees once on their next visit.",
-        },
-        // Authoring too, so no badge (see above). This is THE switch for the
-        // whole affiliate feature: nothing on any game page shows a retailer
+        // An authoring tool rather than a queue, so it carries no count and no
+        // row in domain/notifications.js: forAdminTool("affiliates") matching
+        // no signal returns zero, which renders no badge. This is THE switch
+        // for the whole affiliate feature: nothing on any game page shows a retailer
         // pill until a partner here holds a credential and is enabled.
         {
           route: "admin-affiliates",
@@ -573,7 +562,7 @@
           sub: "Snapshot BoardGameGeek's hot list and import what the catalog lacks.",
         },
         // The one tool that neither moderates a queue nor authors anything —
-        // it reports. So, like Release notices above, it carries no count and
+        // it reports. So, like Affiliate partners above, it carries no count and
         // no row in domain/notifications.js: usage figures are never "work
         // waiting", and forAdminTool("usage") matching no signal returns zero,
         // which renders no badge. Wanted behaviour, noted because most rows
@@ -928,8 +917,8 @@
      * landed, then what you make of it.
      *
      * Neither row is gated on is_admin: everybody files feedback and everybody
-     * reads the board. Only resolving is an admin action, and that lives on the
-     * screen itself.
+     * reads the board and the archive. The admin actions (resolving feedback,
+     * writing release notices) live on those screens themselves.
      */
     _renderFeedbackCard() {
       const row = (route, icon, title, sub) => `
