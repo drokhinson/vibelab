@@ -73,7 +73,7 @@ def _score(tier: str, index: int, count: int) -> float:
     return math.floor((hi - (hi - lo) * index / (count - 1)) * 10 + 0.5) / 10
 
 
-def _entries(rows: list[dict[str, Any]]) -> list[RankEntry]:
+def _entries(rows: list[dict[str, Any]], games: dict[str, dict[str, Any]] | None = None) -> list[RankEntry]:
     by_cat: dict[str, list[dict[str, Any]]] = {}
     for r in rows:
         by_cat.setdefault(r["category"], []).append(r)
@@ -91,6 +91,7 @@ def _entries(rows: list[dict[str, Any]]) -> list[RankEntry]:
                 game_id=r["game_id"], category=cat, category_label=category_label(cat),
                 tier=RankTier(r["tier"]), position=i + 1,
                 score=_score(r["tier"], idx, tier_sizes[r["tier"]]),
+                game=game_summary_from_row(games[r["game_id"]]) if games and r["game_id"] in games else None,
             ))
     return out
 
@@ -120,7 +121,8 @@ def _category_for(game: dict[str, Any], rows: list[dict[str, Any]]) -> str:
 
 
 def list_ranks(sb: Client, user_id: str) -> list[RankEntry]:
-    return _entries(_rank_rows(sb, user_id))
+    rows = _rank_rows(sb, user_id)
+    return _entries(rows, _game_rows(sb, [r["game_id"] for r in rows]))
 
 
 def context(sb: Client, user_id: str, game_id: str) -> RankContext:

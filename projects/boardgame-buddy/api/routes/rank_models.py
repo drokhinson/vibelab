@@ -27,6 +27,10 @@ class RankEntry(BaseModel):
     tier: RankTier
     position: int
     score: float
+    # The ranked game itself, so a client holding the ranking can build the
+    # "which do you prefer?" list without asking for it (Rank.localContext).
+    # Optional: absent from a row cached before it was added.
+    game: GameSummary | None = None
 
 
 class RankPlaced(RankEntry):

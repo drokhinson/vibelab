@@ -42,7 +42,7 @@
      *   its own chrome when the result is up. continueLabel + onContinue put
      *   the result screen's primary button ("Next: Azul", "Done").
      */
-    constructor({ host, context, onDone, onStep, tier, continueLabel, onContinue }) {
+    constructor({ host, context, onDone, onStep, tier, continueLabel, onContinue, ready, reload }) {
       this.host = host;
       this.ctx = context;
       this.onDone = onDone || (() => {});
@@ -61,8 +61,31 @@
       this._saveState = null;  // null | "pending" | "saved" | "error"
       this._onClick = (e) => this._click(e);
       host.addEventListener("click", this._onClick);
+      // `ready`: the context arrives later (the list to compare against), so
+      // the gut check shows now and a pick made before it lands waits for it.
+      this._reload = reload || null;
+      this._pendingTier = null;
+      this._listError = false;
+      if (ready) this._await(ready);
       if (tier) this._pickTier(tier);
       else this.render();
+    }
+
+    _await(ready) {
+      this._listError = false;
+      ready.then((ctx) => {
+        if (this._destroyed) return;
+        this.ctx = { ...this.ctx, ...ctx, rank: null };
+        if (this._pendingTier) {
+          const t = this._pendingTier;
+          this._pendingTier = null;
+          this._pickTier(t);
+        }
+      }, () => {
+        if (this._destroyed) return;
+        this._listError = true;
+        if (this._pendingTier) this.render();
+      });
     }
 
     destroy() {
@@ -89,10 +112,17 @@
       }
       else if (act === "undo") this._undo();
       else if (act === "retry") this._save(this._placedIndex);
+      else if (act === "reload" && this._reload) { this._await(this._reload()); this.render(); }
       else if (act === "continue" && this.onContinue) this.onContinue();
     }
 
     _pickTier(tier) {
+      if (!Array.isArray(this.ctx.ranked)) {
+        this._pendingTier = tier;
+        this.step = "wait";
+        this.render();
+        return;
+      }
       this.tier = tier;
       this.list = (this.ctx.ranked || []).filter((r) => r.tier === tier);
       this.lo = 0;
@@ -114,6 +144,7 @@
     /** Back one question — from the result too. With no question asked (an
      *  empty tier), back to the gut check. */
     _undo() {
+      this._pendingTier = null;
       if (!this.hist.length) { this.step = "tier"; this.render(); return; }
       [this.lo, this.hi] = this.hist.pop();
       this.step = "cmp";
@@ -202,6 +233,16 @@
                 <span>${t.label}</span>
               </button>`).join("")}
           </div>`;
+      }
+      if (this.step === "wait") {
+        if (this._listError) {
+          return `${ctxLine}
+            <div class="rank-flow__error">
+              <p>Couldn't load your ${escapeHtml(this.ctx.category_label)} games just now.</p>
+              ${this._reload ? `<button type="button" class="btn btn-primary btn-sm" data-rank-act="reload">Try again</button>` : ""}
+            </div>`;
+        }
+        return `${ctxLine}${window.buddyLoader({ size: 48, label: `Loading your ${this.ctx.category_label} games…` })}`;
       }
       if (this.step === "cmp") {
         const mid = Math.floor((this.lo + this.hi) / 2);
