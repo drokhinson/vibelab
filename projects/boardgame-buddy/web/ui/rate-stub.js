@@ -35,11 +35,14 @@
   function paint(host, game) {
     const done = _justRated[key(host, game.id)];
     if (done) {
+      const b = window.Rank.badge(done);
+      const line = b.top
+        ? `${escapeHtml(game.name)} is your <b>${b.num}${escapeHtml(b.rest)}</b> game`
+        : `You rated ${escapeHtml(game.name)} <b>${b.num}${b.rest}</b>`;
       host.innerHTML = `
         <p class="polaroid-popup__rate-done">
           <span class="polaroid-popup__rate-check"><i data-icon="check" class="w-4 h-4"></i></span>
-          <span>${escapeHtml(game.name)} is your
-            <b>#${done.position} ${escapeHtml(done.category_label)}</b> game</span>
+          <span>${line}</span>
         </p>`;
     } else {
       host.innerHTML = `

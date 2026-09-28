@@ -4,7 +4,7 @@
 // decides from BoardGameGeek's family lists — the client never picks one. Three
 // reads, one write (DELETE /ranks/games/{id} exists; nothing here offers it yet):
 //
-//   summary()  every ranked game's "#N Category", held whole (tens of rows). The
+//   summary()  every ranked game's place and score, held whole (tens of rows). The
 //              game page pill and the Collection top-5 chips read it.
 //   queue()    owned or played games with no rank yet, A to Z.
 //   context()  one game's category, current rank, and the list it is ranked
@@ -33,10 +33,35 @@
     document.dispatchEvent(new CustomEvent("ranks-changed", { detail: { gameId } }));
   }
 
+  // A game this high in its category is named by its place; below it, by its
+  // rating out of 10 (the server's `score`), since "#14 Family" says little.
+  const TOP_PLACES = 3;
+
   class Rank {
     static get TIERS() { return TIERS; }
 
-    /** @returns {Promise<Object<string, {game_id:string, category:string, category_label:string, tier:string, position:number}>>} */
+    /**
+     * How a rank reads wherever it is shown.
+     * @param {{position:number, score:number, category_label:string}} entry
+     * @returns {{top:boolean, num:string, rest:string, aria:string}}
+     *   `num` is the emphasised part ("#2" / "7.4"), `rest` follows it
+     *   (" Family" / "/10").
+     */
+    static badge(entry) {
+      if (entry.position <= TOP_PLACES) {
+        return {
+          top: true, num: `#${entry.position}`, rest: ` ${entry.category_label}`,
+          aria: `Number ${entry.position} of your ${entry.category_label} games`,
+        };
+      }
+      const score = Number(entry.score).toFixed(1);
+      return {
+        top: false, num: score, rest: "/10",
+        aria: `Rated ${score} out of 10 among your ${entry.category_label} games`,
+      };
+    }
+
+    /** @returns {Promise<Object<string, {game_id:string, category:string, category_label:string, tier:string, position:number, score:number}>>} */
     static async summary({ force = false } = {}) {
       if (force) window.bgbCache.delete(NS, SUMMARY_KEY);
       const data = await window.bgbCache.swr(NS, SUMMARY_KEY,

@@ -33,11 +33,13 @@ ME = "00000000-0000-0000-0000-00000000000a"
 USER = CurrentUser(user_id=ME, display_name="Me", username="me", is_admin=False)
 
 
-def _game(gid, name, *, family=None, cats=(), weight=None, expansion=False, pubs=None):
+def _game(gid, name, *, family=None, cats=(), weight=None, expansion=False, pubs=None,
+          min_p=None, max_p=None):
     return {
         "id": gid, "bgg_id": None, "name": name, "is_expansion": expansion,
         "play_mode": "competitive", "bgg_family": family, "categories": list(cats),
         "bgg_weight": weight, "publishers": pubs,
+        "min_players": min_p, "max_players": max_p,
     }
 
 
@@ -149,6 +151,12 @@ def run(coro):
            pubs=["Rio Grande Games"]), "strategy"),                          # the tag alone is not enough
     (_game("1", "chess", cats=["Abstract Strategy"], pubs=["(Public Domain)"]), "abstract"),
     (_game("1", "unsynced", cats=["Card Game"], pubs=None), "family"),       # publishers not synced yet
+    # Exactly two players, no more and no fewer.
+    (_game("1", "duel", family="strategygames", min_p=2, max_p=2), "two_player"),  # beats BGG's family
+    (_game("1", "solo too", family="strategygames", min_p=1, max_p=2), "strategy"),
+    (_game("1", "up to 4", min_p=2, max_p=4, weight=3), "strategy"),
+    (_game("1", "gin rummy", cats=["Card Game"], pubs=["(Public Domain)"],
+           min_p=2, max_p=2), "card"),                                       # Card comes first
 ])
 def test_category_rules(game, expected):
     assert rank_category(game) == expected
@@ -166,6 +174,21 @@ def test_position_stacks_tiers_whatever_the_stored_numbers(sb):
     ])
     got = {e.game_id: e.position for e in run(R.list_ranks(user=USER)).ranks}
     assert got == {"b": 1, "d": 2, "a": 3, "c": 4}
+
+
+def test_score_spreads_each_tier_down_its_own_band(sb):
+    games = [_game(g, g, family="familygames") for g in "abcdefg"]
+    sb["sb"] = _SB(games, ranks=[
+        _rank("a", "family", "love", 0), _rank("b", "family", "love", 1), _rank("c", "family", "love", 2),
+        _rank("d", "family", "good", 0), _rank("e", "family", "good", 1),
+        _rank("f", "family", "not", 0),
+    ])
+    got = {e.game_id: e.score for e in run(R.list_ranks(user=USER)).ranks}
+    assert got == {"a": 10.0, "b": 8.5, "c": 7.0, "d": 6.9, "e": 4.0, "f": 3.9}
+
+
+def test_score_bands_never_overlap():
+    assert S._score("love", 99, 100) > S._score("good", 0, 5) > S._score("not", 0, 1)
 
 
 def test_positions_are_per_category(sb):

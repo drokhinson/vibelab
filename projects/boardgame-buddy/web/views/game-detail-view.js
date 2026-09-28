@@ -188,12 +188,13 @@
             <i data-icon="list-numbers" class="w-4 h-4"></i> Rank it
           </button>`;
       }
+      const b = window.Rank.badge(r);
       return `
         <button class="btn game-detail__action game-detail__rank-btn is-ranked" type="button"
                 onclick="window.gameDetailView._openRank(event)"
-                aria-label="Number ${r.position} of your ${escapeAttr(r.category_label)} games">
+                aria-label="${escapeAttr(b.aria)}">
           <i data-icon="list-numbers" class="w-4 h-4"></i>
-          <span class="game-detail__rank-num">#${r.position}</span> ${escapeHtml(r.category_label)}
+          <span><span class="game-detail__rank-num">${b.num}</span>${escapeHtml(b.rest)}</span>
         </button>`;
     }
 

@@ -13,6 +13,12 @@ but BGG credits the traditional ones to the publisher "(Public Domain)", which
 the catalog already holds (migration 040). The pair picks out exactly the games
 played with an ordinary deck, and they group together even where BGG also
 ranks one under Family or Strategy.
+
+Next, a game made for exactly two players (7 Wonders Duel, Patchwork, Jaipur)
+is ranked in 2-player: min and max players both 2. A game that also plays solo
+or with more is not. It too comes before BGG's families, which would otherwise
+scatter these across Strategy, Family and War; a two-player-only classic card
+game (Gin Rummy) stays in Card.
 """
 
 from typing import Any
@@ -28,6 +34,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "children": "Children's",
     "customizable": "Customizable",
     "card": "Card",
+    "two_player": "2-player",
 }
 
 # BGG's <rank type="family" name="…"> values → our category.
@@ -66,10 +73,16 @@ def _is_playing_card_game(game: dict[str, Any]) -> bool:
             and _PUBLIC_DOMAIN in (game.get("publishers") or []))
 
 
+def _is_two_player_only(game: dict[str, Any]) -> bool:
+    return game.get("min_players") == 2 and game.get("max_players") == 2
+
+
 def rank_category(game: dict[str, Any]) -> str:
     """The category key a catalog row is ranked in."""
     if _is_playing_card_game(game):
         return "card"
+    if _is_two_player_only(game):
+        return "two_player"
     family = BGG_FAMILY_TO_CATEGORY.get(game.get("bgg_family") or "")
     if family:
         return family
