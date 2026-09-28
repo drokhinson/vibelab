@@ -411,6 +411,9 @@
    the next searchable sheet — and the next body-level clone or popup — to this
    list by name.
 
+   .rank-sheet (the game page's ranking questions) is a body-level sheet of
+   plain UI, not a photograph, so it joins like the other picker sheets.
+
    .ach-sheet is a body-level sheet too, and joins for the same reason: the
    Achievements spoke is a .bgb-spoke-screen, so a badge's detail sheet has to
    land on the same surface the shelf it was tapped on is drawn against.
@@ -434,6 +437,7 @@
      .game-search-sheet,
      .country-picker-sheet,
      .shelf-sheet,
+     .rank-sheet,
      .shelf-picker-sheet,
      .buddy-qr-sheet,
      .ghost-claim-sheet,
@@ -488,6 +492,7 @@
      .game-search-sheet,
      .country-picker-sheet,
      .shelf-sheet,
+     .rank-sheet,
      .shelf-picker-sheet,
      .buddy-qr-sheet,
      .ghost-claim-sheet,
@@ -21965,4 +21970,295 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 
 @media (prefers-reduced-motion: reduce) {
   .feat-strip__row { animation: none; }
+}
+
+/* ── Rank your games (migration 056) ──────────────────────────────────────
+   Four surfaces, one family of questions:
+     .game-detail__rank-btn   the third pill beside Log a play and BGG (ground)
+     .rank-sheet              the sheet it opens (body-level, re-pointed above)
+     .rank-card               the closable card at the top of Collection
+     .rank-queue              the queue screen (a .bgb-spoke-screen)
+   and .rank-flow, the questions themselves, shared by the sheet and the queue.
+   The flow only ever lands on a re-pointed chrome surface, so it paints from
+   the --polaroid-* alias family and reads right in both themes by construction.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Same box as its two neighbours (.game-detail__action); only the paint
+   differs. Dashed while unranked — an invitation, not a status — and a solid
+   hairline once it carries a number. */
+.game-detail__rank-host { display: contents; }
+.game-detail__rank-btn {
+  border: 1px dashed var(--accent);
+  background: transparent;
+  color: var(--accent);
+}
+.game-detail__rank-btn.is-ranked {
+  border-style: solid;
+  border-color: var(--line-strong);
+  background: var(--bg-2);
+  color: var(--ink);
+}
+.game-detail__rank-num {
+  font-family: var(--font-score);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.game-detail__rank-btn:active { transform: scale(0.97); }
+
+/* The flow. The list is the sheet's only scroller (.bgb-sheet__list); nothing
+   in here sets its own overflow. */
+.rank-sheet__body { gap: 12px; padding: 4px 10px 8px; }
+.rank-sheet__foot { flex: none; padding: 0 2px; }
+.rank-sheet__foot:empty { display: none; }
+.rank-sheet__sub { margin: 0; font-size: 0.85rem; color: var(--polaroid-muted); }
+.rank-sheet__rerank { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; }
+
+.rank-flow__ctx {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 12px;
+  background: var(--polaroid-bg-soft);
+  font-size: 0.9rem;
+  color: var(--polaroid-ink);
+}
+.rank-flow__ctx > i, .rank-flow__ctx > svg { color: var(--accent-ink); flex: none; }
+.rank-flow__ctx b { color: var(--accent-ink); font-weight: 700; }
+
+.rank-flow__tiers { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+/* 56px: these are rows in a list (.claude/rules/mobile-web.md §5). */
+.rank-flow__tier {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 56px; padding: 0 14px;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 14px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  font-size: 1rem; font-weight: 600; text-align: left;
+  cursor: pointer;
+  transition: transform 150ms var(--ease), border-color 150ms;
+}
+.rank-flow__tier:active { transform: scale(0.985); background: var(--polaroid-bg-soft); }
+.rank-flow__tier:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+@media (hover: hover) { .rank-flow__tier:hover { border-color: var(--polaroid-muted); } }
+.rank-flow__tier-dot {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-muted);
+}
+.rank-flow__tier--love .rank-flow__tier-dot { color: var(--accent-ink); }
+.rank-flow__tier--not .rank-flow__tier-dot { color: var(--rust); }
+
+.rank-flow__q { margin: 4px 0 0; font-size: 1.15rem; font-weight: 700; color: var(--polaroid-ink); }
+.rank-flow__vs {
+  display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center;
+}
+/* The two games are photographs, so each sits on paper whatever the theme —
+   the same polaroid the rest of the app draws a game as. */
+.rank-flow__pick {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 7px 7px 9px;
+  border: none; border-radius: 4px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow: 0 8px 18px -8px var(--shadow-c);
+  cursor: pointer;
+  transition: transform 180ms var(--ease);
+}
+.rank-flow__pick:active { transform: scale(0.97); }
+.rank-flow__pick:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
+@media (hover: hover) { .rank-flow__pick:hover { transform: translateY(-2px); } }
+.rank-flow__art {
+  display: block; width: 100%; max-width: 100%; aspect-ratio: 1 / 1;
+  object-fit: cover; border-radius: 2px;
+  background: var(--paper-line);
+}
+.rank-flow__art-empty { display: grid; place-items: center; color: var(--paper-muted); }
+.rank-flow__pick-name {
+  font-family: var(--font-polaroid); font-weight: 700; font-size: 0.9rem; line-height: 1.2;
+  text-align: center;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.rank-flow__or { font-family: var(--font-polaroid); font-style: italic; color: var(--polaroid-muted); }
+.rank-flow__actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.rank-flow__actions .btn { min-height: 44px; color: var(--polaroid-ink); }
+.rank-flow__progress {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 0.78rem; color: var(--polaroid-muted);
+}
+.rank-flow__bar, .rank-queue__bar {
+  display: block; height: 6px; border-radius: 3px; overflow: hidden;
+  background: var(--polaroid-bg-soft);
+}
+.rank-flow__bar > i, .rank-queue__bar > i {
+  display: block; height: 100%; background: var(--accent-fill);
+  transition: width 300ms var(--ease);
+}
+.rank-flow__error { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 0; text-align: center; color: var(--polaroid-muted); }
+
+.rank-flow__badge {
+  margin: 4px 0 0;
+  font-family: var(--font-polaroid); font-weight: 700; font-size: 1.35rem;
+  color: var(--polaroid-ink);
+}
+.rank-flow__num { font-family: var(--font-score); color: var(--accent-ink); }
+.rank-flow__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rank-flow__row {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 48px; padding: 4px 8px;
+  border-radius: 10px;
+  color: var(--polaroid-ink);
+}
+.rank-flow__row.is-me { background: var(--polaroid-bg-soft); outline: 1px solid var(--accent-ink); outline-offset: -1px; font-weight: 600; }
+.rank-flow__row-n {
+  flex: none; width: 22px; text-align: right;
+  font-family: var(--font-score); font-size: 0.78rem; color: var(--polaroid-muted);
+}
+.rank-flow__thumb {
+  flex: none; width: 34px; height: 34px; border-radius: 4px; object-fit: cover;
+  background: var(--polaroid-bg-soft);
+}
+.rank-flow__row-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Collection: the closable card. Comes back on every visit (see
+   collection-view.js), so it is kept to one line of copy and one action. */
+.rank-card {
+  position: relative;
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 0 12px;
+  padding: 12px 44px 12px 12px;
+  border: 1px solid var(--accent-ink);
+  border-radius: 14px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  animation: fadeUp 240ms ease both;
+}
+.rank-card__ring {
+  flex: none; width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: conic-gradient(var(--accent-fill) calc(var(--pct) * 1%), var(--polaroid-bg-soft) 0);
+}
+.rank-card__ring > span {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--polaroid-bg);
+  font-family: var(--font-score); font-size: 0.68rem; font-weight: 700;
+  color: var(--accent-ink);
+}
+.rank-card__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.rank-card__title { font-weight: 700; }
+.rank-card__sub { font-size: 0.8rem; color: var(--polaroid-muted); }
+.rank-card__go { flex: none; min-height: 40px; }
+.rank-card__close {
+  position: absolute; top: 6px; right: 6px;
+  width: 32px; height: 32px; border: none; border-radius: 50%;
+  display: grid; place-items: center;
+  background: transparent; color: var(--polaroid-muted); cursor: pointer;
+}
+/* 44×44 hit area around a 32px mark (.claude/rules/mobile-web.md §5). */
+.rank-card__close::before { content: ""; position: absolute; inset: -6px; }
+.rank-card__close:active { background: var(--polaroid-bg-soft); }
+
+/* A top-5 game's tile. LITERAL colours for the same reason as the
+   .collection-tile__stamp block: the ground is box art, which does not change
+   with the theme, so a token plate would go pale in light over pale covers.
+   Ink on plate is ~12:1 in both themes. Top-left, clear of the status tag. */
+.collection-tile__rank {
+  position: absolute; top: 4px; left: 4px; z-index: 2;
+  pointer-events: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: oklch(0.21 0.014 55 / 0.88);
+  color: oklch(0.96 0.006 85);
+  font-size: 0.62rem; font-weight: 700; line-height: 1.5;
+  white-space: nowrap; max-width: calc(100% - 44px); overflow: hidden; text-overflow: ellipsis;
+}
+
+/* The wrap-up card's "Rate {game}" stub (ui/rate-stub.js). The polaroid above
+   is tonight's play; this strip is the GAME, so it is torn off along a
+   perforation onto a different paper stock. It lives inside the card (outside
+   taps dismiss the card) and bleeds to its edges through the card's padding
+   (14px 14px 22px). Paper surface, so --polaroid-* throughout. */
+.polaroid-popup__rate {
+  margin: 16px -14px -22px;
+  padding: 14px 14px 14px;
+  border-top: 2px dashed var(--polaroid-line);
+  border-radius: 0 0 8px 8px;
+  background: var(--polaroid-bg-soft);
+  text-align: left;
+  animation: fadeUp 240ms ease both;
+}
+.polaroid-popup__rate-title {
+  margin: 0 0 10px;
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--polaroid-ink);
+}
+.polaroid-popup__rate-tiers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.polaroid-popup__rate-tier {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 64px; padding: 8px 4px;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 10px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  font-size: 12px; font-weight: 600; line-height: 1.15; text-align: center;
+  cursor: pointer;
+  transition: transform 150ms var(--ease);
+}
+.polaroid-popup__rate-tier:active { transform: scale(0.96); }
+.polaroid-popup__rate-tier:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.polaroid-popup__rate-dot {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-muted);
+}
+.polaroid-popup__rate-tier--love .polaroid-popup__rate-dot { color: var(--accent-ink); }
+.polaroid-popup__rate-tier--not .polaroid-popup__rate-dot { color: var(--rust); }
+.polaroid-popup__rate-done {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0;
+  font-size: 14px; line-height: 1.3;
+  color: var(--polaroid-ink);
+}
+.polaroid-popup__rate-check {
+  flex: none; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent-fill); color: var(--on-accent);
+}
+@media (prefers-reduced-motion: reduce) { .polaroid-popup__rate { animation: none; } }
+
+/* The queue screen. */
+.rank-queue { display: flex; flex-direction: column; gap: 14px; }
+.rank-queue__bar { margin: -4px 0 12px; }
+.rank-queue__stop { margin-left: auto; min-height: 44px; }
+.rank-queue__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rank-queue__row {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 56px; padding: 4px 8px;
+  border-radius: 10px;
+  color: var(--polaroid-ink);
+  animation: fadeUp 240ms ease both;
+}
+.rank-queue__row-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-queue__tag {
+  flex: none; font-size: 0.72rem; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--polaroid-line); color: var(--polaroid-muted);
+}
+.rank-queue__cta { width: 100%; min-height: 52px; }
+.rank-queue__game { display: flex; align-items: center; gap: 14px; }
+.rank-queue__art {
+  flex: none; width: 88px; height: 88px; border-radius: 4px; object-fit: cover;
+  border: 6px solid var(--paper); box-shadow: 0 8px 18px -8px var(--shadow-c);
+}
+.rank-queue__name { margin: 0; font-size: 1.35rem; font-weight: 800; line-height: 1.15; color: var(--polaroid-ink); }
+.rank-queue__flow { display: flex; flex-direction: column; gap: 12px; }
+.rank-queue__done { margin: 8px 0 0; font-size: 1rem; color: var(--polaroid-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rank-card, .rank-queue__row { animation: none; }
 }

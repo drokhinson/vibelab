@@ -34,6 +34,12 @@
         if (this._game && gameId === this._game.id) this._status = status;
         this._paintStatuses();
       });
+      // The rank pill reads the viewer's whole ranking (tens of rows), not a
+      // bundle field: a rank written in the sheet or the queue has to show here
+      // without waiting out the bundle's 30-minute cache.
+      this._ranks = null;
+      this.listenDom("ranks-changed", () => this._loadRanks());
+      this._loadRanks();
       this.listenDom("chapters-changed", (e) => {
         // The widget may not exist yet during the initial _load, and a
         // chapter add could be for the base game OR for an active
@@ -157,6 +163,53 @@
       });
     }
 
+    async _loadRanks() {
+      try {
+        const ranks = await window.Rank.summary();
+        if (!this._mounted) return;
+        this._ranks = ranks;
+        this._paintRank();
+      } catch (_) {
+        // No pill is the right rendering for "could not ask".
+      }
+    }
+
+    // Beside Log a play and BGG. Nothing until the ranking has loaded, so an
+    // already-ranked game never flashes "Rank it" first. Expansions are ranked
+    // with their base game, so they get no pill.
+    _renderRankPill() {
+      const g = this._game;
+      if (!g || g.is_expansion || !this._ranks) return "";
+      const r = this._ranks[g.id];
+      if (!r) {
+        return `
+          <button class="btn game-detail__action game-detail__rank-btn" type="button"
+                  onclick="window.gameDetailView._openRank(event)">
+            <i data-icon="list-numbers" class="w-4 h-4"></i> Rank it
+          </button>`;
+      }
+      return `
+        <button class="btn game-detail__action game-detail__rank-btn is-ranked" type="button"
+                onclick="window.gameDetailView._openRank(event)"
+                aria-label="Number ${r.position} of your ${escapeAttr(r.category_label)} games">
+          <i data-icon="list-numbers" class="w-4 h-4"></i>
+          <span class="game-detail__rank-num">#${r.position}</span> ${escapeHtml(r.category_label)}
+        </button>`;
+    }
+
+    _paintRank() {
+      const host = this.container && this.container.querySelector("#game-detail-rank");
+      if (!host) return;
+      host.innerHTML = this._renderRankPill();
+      this.refreshIcons(host);
+    }
+
+    _openRank(ev) {
+      const g = this._game;
+      if (!g) return;
+      window.RankSheet.open({ id: g.id, name: g.name }, { returnFocus: ev && ev.currentTarget });
+    }
+
     _paintBuy() {
       const host = this.container && this.container.querySelector("#game-detail-buy");
       if (!host) return;
@@ -222,6 +275,7 @@
                                 title="No BGG link available">
                 <i data-icon="external-link" class="w-4 h-4"></i> BGG
               </button>`}
+              <span id="game-detail-rank" class="game-detail__rank-host">${this._renderRankPill()}</span>
               <!-- No Rulebook button here since migration 052. The link is a
                    reference-guide chapter now, and the guide is mounted on this
                    same screen a few rows down — where it also says "No rulebook

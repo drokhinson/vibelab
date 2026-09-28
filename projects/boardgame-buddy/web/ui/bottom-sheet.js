@@ -139,8 +139,17 @@
         // BESIDE the panel would be a sibling of it, and an `=== root` test
         // leaves any such strip of apparent background inert
         // (.claude/rules/overlays.md §8a, where exactly that shipped).
+        //
+        // Asked of the dispatch path first, not only of `panel.contains(t)`: a
+        // sheet that repaints its own body from a click handler deeper down
+        // (the ranking questions do, on every answer) has already detached the
+        // tapped button by the time the click bubbles here, and a containment
+        // test then reads the press that caused the repaint as a tap outside.
+        // composedPath() is fixed at dispatch, before any handler ran (§8a).
         const panel = root.firstElementChild;
-        if (t === root || (panel && !panel.contains(t))) { this.close(); return; }
+        const path = typeof e.composedPath === "function" ? e.composedPath() : null;
+        const inPanel = !!panel && ((path && path.includes(panel)) || panel.contains(t));
+        if (t === root || (panel && !inPanel)) { this.close(); return; }
         if (t.closest('[data-action="close"]')) { this.close(); return; }
         if (opts.onClick) opts.onClick(e);
       });

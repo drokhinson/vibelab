@@ -403,7 +403,7 @@ async def fetch_owner_counts(bgg_ids: list[int]) -> dict[int, int]:
 # import path, the per-game refresh and the batched backfill, so the three
 # cannot disagree about which <rank> is "the" rank.
 
-_STATS_COLUMNS = ("bgg_rating", "bgg_rank", "bgg_weight", "bgg_owned_count")
+_STATS_COLUMNS = ("bgg_rating", "bgg_rank", "bgg_weight", "bgg_owned_count", "bgg_family")
 
 
 def _stat_float(el: ET.Element | None) -> float | None:
@@ -427,21 +427,42 @@ def _stat_int(el: ET.Element | None) -> int | None:
         return None
 
 
+def _best_family(ranks: list[ET.Element]) -> str | None:
+    """The BGG family list a game ranks highest in, e.g. "familygames".
+
+    A game can sit in several (Wingspan is in both strategygames and
+    familygames); the one with the smallest rank number is where BGG's voters
+    place it most firmly. A family the game is listed in but "Not Ranked"
+    within still counts, behind every ranked one.
+    """
+    best: tuple[int, str] | None = None
+    for r in ranks:
+        if r.get("type") != "family" or not r.get("name"):
+            continue
+        value = _stat_int(r)
+        key = (value if value is not None else 10**9, r.get("name"))
+        if best is None or key[0] < best[0]:
+            best = key
+    return best[1] if best else None
+
+
 def thing_item_stats(item: ET.Element) -> dict:
-    """Pull the four stats columns off one /thing <item> (stats=1).
+    """Pull the stats columns off one /thing <item> (stats=1).
 
     rating = <bayesaverage> (the "geek rating", which BGG ranks by), not
     <average>: the raw mean is dominated by ten-vote games. rank = the
     <rank type="subtype" name="boardgame"> row, never a family rank
-    (strategygames, familygames, …) — those have their own numbering. A
-    missing <statistics> block yields four Nones, which the backfill still
-    stamps as synced so the row leaves its queue.
+    (strategygames, familygames, …) — those have their own numbering. The
+    family ranks feed bgg_family instead (migration 056), which is what game
+    ranking groups by. A missing <statistics> block yields all Nones, which the
+    backfill still stamps as synced so the row leaves its queue.
     """
     ratings = item.find("statistics/ratings")
     if ratings is None:
         return {c: None for c in _STATS_COLUMNS}
     rank_el = None
-    for r in ratings.findall("ranks/rank"):
+    all_ranks = ratings.findall("ranks/rank")
+    for r in all_ranks:
         if r.get("name") == "boardgame":
             rank_el = r
             break
@@ -453,6 +474,7 @@ def thing_item_stats(item: ET.Element) -> dict:
             _stat_float(ratings.find("averageweight"))
         ),
         "bgg_owned_count": _stat_int(ratings.find("owned")),
+        "bgg_family": _best_family(all_ranks),
     }
 
 

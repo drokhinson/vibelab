@@ -134,6 +134,9 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "declined_twice": (409, "They've already declined that link"),
     "ghost_gone": (410, "That ghost is no longer on their plays"),
     "not_visible": (403, "You can't see that play"),
+    # Game ranking (migration 056). Unreachable through PUT /ranks/games/{id} —
+    # RankWrite's enum rejects a bad tier first — so this is for a direct caller.
+    "invalid_tier": (400, "tier must be love, good or not"),
     # `invalid_transition` is deliberately absent: its detail is dynamic
     # (from/to), so update_phase composes and raises that one itself.
 }

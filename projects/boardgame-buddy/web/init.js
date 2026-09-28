@@ -25,6 +25,7 @@
   window.profileSelfView = new window.ProfileSelfView();
   window.profileOtherView = new window.ProfileOtherView();
   window.collectionView  = new window.CollectionView();
+  window.rankQueueView   = new window.RankQueueView();
   window.playsView       = new window.PlaysView();
   window.sessionViewerView = new window.SessionViewerView();
   window.buddiesView     = new window.BuddiesView();
@@ -78,6 +79,7 @@
   window.router.register("profile-self",  window.profileSelfView);
   window.router.register("profile-other", window.profileOtherView);
   window.router.register("collection",    window.collectionView);
+  window.router.register("rank-queue",    window.rankQueueView);
   window.router.register("plays",         window.playsView);
   window.router.register("session-viewer", window.sessionViewerView);
   window.router.register("buddies",       window.buddiesView);

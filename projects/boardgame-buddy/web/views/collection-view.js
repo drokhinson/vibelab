@@ -141,6 +141,11 @@
       this._targetUserId = null;
       this._targetProfile = null;
       this._lastSig = null;
+      // Rank your games (migration 056). The card comes back on every visit —
+      // this runs per mount — and closing it lasts until the viewer leaves.
+      this._ranks = null;
+      this._rankQueue = null;
+      this._rankCardClosed = false;
       this._resetTreeState();
       if (this.ctl) this.ctl.reset();
     }
@@ -278,6 +283,8 @@
         }
         this.render();
       });
+      this.listenDom("ranks-changed", () => this._loadRanks());
+      this._loadRanks();
       await this._initFromParams();
     }
 
@@ -512,6 +519,7 @@
         // made both pop in once the first shelf landed, and moved the grid.
         this.container.innerHTML = `
           ${this._renderHead()}
+          <div id="collection-rank-host">${this._renderRankCard()}</div>
           ${this._renderShelfPicker()}
           ${this._renderControls(tree)}
           <div class="profile-loading">
@@ -530,6 +538,7 @@
       // for an expansion, so the tree gets the search field without it.
       this.container.innerHTML = `
         ${this._renderHead()}
+        <div id="collection-rank-host">${this._renderRankCard()}</div>
         ${this._renderShelfPicker()}
         ${this._renderControls(tree)}
         <div id="collection-tree-controls-host">${tree ? this._renderTreeControls() : ""}</div>
@@ -941,6 +950,13 @@
       // browsed. On someone else's Collection their sold games are the ones
       // that show dimmed, which is right.
       const parted = item.status === "prev_owned";
+      // Your own shelf only, and only your top 5 in the game's category: a
+      // chip on every ranked tile would be noise, and on someone else's shelf
+      // it would be YOUR rank on THEIR game.
+      const rank = !other && this._ranks && this._ranks[g.id];
+      const rankChip = rank && rank.position <= 5
+        ? `<span class="collection-tile__rank">#${rank.position} ${escapeHtml(rank.category_label)}</span>`
+        : "";
       const stamp = parted
         ? `<div class="collection-tile__stamp" aria-hidden="true">Prev. owned</div>`
         : "";
@@ -951,11 +967,61 @@
             ${gameArtImg(g, "card")
               || `<div class="collection-tile__placeholder"><i data-icon="dice-6"></i></div>`}
             ${stamp}
+            ${rankChip}
             ${window.renderExpansionBadge(expCount, { context: "total" })}
           </div>
           <div class="collection-tile__name">${escapeHtml(g.name || "Unknown")}</div>
         </div>
       `;
+    }
+
+    // ── Rank your games ───────────────────────────────────────────────────────
+
+    async _loadRanks() {
+      if (this._isOther()) return;
+      try {
+        const [ranks, queue] = await Promise.all([window.Rank.summary(), window.Rank.queue()]);
+        if (!this._mounted || this._isOther()) return;
+        this._ranks = ranks;
+        this._rankQueue = queue;
+        this._paintRankCard();
+        this._paintList();
+      } catch (_) {
+        // No card and no chips is the right rendering for "could not ask".
+      }
+    }
+
+    _renderRankCard() {
+      const left = this._rankQueue ? this._rankQueue.length : 0;
+      if (this._isOther() || !left || this._rankCardClosed) return "";
+      const ranked = Object.keys(this._ranks || {}).length;
+      const pct = Math.round((ranked / (ranked + left)) * 100);
+      return `
+        <section class="rank-card" aria-label="Rank your games">
+          <span class="rank-card__ring" style="--pct:${pct}" aria-hidden="true"><span>${pct}%</span></span>
+          <span class="rank-card__body">
+            <span class="rank-card__title">Rank your games</span>
+            <span class="rank-card__sub">${left} unranked</span>
+          </span>
+          <button class="btn btn-primary btn-sm rank-card__go" type="button"
+                  onclick="window.router.go('rank-queue')">Start</button>
+          <button class="rank-card__close" type="button" aria-label="Close"
+                  onclick="window.collectionView._closeRankCard()">
+            <i data-icon="x" class="w-4 h-4"></i>
+          </button>
+        </section>`;
+    }
+
+    _paintRankCard() {
+      const host = this.container && this.container.querySelector("#collection-rank-host");
+      if (!host) return;
+      host.innerHTML = this._renderRankCard();
+      this.refreshIcons(host);
+    }
+
+    _closeRankCard() {
+      this._rankCardClosed = true;
+      this._paintRankCard();
     }
 
     // ── Expansions shelf ──────────────────────────────────────────────────────

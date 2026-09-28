@@ -291,6 +291,7 @@
     <main data-view="profile-self" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="profile-other" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="collection" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
+    <main data-view="rank-queue" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="plays" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <!-- No container padding: the cascade screens inside own their own
          gutters, exactly like play-flow above. The old px-4 py-4 doubled up
@@ -447,6 +448,7 @@
   <script src="domain/shelf-filter.js"></script>
   <script src="domain/shelf-controller.js"></script>
   <script src="domain/collection.js"></script>
+  <script src="domain/rank.js"></script>
   <script src="domain/expansion-tree.js"></script>
   <script src="domain/geo-data.js"></script>
   <script src="domain/geo.js"></script>
@@ -518,6 +520,8 @@
   <script src="ui/bottom-sheet.js"></script>
   <script src="ui/modal-shell.js"></script>
   <script src="ui/status-tag.js"></script>
+  <script src="ui/rank-flow.js"></script>
+  <script src="ui/rate-stub.js"></script>
   <script src="ui/markdown.js"></script>
   <script src="ui/release-notice-body.js"></script>
   <script src="ui/buy-links.js"></script>
@@ -596,6 +600,7 @@
   <script src="widgets/game-picker-sheet.js"></script>
   <script src="widgets/shelf-picker-sheet.js"></script>
   <script src="widgets/shelf-of-shame-sheet.js"></script>
+  <script src="widgets/rank-sheet.js"></script>
   <script src="widgets/feedback-compose-sheet.js"></script>
   <script src="widgets/bgg-sync-screens.js"></script>
   <script src="widgets/player-picker-sheet.js"></script>
@@ -654,6 +659,7 @@
   <script src="views/profile-self-view.js"></script>
   <script src="views/profile-other-view.js"></script>
   <script src="views/collection-view.js"></script>
+  <script src="views/rank-queue-view.js"></script>
   <script src="views/plays-view.js"></script>
   <script src="views/session-viewer-view.js"></script>
   <script src="views/buddies-view.js"></script>
