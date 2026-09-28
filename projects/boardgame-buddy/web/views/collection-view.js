@@ -92,11 +92,22 @@
     { id: MODE_EXPANSIONS, label: "Expansions", noun: "expansion", icon: "puzzle" },
   ];
 
-  // The A–Z / ranking toggle beside the picker. Ranking lists every game the
-  // viewer has ranked, whatever shelf it is on, so while it is on the picker
-  // chooses a game category (domain/rank-shelf.js) instead of a shelf.
+  // The sort button beside the picker, and the dial it unfolds into
+  // (ui/sort-dial.js). Alphabetical is the shelves as they are. Ranking lists
+  // every game the viewer has ranked, whatever shelf it is on, so the picker
+  // chooses a game category (domain/rank-shelf.js) instead of a shelf. Most
+  // played lists every game with a play across the three flat shelves
+  // (domain/played-shelf.js), so there is nothing for the picker to choose.
+  // All three are orderings of data already in memory: switching fetches
+  // nothing.
   const SORT_AZ = "az";
   const SORT_RANK = "rank";
+  const SORT_PLAYED = "played";
+  const SORTS = [
+    { id: SORT_AZ, label: "Alphabetical", icon: `<span class="sort-toggle__az" aria-hidden="true">A–Z</span>` },
+    { id: SORT_RANK, label: "Ranking", icon: `<i data-icon="list-numbers" class="w-5 h-5"></i>` },
+    { id: SORT_PLAYED, label: "Most played", icon: `<i data-icon="flame" class="w-5 h-5"></i>` },
+  ];
 
   const PLAYTIME_BUCKETS = window.ShelfFilter.PLAYTIME_BUCKETS;
   const isActiveBucket = window.ShelfFilter.isActiveBucket;
@@ -194,12 +205,22 @@
      * clearing the box is the whole way back to the picked shelf.
      */
     _isGlobalSearch() {
-      return !!this.ctl.query && this._mode !== MODE_EXPANSIONS && !this._isRankView();
+      return !!this.ctl.query && this._mode !== MODE_EXPANSIONS && !this._isAltSort();
     }
 
     /** Ranking view: the viewer's own ranks, so never on someone else's shelf. */
     _isRankView() {
       return this._sort === SORT_RANK && !this._isOther();
+    }
+
+    /** Most played: the viewer's own plays, so never on someone else's shelf. */
+    _isPlayedView() {
+      return this._sort === SORT_PLAYED && !this._isOther();
+    }
+
+    /** Any order but Alphabetical: no shelf filters, a local name search. */
+    _isAltSort() {
+      return this._isRankView() || this._isPlayedView();
     }
 
     /** The flat shelves this viewer may search — no wishlist on someone else's. */
@@ -235,7 +256,7 @@
      *  when the list paints, so an unknown one reads as "All Game Types". */
     _sortFromParams() {
       const p = this.params || {};
-      this._sort = p.sort === SORT_RANK ? SORT_RANK : SORT_AZ;
+      this._sort = SORTS.some((o) => o.id === p.sort) ? p.sort : SORT_AZ;
       this._rankCat = p.type || window.RankShelf.ALL;
     }
 
@@ -428,6 +449,8 @@
         this._loadActiveShelf(),
         this._refreshMaps(),
       ]);
+      // After the shelf on screen, so the warm-up never competes with it.
+      if (this._mounted) this._warmSortData();
     }
 
     /**
@@ -506,12 +529,12 @@
         this._isOther() ? "other" : "self",
         (this._targetProfile && this._targetProfile.display_name) || "",
         this._mode === MODE_EXPANSIONS ? treeState
-          : this._isRankView() ? "ranks"
+          : this._isAltSort() ? this._sort
           : (this.ctl.isColdLoad(this._mode) ? "cold" : "warm"),
         // Starting or clearing a search swaps the picker for its inert
         // "All shelves" twin — same slot, so the field under the thumb holds.
         this._isGlobalSearch() ? "all" : "",
-        this._isRankView() ? SORT_RANK : SORT_AZ,
+        this._isAltSort() ? this._sort : SORT_AZ,
       ].join("|");
     }
 
@@ -540,7 +563,7 @@
 
       const tree = this._mode === MODE_EXPANSIONS;
 
-      if (!tree && !this._isRankView() && this.ctl.isColdLoad(this._mode)) {
+      if (!tree && !this._isAltSort() && this.ctl.isColdLoad(this._mode)) {
         // The picker and the bar come up with the spinner rather than a frame
         // after it. They are chrome, not content: emitting only the header here
         // would make both pop in once the first shelf lands, and move the grid.
@@ -568,8 +591,8 @@
         <div id="collection-rank-host" class="rank-banner">${this._rankCardSlot()}</div>
         ${this._renderShelfPicker()}
         ${this._renderControls(tree)}
-        <div id="collection-tree-controls-host">${tree && !this._isRankView() ? this._renderTreeControls() : ""}</div>
-        <div id="collection-filters-host">${!tree && !this._isRankView() && this._filtersOpen ? this._renderFilters() : ""}</div>
+        <div id="collection-tree-controls-host">${tree && !this._isAltSort() ? this._renderTreeControls() : ""}</div>
+        <div id="collection-filters-host">${!tree && !this._isAltSort() && this._filtersOpen ? this._renderFilters() : ""}</div>
         <div id="collection-grid-host">${this._renderBody()}</div>
         <div id="collection-more-host">${this._renderMore()}</div>
       `;
@@ -642,10 +665,8 @@
      * what the shelf is worth.
      */
     _countLabel(mode, { rows = false } = {}) {
-      if (this._isRankView() && mode === this._mode) {
-        const n = this._rankList().length;
-        return `${n} ranked`;
-      }
+      if (this._isRankView() && mode === this._mode) return `${this._rankList().length} ranked`;
+      if (this._isPlayedView() && mode === this._mode) return `${this._playedList().length} played`;
       if (this._isGlobalSearch() && mode === this._mode) {
         // A result count, not a shelf's worth: every matching tile counts,
         // prev-owned ones included, so the header is the sum of the section
@@ -678,7 +699,7 @@
       // _filtersOpen survives a shelf switch, so without the tree check a panel
       // left open on Owned would reappear on Expansions — where the button that
       // closes it does not exist. Matches the guard in _renderShell.
-      const open = this._filtersOpen && this._mode !== MODE_EXPANSIONS && !this._isRankView();
+      const open = this._filtersOpen && this._mode !== MODE_EXPANSIONS && !this._isAltSort();
       const host = this.container.querySelector("#collection-filters-host");
       if (host) {
         host.innerHTML = open ? this._renderFilters() : "";
@@ -748,7 +769,7 @@
      * @param {boolean} tree True on Expansions, where the button is dropped.
      */
     _renderControls(tree) {
-      const noFilters = tree || this._isRankView();
+      const noFilters = tree || this._isAltSort();
       const activeFilters = this.ctl.activeFilterCount();
       return `
         <div class="profile-panel__controls">
@@ -771,8 +792,9 @@
 
     /** Names the shelf being searched, so the field can't read as global. */
     _searchPlaceholder() {
-      if (this._mode === MODE_EXPANSIONS && !this._isRankView()) return "Search expansions by name";
+      if (this._mode === MODE_EXPANSIONS && !this._isAltSort()) return "Search expansions by name";
       if (this._isRankView()) return "Search your ranked games by name";
+      if (this._isPlayedView()) return "Search your played games by name";
       if (this._isOther()) {
         const who = this._targetProfile && this._targetProfile.display_name;
         // The name arrives on a later frame than the first paint, so the
@@ -792,31 +814,45 @@
       return `
         <div class="collection-picker-row">
           ${this._renderPickerButton()}
-          ${this._isOther() ? "" : this._renderSortToggle()}
+          ${this._isOther() ? "" : this._renderSortButton()}
         </div>
       `;
     }
 
-    /**
-     * One button that flips in place between A–Z (the shelves as they are) and
-     * the viewer's ranking. It shows the order on screen, as the filter button
-     * shows its filters, and carries the filter button's size and style.
-     */
-    _renderSortToggle() {
-      const rank = this._isRankView();
+    /** The active order's mark; a tap unfolds the dial of all three. */
+    _renderSortButton() {
+      const cur = SORTS.find((o) => o.id === (this._isAltSort() ? this._sort : SORT_AZ)) || SORTS[0];
       return `
         <button type="button" id="collection-sort-btn" class="btn btn-ghost sort-toggle"
-                aria-pressed="${rank ? "true" : "false"}"
-                aria-label="${rank ? "Showing your ranking — switch to A to Z" : "Showing A to Z — switch to your ranking"}"
-                title="${rank ? "By ranking" : "A to Z"}"
-                onclick="window.collectionView._setSort('${rank ? SORT_AZ : SORT_RANK}')">
-          ${rank
-            ? `<i data-icon="list-numbers" class="w-4 h-4"></i>`
-            : `<span class="sort-toggle__az" aria-hidden="true">A–Z</span>`}
+                aria-haspopup="menu" aria-expanded="false"
+                aria-label="Order: ${escapeAttr(cur.label)}. Change order" title="${escapeAttr(cur.label)}"
+                onclick="window.collectionView._openSortDial(this)">
+          ${cur.icon}
         </button>`;
     }
 
+    _openSortDial(anchor) {
+      window.BgbSortDial.open({
+        anchor,
+        options: SORTS.map((o) => ({ id: o.id, label: o.label, iconHtml: o.icon })),
+        selected: this._isAltSort() ? this._sort : SORT_AZ,
+        label: "Order",
+        onPick: (id) => this._setSort(id),
+      });
+    }
+
     _renderPickerButton() {
+      if (this._isPlayedView()) {
+        // Every shelf at once, so nothing to choose: a disabled <button>,
+        // like the cross-shelf search's, so the slot keeps its metrics.
+        return `
+          <button type="button" class="shelf-picker is-all" id="collection-shelf-picker" disabled
+                  aria-label="Showing every game you've played">
+            <i data-icon="flame" class="w-5 h-5 shelf-picker__icon"></i>
+            <span class="shelf-picker__label font-display">All played games</span>
+          </button>
+        `;
+      }
       if (this._isRankView()) {
         const label = window.RankShelf.label(this._ranks, this._rankCatShown());
         return `
@@ -920,6 +956,7 @@
     _renderBody() {
       const mode = this._mode;
       if (this._isRankView()) return this._renderRankBody();
+      if (this._isPlayedView()) return this._renderPlayedBody();
       if (mode === MODE_EXPANSIONS) return this._renderTreeBody();
       if (this._isGlobalSearch()) return this._renderSearchBody();
       if (this.ctl.error[mode]) {
@@ -998,8 +1035,11 @@
       return `<div class="profile-empty">No matches on any shelf.</div>`;
     }
 
-    /** @param {{rankEntry?: Object}} [opts] rankEntry: chip every tile (ranking view). */
-    _renderTile(item, { rankEntry = null } = {}) {
+    /**
+     * @param {{rankEntry?: Object, plays?: boolean}} [opts] rankEntry: chip every
+     *   tile with its rank (ranking view); plays: chip it with its play count.
+     */
+    _renderTile(item, { rankEntry = null, plays = false } = {}) {
       const g = item.game || {};
       // On someone else's shelf `item.status` is THEIR relationship to the
       // game, and the tag is always the viewer's — tapping it writes to the
@@ -1030,7 +1070,9 @@
       // chip on every ranked tile would be noise, and on someone else's shelf
       // it would be YOUR rank on THEIR game. Reads as the game page pill does
       // (Rank.badge): "#2 Family" in the top 3, then "8.6/10".
-      const rankChip = other ? "" : this._rankChipHtml(g.id, rankEntry);
+      const rankChip = other ? ""
+        : plays ? this._playsChipHtml(item.play_count || 0)
+        : this._rankChipHtml(g.id, rankEntry);
       const stamp = parted
         ? `<div class="collection-tile__stamp" aria-hidden="true">Prev. owned</div>`
         : "";
@@ -1078,6 +1120,10 @@
       }
     }
 
+    _playsChipHtml(n) {
+      return `<span class="collection-tile__rank">${n} ${n === 1 ? "play" : "plays"}</span>`;
+    }
+
     _rankChipHtml(gameId, forced = null) {
       if (forced) {
         // One category: the place in it. All of them: the badge, since the
@@ -1100,7 +1146,7 @@
      * the whole page looks like it loaded a second time.
      */
     _paintRankChips() {
-      if (this._isOther() || this._isRankView()) return;
+      if (this._isOther() || this._isAltSort()) return;
       const grid = this.container && this.container.querySelector("#collection-grid-host");
       if (!grid) return;
       grid.querySelectorAll(".collection-tile[data-game-id]").forEach((tile) => {
@@ -1307,7 +1353,7 @@
     _paintTreeControls() {
       const host = this.container.querySelector("#collection-tree-controls-host");
       if (!host) return;
-      host.innerHTML = this._mode === MODE_EXPANSIONS && !this._isRankView() ? this._renderTreeControls() : "";
+      host.innerHTML = this._mode === MODE_EXPANSIONS && !this._isAltSort() ? this._renderTreeControls() : "";
       this.refreshIcons(host);
     }
 
@@ -1604,7 +1650,7 @@
       // The tree renders every group it has, so it has no window to grow and
       // must not carry a sentinel — the controller doesn't track "expansions"
       // as a mode, and asking it for one writes junk keys under that name.
-      if (this._mode === MODE_EXPANSIONS || this._isRankView()) return "";
+      if (this._mode === MODE_EXPANSIONS || this._isAltSort()) return "";
       const global = this._isGlobalSearch();
       // Mid-search the strip belongs to the shelf still unrolling; with none
       // left it is the end-of-list line for the whole result set.
@@ -1664,7 +1710,7 @@
     }
 
     _setSort(sort) {
-      const next = sort === SORT_RANK ? SORT_RANK : SORT_AZ;
+      const next = SORTS.some((o) => o.id === sort) ? sort : SORT_AZ;
       if (next === this._sort) return;
       this._sort = next;
       this._syncShelfUrl();
@@ -1672,10 +1718,15 @@
       if (next === SORT_RANK) {
         if (!this._ranks) this._ranks = window.Rank.cachedSummary();
         this.render();
-        this._loadRanks();
+        if (!this._ranks) this._loadRanks();
         return;
       }
-      // Back to the picked shelf. A query typed in ranking view carries over
+      if (next === SORT_PLAYED) {
+        this.render();
+        this._warmSortData();
+        return;
+      }
+      // Back to the picked shelf. A query typed in another order carries over
       // and goes through the shelf search, which loads what it spans.
       this.render();
       if (this._mode === MODE_EXPANSIONS) {
@@ -1684,6 +1735,49 @@
       }
       if (this.ctl.query) this._onSearchInput(this.ctl.query);
       else if (!this.ctl.shelf[this._mode] && !this.ctl.loading[this._mode]) this.ctl.load(this._mode);
+    }
+
+    /**
+     * Get every order's data into memory, so a pick in the dial is a re-sort
+     * and never a wait: the flat shelves Most played draws from (cache hits
+     * cost nothing, and the controller repaints as each lands) and the ranking.
+     * Self only — neither order is offered on someone else's collection.
+     */
+    _warmSortData() {
+      if (this._isOther()) return;
+      for (const m of FLAT_MODES) {
+        if (!this.ctl.shelf[m] && !this.ctl.loading[m]) this.ctl.load(m);
+      }
+      if (!this._ranks) this._loadRanks();
+    }
+
+    _playedList() {
+      const sh = this.ctl.shelf;
+      return window.PlayedShelf.list({
+        owned: sh[MODE_OWNED] && sh[MODE_OWNED].items,
+        played: sh[MODE_PLAYED] && sh[MODE_PLAYED].items,
+        wishlist: sh[MODE_WISHLIST] && sh[MODE_WISHLIST].items,
+      }, this.ctl.query);
+    }
+
+    _renderPlayedBody() {
+      const list = this._playedList();
+      const pending = FLAT_MODES.some((m) => !this.ctl.shelf[m] && !this.ctl.error[m]);
+      if (!list.length && pending) {
+        return `<div class="profile-loading">${window.buddyLoader({ size: 88, label: "Counting your plays…" })}</div>`;
+      }
+      if (!list.length) {
+        return `<div class="profile-empty">${this.ctl.query ? "No played games match." : "No plays logged yet."}</div>`;
+      }
+      const tail = pending
+        ? `<div class="profile-loading">${window.buddyLoader({ size: 56, label: "Checking the other shelves…" })}</div>`
+        : "";
+      return `
+        <div class="profile-collection-grid">
+          ${list.map((it) => this._renderTile(it, { plays: true })).join("")}
+        </div>
+        ${tail}
+      `;
     }
 
     /** The category on screen: the picked one while the ranking holds it. */
@@ -1780,13 +1874,15 @@
       if (this._isRankView()) {
         params.sort = SORT_RANK;
         if (this._rankCat !== window.RankShelf.ALL) params.type = this._rankCat;
+      } else if (this._isPlayedView()) {
+        params.sort = SORT_PLAYED;
       }
       window.router.replaceUrl("collection", params);
     }
     _onSearchInput(value) {
-      if (this._isRankView()) {
-        // Name-only and local: the ranking is held whole. The query is kept
-        // on the controller so it survives a flip back to A–Z.
+      if (this._isAltSort()) {
+        // Name-only and local: both lists are held whole. The query is kept
+        // on the controller so it survives a switch back to Alphabetical.
         this.ctl.query = value;
         this._paintCounts();
         this._paintList();
