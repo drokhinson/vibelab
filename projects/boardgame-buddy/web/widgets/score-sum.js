@@ -17,15 +17,36 @@
 
 (function () {
   const MAX_DIGITS = 6;
+  const MAX_DECIMALS = 2;
 
-  /** A key typed into a number's text: a digit appends, "back" deletes. */
+  /**
+   * A key typed into a number's text: a digit appends, "." starts the
+   * decimals (once, as "0." on an empty number), "back" deletes. Six digits
+   * before the point and two after it, the most a score holds.
+   */
   function typeKey(text, key) {
     const s = String(text == null ? "" : text);
     if (key === "back") return s.slice(0, -1);
+    const dot = s.indexOf(".");
+    if (key === ".") {
+      if (dot >= 0) return s;
+      return s === "" || s === "-" ? s + "0." : s + ".";
+    }
     if (!/^[0-9]$/.test(key)) return s;
+    if (dot >= 0) return s.length - dot - 1 >= MAX_DECIMALS ? s : s + key;
     if (s === "0") return key;
     if (s === "-0") return "-" + key;
     return s.replace(/^-/, "").length >= MAX_DIGITS ? s : s + key;
+  }
+
+  // "12." is a number still being typed; stacked, it is just 12.
+  function settled(text) {
+    return String(text).replace(/\.$/, "");
+  }
+
+  function round(n) {
+    const f = Math.pow(10, MAX_DECIMALS);
+    return Math.round(n * f) / f;
   }
 
   /** @param {number|null} seed the cell's score when Sum was pressed */
@@ -41,14 +62,15 @@
   }
 
   function signed(t) {
-    if (t.v === "") return 0;
-    return (t.op === "-" ? -1 : 1) * Number(t.v);
+    const n = Number(t.v);
+    if (t.v === "" || t.v === "." || !Number.isFinite(n)) return 0;
+    return (t.op === "-" ? -1 : 1) * n;
   }
 
   function total(s) {
     const all = view(s);
     if (s.entry !== "") all.push({ op: s.op, v: s.entry });
-    return all.reduce((a, t) => a + signed(t), 0);
+    return round(all.reduce((a, t) => a + signed(t), 0));
   }
 
   function isEmpty(s) {
@@ -63,7 +85,8 @@
   // Put a reopened number back where it came from, or drop it if cleared.
   function closeEdit(s) {
     if (s.edit === null) return;
-    if (s.editVal !== "") s.terms[s.edit] = { op: s.editOp, v: s.editVal };
+    const v = settled(s.editVal);
+    if (v !== "") s.terms[s.edit] = { op: s.editOp, v };
     else s.terms.splice(s.edit, 1);
     s.edit = null;
   }
@@ -106,7 +129,7 @@
     }
     if (op) {
       if (s.entry !== "") {
-        s.terms.push({ op: s.op, v: s.entry, fresh: true });
+        s.terms.push({ op: s.op, v: settled(s.entry), fresh: true });
         s.entry = "";
       }
       s.op = k;

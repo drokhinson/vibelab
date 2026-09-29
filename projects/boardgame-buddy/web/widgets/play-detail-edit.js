@@ -228,7 +228,7 @@
                 <span class="play-detail__edit-player-name">${escapeHtml(window.Buddy.nameFor(pl.user_id, pl.name))}</span>
                 ${hasRoundGrid(d.players, "roundScores", d.scoring_template)
                   ? `<span class="play-detail__edit-score-readout">${escapeHtml(playerTotal(pl, d.players))}</span>`
-                  : `<input type="number" class="input input-bordered input-sm play-detail__edit-score"
+                  : `<input type="number" step="any" inputmode="decimal" class="input input-bordered input-sm play-detail__edit-score"
                             id="play-popup-score-${i}"
                             placeholder="Score"
                             value="${escapeAttr(pl.score)}"

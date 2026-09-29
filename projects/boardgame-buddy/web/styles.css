@@ -9645,7 +9645,8 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .score-pad__key--next { background: var(--accent-fill); color: var(--on-accent); font-size: 17px; font-weight: 600; }
 /* Σ Sum and + Round: outlined in the accent so Next stays the one solid key.
    + Round is the Play step's "Next round" and shows only there
-   ([data-kp-round]); without it Σ Sum takes the whole row. */
+   ([data-kp-round]); without it Σ Sum takes the whole row. In Sum mode the
+   row is always Σ Sum beside a solid =, which finishes the sum. */
 .score-pad__key--tool {
   grid-column: 1 / -1;
   height: 44px;
@@ -9656,11 +9657,19 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   font-weight: 600;
 }
 .score-pad__key--round { display: none; }
-.score-pad.has-round .score-pad__key--sumkey { grid-column: 1 / 3; }
-.score-pad.has-round .score-pad__key--round { display: grid; grid-column: 3 / -1; }
+.score-pad.has-round:not(.is-summing) .score-pad__key--sumkey,
+.score-pad.is-summing .score-pad__key--sumkey { grid-column: 1 / 3; }
+.score-pad.has-round:not(.is-summing) .score-pad__key--round { display: grid; grid-column: 3 / -1; }
 .score-pad.is-summing .score-pad__key--sumkey { background: var(--accent-quiet); }
+.score-pad.is-summing .score-pad__key--eq {
+  grid-column: 3 / -1;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  box-shadow: none;
+  font: 600 24px/1 var(--font-score);
+}
+.score-pad__key--dot { font: 600 26px/1 var(--font-score); }
 .score-pad__key--op { background: var(--accent-quiet); color: var(--accent); font: 600 26px/1 var(--font-score); box-shadow: none; }
-.score-pad__key--eq { background: var(--accent-fill); color: var(--on-accent); }
 .score-pad__key--op.is-armed { box-shadow: inset 0 0 0 2px var(--accent); }
 .score-pad:not(.is-summing) .score-pad__sum,
 .score-pad.is-summing .score-pad__plain { display: none; }

@@ -1,11 +1,11 @@
 // widgets/score-keypad.js — the score pad: the app's own number keys for a
 // scoring-grid cell on a touch screen, in place of the phone's keyboard.
 //
-//   1  2  3  (−)        Sum mode:   1  2  3  =
-//   4  5  6                         4  5  6  +
-//   7  8  9                         7  8  9  −
-//   Prev  0  Next  ⌫                Prev  0  Next  ⌫
-//   Σ Sum  |  + Round
+//   1  2  3  ⌫          Sum mode:   1  2  3  ⌫
+//   4  5  6  (−)                    4  5  6  −
+//   7  8  9                         7  8  9  +
+//   Prev  0  Next  .                Prev  0  Next  .
+//   Σ Sum  |  + Round               Σ Sum  |  =
 //
 // On a coarse pointer the cells render with inputmode="none"
 // (round-score-grid.js asks ScoreKeypad.custom), so focusing one raises no
@@ -24,6 +24,8 @@
 // pad close on every tap. pointerdown is cancelled for mouse and pen; iOS
 // decides focus in the tap itself, so a touch acts on touchend and cancels
 // that, which also swallows the click it would have become.
+//
+// Scores take up to two decimal places, so "." is a key of its own.
 //
 // + Round shows only for a cell inside a [data-kp-round] element. It
 // dispatches `scorekeypad:round` (bubbling) from the cell; the host adds the
@@ -61,10 +63,13 @@
     write(el, flipSign(el.value));
   }
 
-  // A lone "-" left behind is cleared on the way out, so a cell never sits
-  // there showing a sign its column is totalling as nothing.
+  // A number still being typed is finished on the way out: a lone "-" or "."
+  // is cleared and a trailing "." dropped, so a cell never sits there showing
+  // a sign or a point its column is not totalling.
   function settle(el) {
-    if (el.value === "-") write(el, "");
+    const v = el.value.replace(/\.$/, "");
+    const done = v === "-" ? "" : v;
+    if (done !== el.value) write(el, done);
   }
 
   // The cells of the grid this one belongs to, in reading order — across a
@@ -118,18 +123,19 @@
       </div>
       <div class="score-pad__keys">
         ${key("1", "1")}${key("2", "2")}${key("3", "3")}
-        ${key("sign", "(&minus;)", "score-pad__key--fn score-pad__key--sign score-pad__plain", "Make negative or positive")}
-        ${key("=", "=", "score-pad__key--op score-pad__key--eq score-pad__sum", "Finish the sum")}
+        ${key("back", BACK_ICON, "score-pad__key--fn", "Delete")}
         ${key("4", "4")}${key("5", "5")}${key("6", "6")}
-        ${blank}${key("+", "+", "score-pad__key--op score-pad__sum", "Add")}
+        ${key("sign", "(&minus;)", "score-pad__key--fn score-pad__key--sign score-pad__plain", "Make negative or positive")}
+        ${key("-", "&minus;", "score-pad__key--op score-pad__sum", "Subtract")}
         ${key("7", "7")}${key("8", "8")}${key("9", "9")}
-        ${blank}${key("-", "&minus;", "score-pad__key--op score-pad__sum", "Subtract")}
+        ${blank}${key("+", "+", "score-pad__key--op score-pad__sum", "Add")}
         ${key("prev", "Prev", "score-pad__key--nav")}
         ${key("0", "0")}
         ${key("next", "Next", "score-pad__key--next")}
-        ${key("back", BACK_ICON, "score-pad__key--fn", "Delete")}
+        ${key(".", ".", "score-pad__key--fn score-pad__key--dot", "Decimal point")}
         ${key("sum", "&Sigma; Sum", "score-pad__key--tool score-pad__key--sumkey")}
-        ${key("round", "+ Round", "score-pad__key--tool score-pad__key--round")}
+        ${key("round", "+ Round", "score-pad__key--tool score-pad__key--round score-pad__plain")}
+        ${key("=", "=", "score-pad__key--tool score-pad__key--eq score-pad__sum", "Finish the sum")}
       </div>`;
     el.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "touch" && e.target instanceof Element && e.target.closest("button")) e.preventDefault();
@@ -179,7 +185,7 @@
       else if (k === "cancel") { endSum(); write(el, before); }
       else { Sum.key(sum, k); sumChanged(); }
     } else if (k === "sign") toggleSign(el);
-    else if (k === "back" || /^[0-9]$/.test(k || "")) write(el, Sum.typeKey(el.value, k));
+    else if (k === "back" || k === "." || /^[0-9]$/.test(k || "")) write(el, Sum.typeKey(el.value, k));
   }
 
   // ── Σ Sum ──

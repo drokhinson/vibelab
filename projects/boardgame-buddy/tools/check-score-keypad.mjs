@@ -14,9 +14,11 @@ import vm from "node:vm";
 
 const WEB = path.join(path.dirname(url.fileURLToPath(import.meta.url)), "..", "web");
 const win = {};
-const sandbox = { window: win, console, String, document: undefined };
+const sandbox = { window: win, console, Date, Number, Math, Map, Set, String, Array,
+                  Object, JSON, Promise, URL, document: undefined, localStorage: undefined };
 vm.createContext(sandbox);
-for (const f of ["widgets/score-sum.js", "widgets/score-keypad.js"]) {
+for (const f of ["helpers.js", "ui/team-colors.js", "widgets/round-score-grid.js",
+                 "widgets/score-sum.js", "widgets/score-keypad.js"]) {
   vm.runInContext(fs.readFileSync(path.join(WEB, f), "utf8"), sandbox, { filename: f });
 }
 const K = win.ScoreKeypad;
@@ -52,7 +54,23 @@ eq("after a sign too", S.typeKey("-0", "7"), "-7");
 eq("back deletes one", S.typeKey("-12", "back"), "-1");
 eq("six digits is the cap", S.typeKey("123456", "7"), "123456");
 eq("a minus-signed cell keeps its six", S.typeKey("-12345", "6"), "-123456");
-eq("anything else is ignored", S.typeKey("4", "."), "4");
+eq("anything else is ignored", S.typeKey("4", "x"), "4");
+eq(". starts the decimals", S.typeKey("12", "."), "12.");
+eq(". on an empty number reads 0.", S.typeKey("", "."), "0.");
+eq("and after a sign, -0.", S.typeKey("-", "."), "-0.");
+eq("a second . is ignored", S.typeKey("1.5", "."), "1.5");
+eq("two decimal places is the cap", S.typeKey("1.25", "7"), "1.25");
+
+console.log("\nwhat a cell stores");
+const clean = win.sanitizeRoundScore;
+eq("a decimal is kept", clean("12.5"), "12.5");
+eq("a half-typed point is kept", clean("12."), "12.");
+eq("a second point is dropped", clean("1.2.3"), "1.23");
+eq("past two places is cut", clean("-3.14159"), "-3.14");
+eq("letters are stripped", clean("7a.5b"), "7.5");
+eq("a lone point reads as empty", win.parseRoundScore("."), null);
+eq("12. reads as 12", win.parseRoundScore("12."), 12);
+eq("a sum of decimals has no float noise", win.roundScoreSum(0.1 + 0.2), 0.3);
 
 const run = (s, keys) => { for (const k of keys) S.key(s, k); return s; };
 
@@ -65,6 +83,13 @@ eq("an empty sum leaves the cell blank", S.cellText(S.create(null)), "");
 eq("the cell's own score is the first number", S.total(run(S.create(12), ["+", "3"])), 15);
 eq("a negative score seeds a minus", S.total(run(S.create(-2), ["+", "5"])), 3);
 eq("a trailing + adds nothing", S.total(run(S.create(null), ["9", "+"])), 9);
+
+s = run(S.create(null), ["2", ".", "5", "+", "0", ".", "2", "5", "+", "1", "."]);
+eq("2.5 + 0.25 + 1.", S.total(s), 3.75);
+S.key(s, "+");
+eq("a trailing point is dropped when it stacks", s.terms[2].v, "1");
+eq("0.1 + 0.2 is 0.3", S.total(run(S.create(null), [".", "1", "+", ".", "2"])), 0.3);
+eq("the cell's decimal score seeds the sum", S.total(run(S.create(-1.5), ["+", "2"])), 0.5);
 
 console.log("\ntapping a stacked number reopens it");
 s = run(S.create(null), ["5", "+", "3", "+", "2", "+"]);
