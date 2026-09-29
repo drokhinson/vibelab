@@ -49,8 +49,8 @@ _SELECT_PLAY = (
 
 # The Supabase Storage bucket. Still here because it is the fallback when R2
 # is unconfigured — see object_store.py — and because the objects it holds
-# stay readable forever: rows written before 036_r2_photo_urls.sql keep their
-# supabase.co URLs, and the client loads whatever absolute URL the row holds.
+# stay readable forever: a row can still hold a supabase.co URL, and the
+# client loads whatever absolute URL the row holds.
 PLAYS_BUCKET = "boardgamebuddy-plays"
 _ALLOWED_PHOTO_MIME = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 _MAX_PHOTO_BYTES = 5 * 1024 * 1024  # mirrors the bucket's file_size_limit
@@ -93,9 +93,9 @@ def _build_play_response(
 def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse]]:
     """Bulk-fetch players for a list of play IDs (no N+1).
 
-    Reads the migration-009 columns directly (buddy_id is dropped, migration
-    013): real-account players resolve their display name from their profile, and
-    free-text ghost players use player_display_name.
+    Reads player_user_id / player_display_name directly: real-account players
+    resolve their display name from their profile, and free-text ghost players
+    use player_display_name.
     """
     players_by_play: dict[str, list[PlayPlayerResponse]] = {pid: [] for pid in play_ids}
     if not play_ids:
@@ -228,7 +228,7 @@ def _read_linked_at(sb, play_id: str) -> dict[str, str]:
 
     PUT /plays/{id} full-replaces the nested lists — it deletes every
     play_players row and re-inserts them — so without this every edit stamps a
-    fresh `linked_at` (migration 008's DEFAULT now()) on everyone at the table.
+    fresh `linked_at` (its DEFAULT now()) on everyone at the table.
     A typo fix in the notes would then notify all five players that they had
     just been added to a play they have been in for two years.
 
@@ -256,7 +256,7 @@ def _write_play_players(
 ) -> list[PlayPlayerResponse]:
     """Insert the play_players rows for a play in ONE bulk statement.
 
-    Writes go through the migration-009 columns directly:
+    Writes go through the player columns directly:
     player_user_id for real-account players, player_display_name as the
     free-text label.
 
@@ -270,7 +270,7 @@ def _write_play_players(
     PostgREST writes a bulk insert as ONE statement over the union of the keys
     it was given: a row missing a key the batch mentions is sent an explicit
     NULL rather than falling through to the column default. `linked_at` is
-    `DEFAULT now() NOT NULL` (migration 008), so one carried-over seat beside
+    `DEFAULT now() NOT NULL`, so one carried-over seat beside
     one uncarried seat is a `null value in column "linked_at" ... violates
     not-null constraint` and a 500 — i.e. editing any play that seats a ghost,
     or adds a player, once the host's own seat has a timestamp to carry.
@@ -279,7 +279,7 @@ def _write_play_players(
     which is also the truer answer — the seats it stamps all happened in the
     same write.
 
-    `team` (migration 048) is unconditional for the same reason, and that is the
+    `team` is unconditional for the same reason, and that is the
     trap to watch: it reads as the natural candidate for `if team:`, being NULL
     on most rows of most plays. Setting it only where there is a side would put
     the batch back into mixed key sets — a different column, the same 500. The
@@ -289,7 +289,7 @@ def _write_play_players(
 
     The roster itself is already checked by the time it gets here: this is only
     reached from PUT /plays/{id}, whose PlayUpdate validator refuses an empty
-    one and refuses one account on two seats (migration 023) before the caller
+    one and refuses one account on two seats before the caller
     deletes the seats these replace.
     """
     out: list[PlayPlayerResponse] = []
@@ -362,7 +362,7 @@ def _list_plays_sync(
             status_code=403, detail="Only buddies can see this user's plays"
         )
 
-    # Single RPC (migration 039): merging, sorting and paginating every
+    # Single RPC (bgb_plays_page): merging, sorting and paginating every
     # visible play, then hydrating players and expansions, is one round trip
     # per History-tab page rather than 8-11 sequential ones.
     data = (
@@ -435,7 +435,7 @@ def _log_play_sync(sb: Client, user_id: str, body: PlayCreate) -> tuple[PlayResp
         .data
     )
     raise_for_rpc_error(data, "Log play")
-    # A client_key we already hold a play for (migration 048) — an offline
+    # A client_key we already hold a play for — an offline
     # outbox retry after a lost response. The RPC wrote nothing and handed
     # back the original row's id; answer with the play that actually exists
     # rather than the payload this attempt carried. Still 201: from the
@@ -458,11 +458,11 @@ async def log_play(
 ) -> PlayResponse:
     """Record a game play with players and winner (idempotent when client_key is set).
 
-    One round trip: bgb_log_play (migration 042) resolves the game, inserts
+    One round trip: bgb_log_play resolves the game, inserts
     the play with its denormalized game columns and bulk-writes the player and
     expansion rows, returning the PlayResponse-shaped payload.
 
-    When the body carries a client_key (migration 048), a repeat of a key
+    When the body carries a client_key, a repeat of a key
     already stored returns the original play instead of writing a second one.
     That is what makes the offline outbox safe to retry after a lost response.
     """
@@ -543,14 +543,14 @@ def _update_play_sync(sb: Client, play_id: str, user_id: str, body: PlayUpdate) 
 
     # Update the top-level row. play_mode and country_code are only written
     # when the request carries them — omitting either leaves whatever was
-    # already on the play. That matters for country_code (migration 065): the
+    # already on the play. That matters for country_code: the
     # popup's edit form doesn't offer the field, so treating an absent value as
     # "clear it" would quietly erase the country on every note edit.
     update_payload: dict[str, object] = {
         "played_at": body.played_at.isoformat(),
         "notes": body.notes,
         "photo_url": body.photo_url,
-        # Migration 005. An edited play leaves its imported run: the run's card
+        # An edited play leaves its imported run: the run's card
         # says "58 identical plays", and the moment one of them carries a score
         # or a different winner that sentence is false. Unconditional, unlike
         # play_mode and country_code above — those are omitted-means-keep
@@ -562,7 +562,7 @@ def _update_play_sync(sb: Client, play_id: str, user_id: str, body: PlayUpdate) 
         update_payload["play_mode"] = body.play_mode.value
     if body.country_code is not None:
         update_payload["country_code"] = body.country_code
-    # Migration 018, omitted-means-keep for the same reason: the popup's edit
+    # scoring_template is omitted-means-keep for the same reason: the popup's edit
     # mode round-trips the snapshot it was handed and never offers a way to
     # change it (editing row labels is a chapter edit — this play's copy is
     # deliberately frozen), so an absent value must not strip the labels off
@@ -760,7 +760,7 @@ async def delete_play(
     Ownership rides in the WHERE clause, so a missing play and someone else's
     both report 404 rather than reporting success for a delete that did
     nothing. There is deliberately no separate play_players delete:
-    play_players.play_id is ON DELETE CASCADE (001_baseline.sql:190), and an
+    play_players.play_id is ON DELETE CASCADE, and an
     explicit one scoped by play_id ALONE would let any signed-in user strip
     every player, winner and score off anyone's play while the endpoint
     answered 200. RLS is not a backstop here; the backend holds

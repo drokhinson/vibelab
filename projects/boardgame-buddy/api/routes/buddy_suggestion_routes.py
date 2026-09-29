@@ -67,7 +67,7 @@ async def list_onboarding_buddy_suggestions(
 
     Carries `network` as well: the buddies of each candidate it returns, so
     the onboarding deck can promote them into the grid the moment the user
-    ticks that candidate, without a round trip (migration 072)."""
+    ticks that candidate, without a round trip."""
     return await asyncio.to_thread(
         feed_service.fetch_onboarding_buddy_suggestions,
         get_supabase(),
@@ -88,10 +88,7 @@ async def dismiss_buddy_suggestion(
 ) -> MessageResponse:
     """Remove one person from every list this app volunteers.
 
-    Backed by `archive/2026-09-28/014_buddy_suggestion_dismissals`. Named in
-    full because a bare number can name either archive generation — several
-    comments in this package say "migration 013" and mean
-    `archive/2026-09-01/013_drop_buddy_id`.
+    Backed by boardgamebuddy_buddy_suggestion_dismissals.
 
     Per-viewer and silent — the person dismissed is never told, is not blocked,
     and can still be found through `/profiles/search`, which is what makes a

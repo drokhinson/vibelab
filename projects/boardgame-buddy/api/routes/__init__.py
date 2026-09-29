@@ -43,7 +43,7 @@ from . import feed_routes      # noqa: F401, E402
 # with no parameterised sibling to be swallowed by.
 from . import discovery_routes  # noqa: F401, E402
 from . import stats_routes     # noqa: F401, E402
-# Game ranking (migration 056). No ordering constraint: `/ranks` is a prefix
+# Game ranking. No ordering constraint: `/ranks` is a prefix
 # nothing else touches, and within the module `/ranks/queue` (two segments)
 # cannot be swallowed by `/ranks/games/{game_id}` (three).
 from . import rank_routes      # noqa: F401, E402
@@ -54,7 +54,7 @@ from . import chapter_routes   # noqa: F401, E402
 # chapter_routes: every path here is a literal `/chapters/generate…` under a
 # game id, which no parameterised route in that module can swallow.
 from . import chapter_ai_routes  # noqa: F401, E402
-# The admin's rulebook-link queue (migration 052). No ordering constraint
+# The admin's rulebook-link queue. No ordering constraint
 # against chapter_routes: every path here is a literal under
 # `/admin/rulebook-links`, which no parameterised route in that module reaches.
 from . import rulebook_admin_routes  # noqa: F401, E402

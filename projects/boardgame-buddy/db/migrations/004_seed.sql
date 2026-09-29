@@ -4,13 +4,16 @@
 -- Run on an empty database in this order: 001_baseline_tables.sql,
 --   002_baseline_functions_play.sql, 003_baseline_functions_social.sql,
 --   004_seed.sql (this file)
+-- then every later NNN_*.sql in this directory, in number order.
 --
 -- Generated on 2026-09-29 by .claude/skills/squash-migrations/squash.py from
--- the 58 migrations in archive/2026-09-28/: they were replayed into an
--- empty database and these files were read back out of its catalog. A
--- database built from them diffs clean against that replay.
+-- the 58 migrations in archive/2026-09-28/ and
+-- 059_comments_describe_current_schema.sql: they were replayed into an empty
+-- database and these files were read back out of its catalog. A database built
+-- from them diffs clean against that replay.
 --
--- FRESH-DB ONLY. Production is already at this state. Do not run it there.
+-- FRESH-DB ONLY. Production reaches this state through the migrations it was
+-- generated from. Never run these files there.
 --
 -- Needs these first, for the cross-app tables it reads:
 -- _shared/001_analytics.sql, _shared/004_api_logs.sql,

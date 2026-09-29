@@ -205,10 +205,10 @@ async def _upload_to_storage(sb: Client, bgg_id: int, url: str | None, kind: str
 def bgg_image_fields(raw_img: str | None, raw_thumb: str | None) -> dict:
     """BGG's own image URLs plus the stamp, for any write that just read /thing.
 
-    Recorded next to the re-hosted image_url / thumbnail_url (migration 054) so
+    Recorded next to the re-hosted image_url / thumbnail_url so
     the app can later serve BGG's CDN directly without re-crawling. Every path
-    that reads /thing writes these, so the backfill queue only ever holds games
-    imported before 054.
+    that reads /thing writes these, so nothing adds to the backfill queue; it
+    only drains.
     """
     return {
         "bgg_image_url": raw_img,
@@ -399,7 +399,7 @@ async def list_games(
     if players is not None and prioritize_exact_players:
         query = query.order("max_players", desc=False)
     # `id` is the tiebreaker on both axes, and it is load-bearing rather than
-    # cosmetic: created_at is nullable (001_baseline.sql:60) and bulk BGG
+    # cosmetic: boardgamebuddy_games.created_at is nullable and bulk BGG
     # imports insert inside one transaction, where now() is the TRANSACTION
     # timestamp — so ties are normal there; two printings of the same game
     # share a name, so they are normal on the alphabetical axis too. Without a
@@ -544,7 +544,7 @@ async def get_game_detail_bundle(
     fetch via /games/{id}, /collection (for viewer status), /plays?game_id,
     and /games/{id}/expansions.
 
-    Also carries `viewer_stats` (migration 030): the viewer's own record with
+    Also carries `viewer_stats`: the viewer's own record with
     this one game — plays, wins, decided_plays, scored_plays,
     avg_winning_score, your_avg_score, your_best_score, first and last played —
     or None when they have never played it. Same row bgb_user_stats_detail's
@@ -617,12 +617,12 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
         "playing_time": int(time_el.get("value", "0")) if time_el is not None else None,
         "image_url": await _upload_to_storage(sb, bgg_id, raw_img, "image"),
         "thumbnail_url": await _upload_to_storage(sb, bgg_id, raw_thumb, "thumb"),
-        # Same /thing response, so BGG's URLs cost nothing extra (migration 054).
+        # Same /thing response, so BGG's URLs cost nothing extra.
         **bgg_image_fields(raw_img, raw_thumb),
         "description": bgg_description_text(item),
         "categories": categories,
         "mechanics": mechanics,
-        # Migration 040. [] rather than NULL even when BGG credits nobody —
+        # [] rather than NULL even when BGG credits nobody —
         # a fresh import is synced by definition and must not land in the
         # backfill queue.
         "publishers": thing_item_publishers(item),
@@ -638,7 +638,7 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
         # And the metadata stamp with it. This import reads exactly what the
         # sweep reads, from the same call, so a game that arrives here is
         # already answered — without this line every newly imported game joins
-        # the metadata queue the moment it lands (migration 045).
+        # the metadata queue the moment it lands.
         "bgg_meta_synced_at": _now_iso(),
     }
 
@@ -798,13 +798,13 @@ async def refresh_game_images(
         return BackfillPassResponse(updated=updated, failed=failed, remaining=remaining)
 
 
-# ── Denormalization helpers (migration 020) ──────────────────────────────────
+# ── Denormalization helpers ──────────────────────────────────────────────────
 # Plays and collections cache a subset of game fields so list reads stay
 # single-table. These helpers build the payload from an in-hand game row
 # (no extra round trip) and fan a games-row mutation out to dependents.
 
 # Columns a collection row caches off boardgamebuddy_games. This is a superset
-# of what a play row caches (044 left plays with just name + thumbnail), so it
+# of what a play row caches (just name + thumbnail), so it
 # is also what _sync_denormalized_game_fields selects to build both payloads.
 COLLECTION_DENORM_GAME_FIELDS = (
     "bgg_id, name, thumbnail_url, year_published, min_players, max_players, "
@@ -816,9 +816,8 @@ COLLECTION_DENORM_GAME_FIELDS = (
 def play_denormalized_from_game(game: dict) -> dict:
     """Translate a boardgamebuddy_games row into the play-denorm payload.
 
-    Only the two columns plays still carries: 044_cleanup.sql dropped
-    game_image_url and game_play_mode from boardgamebuddy_plays because nothing
-    read them off a play row.
+    boardgamebuddy_plays caches only these two; nothing reads any other game
+    field off a play row.
     """
     return {
         "game_name": game["name"],
@@ -949,21 +948,15 @@ async def refresh_single_game_images(
     return GameSummary(**refreshed.data[0])
 
 
-# RETIRED: PATCH /games/admin/{game_id}/rulebook-url (migration 052).
-#
-# It wrote boardgamebuddy_games.rulebook_url, the one admin-curated rulebook
-# link a game could have. A rulebook link is now a reference-guide chapter —
-# anyone can write one, an admin approves it, and who may see an unapproved one
-# is decided per reader (services/chapter_rulebook.py). Every value this
-# endpoint ever wrote was backfilled into an approved chapter by 052, and the
-# column is legacy: still selected by forty RPCs, read by nothing.
-#
-# Deleted rather than left in place because a second write path into a column
-# nothing reads is how a game ends up with two different rulebooks and no way to
-# tell which one anybody sees.
+# boardgamebuddy_games.rulebook_url has no write path, on purpose. A rulebook
+# link is a reference-guide chapter — anyone can write one, an admin approves
+# it, and who may see an unapproved one is decided per reader
+# (services/chapter_rulebook.py). The column is legacy: still selected by forty
+# RPCs, read by nothing. A write path into it is how a game ends up with two
+# different rulebooks and no way to tell which one anybody sees.
 
 
-# ── Admin: the catalog metadata sweep (migration 045) ────────────────────────
+# ── Admin: the catalog metadata sweep ────────────────────────────────────────
 # ONE trio — list, refresh-one, backfill-all — where there were three.
 #
 # Descriptions, BGG stats and publisher credits each had their own queue, their
@@ -1054,9 +1047,8 @@ def _meta_cols(item: Optional[ET.Element], *, has_year: bool) -> dict:
     cols: dict = {"bgg_stats_synced_at": ts, "bgg_meta_synced_at": ts}
     if item is None:
         # Unknown to BGG under that id. Stamped so it leaves the queue, and
-        # NOT written `publishers: []` — that was the old backfill's way of
-        # clearing its own NULL-is-the-queue marker, and NULL no longer means
-        # "never asked" (migration 045). Readers coerce both to [] anyway.
+        # NOT written `publishers: []`: the queue is bgg_meta_synced_at, so a
+        # NULL publishers marks nothing. Readers coerce both to [] anyway.
         return cols
     cols.update(thing_item_stats(item))
     cols["publishers"] = thing_item_publishers(item)

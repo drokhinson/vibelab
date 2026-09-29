@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 056_game_ranks.sql — the position arithmetic in bgb_rank_game /
---                      bgb_unrank_game
+-- game_ranks.sql — the position arithmetic in bgb_rank_game /
+--                 bgb_unrank_game
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY THIS FILE EXISTS. api/tests/test_game_ranks.py drives the service against
@@ -15,10 +15,10 @@
 -- SAFE TO RUN ANYWHERE: one transaction ending in ROLLBACK, touching only rows
 -- it inserted under uuids it invented.
 --
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/056_game_ranks.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/game_ranks.sql
 --
--- Needs migration 056 applied (the table and both functions). Silence plus
--- "ALL 056 CHECKS PASSED" is a pass.
+-- Needs boardgamebuddy_game_ranks and both functions. Silence plus
+-- "ALL GAME-RANKS CHECKS PASSED" is a pass.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
@@ -104,7 +104,7 @@ BEGIN
     ) t WHERE t.mx <> t.n - 1 OR t.d <> t.n
   ), 'positions are dense';
 
-  RAISE NOTICE 'ALL 056 CHECKS PASSED';
+  RAISE NOTICE 'ALL GAME-RANKS CHECKS PASSED';
 END;
 $$;
 

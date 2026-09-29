@@ -6,8 +6,8 @@ title + markdown), or browse the pool of existing chapters for that
 game and add the ones they want. No curated defaults, and for prose no
 review queue — moderation is reactive via per-chapter reports.
 
-ONE chapter kind is different: a rulebook link (layout='rulebook_link',
-migration 052) sends a reader off this origin, so it carries a gate of its
+ONE chapter kind is different: a rulebook link (layout='rulebook_link')
+sends a reader off this origin, so it carries a gate of its
 own and every read path in this file filters on it. The rule itself, and the
 argument for it, live in services/chapter_rulebook.py; here it is one call —
 `chapter_rulebook.filter_visible` — that each read passes its rows through,
@@ -62,7 +62,7 @@ _CHAPTER_SELECT = (
     " link_url, moderation_status,"
     " created_by, updated_at, created_at,"
     " boardgamebuddy_chapter_types(label, icon, display_order),"
-    # This table has TWO FKs into profiles (migration 052) — created_by and
+    # This table has TWO FKs into profiles — created_by and
     # moderated_by — so an unhinted embed is PGRST201 ("more than one
     # relationship was found") and every read path through this select 500s.
     # !created_by names the one the author's display_name comes from; the JSON
@@ -79,7 +79,7 @@ def _build_source_map(sb, game_ids: list[str]) -> dict[str, dict[str, Any]]:
     so the FE can render colored dots tying each chapter to its expansion (or
     leave the dot blank for base-game chapters).
 
-    `bgg_id` rides along for migration 032: when several add-on expansions
+    `bgg_id` rides along for expansion scoring modes: when several add-on expansions
     contribute rows to one scorepad, their blocks are ordered by BGG id
     ascending — a stable, publication-ordered key every client agrees on, where
     the order the guide happens to return them in is not.
@@ -150,11 +150,11 @@ def _chapter_row_to_response(
         title=row["title"],
         layout=row.get("layout", "text"),
         content=row["content"],
-        # Stale client caches and rows written before 018 can carry a layout
+        # Stale client caches and older rows can carry a layout
         # with no grid; every reader treats that as plain text rather than
         # throwing, so `grid` is read defensively here too.
         grid=row.get("grid"),
-        # Migration 052. Both are NULL on every layout but 'rulebook_link', and
+        # Both are NULL on every layout but 'rulebook_link', and
         # a row only reaches this function at all once
         # services/chapter_rulebook has decided the viewer may see it — the
         # response carries the status so the AUTHOR's copy can say it is
@@ -226,8 +226,7 @@ def _browse_chapter_pool_sync(
         pool_q = pool_q.or_(f"title.ilike.{needle},content.ilike.{needle}")
     pool_rows = pool_q.limit(1000).execute().data or []
 
-    # THE GATE, applied before anything else looks at these rows (migration
-    # 052). A rulebook link the viewer may not see must not reach the sort, the
+    # THE GATE, applied before anything else looks at these rows. A rulebook link the viewer may not see must not reach the sort, the
     # popularity tally or the wire — filtering client-side would ship the URL to
     # the browser that is not allowed to have it, which is not filtering.
     pool_rows = chapter_rulebook.filter_visible(sb, pool_rows, viewer_id)
@@ -241,7 +240,7 @@ def _browse_chapter_pool_sync(
     # Popularity: count user_chapters rows per chapter in one round trip.
     # Bounded at 1000 adopter rows until the tally moves to an RPC GROUP BY.
     #
-    # `state='kept'` (migration 033): a row can also mean "this viewer
+    # `state='kept'`: a row can also mean "this viewer
     # turned it down", and counting those would let a chapter climb the
     # popularity sort on the strength of the people who refused it.
     popularity: dict[str, int] = {cid: 0 for cid in chapter_ids}
@@ -360,14 +359,14 @@ def _chapter_pool_count_sync(
     if not total:
         return total
 
-    # Migration 033: a chapter this viewer has turned down is not one their
+    # A chapter this viewer has turned down is not one their
     # guide is missing, so it comes off the denominator of the guide's
     # "N of M" — which is the whole point of the dislike. Counted, not
     # fetched, for the same reason the total above is.
     #
     # Scoped by game rather than by chapter id: this endpoint deliberately
     # never pulls the chapter rows, so it has no id list to filter on, and
-    # game_id is on the dislike row anyway. The partial index from 033 serves
+    # game_id is on the dislike row anyway. idx_bgb_user_chapters_disliked serves
     # exactly this shape.
     #
     # Anonymous callers skip this and NOT the rulebook pass below: a signed-out
@@ -386,7 +385,7 @@ def _chapter_pool_count_sync(
         )
         disliked = dis_q.execute().count or 0
 
-    # The rulebook gate's share of the denominator (migration 052). The count
+    # The rulebook gate's share of the denominator. The count
     # endpoints are the one read path that cannot filter rows it never fetched,
     # so the links are fetched — id, author and status only, no bodies, off the
     # partial index idx_bgb_chapters_rulebook_status — and the ones this viewer
@@ -447,7 +446,7 @@ async def count_chapter_pool(
     The same number `GET /games/{game_id}/chapter-pool` would return the length
     of once its disliked rows are dropped, without the chapter bodies. Auth is
     OPTIONAL and viewer-scoping is the only thing it buys: the caller's own
-    dislikes come off the total (migration 033), because a chapter they have
+    dislikes come off the total, because a chapter they have
     refused is not one their guide is missing. An anonymous caller gets the
     unfiltered pool size. The caller's own
     guide is still counted client-side from `my-chapters`.
@@ -469,7 +468,7 @@ def _create_chapter_sync(
 ) -> MyGuideChapterResponse:
     game = (
         sb.table("boardgamebuddy_games")
-        # is_expansion decides a scoring grid's MODE (migration 032) — an
+        # is_expansion decides a scoring grid's MODE — an
         # expansion's rows either join the base game's grid or stand in for it,
         # and a base game's own grid is in neither mode. Selected here beside
         # the name the title is derived from, so the mode costs no extra
@@ -548,8 +547,8 @@ def _create_chapter_sync(
                 else None
             ),
             "link_url": link_url,
-            # The gate the author chose, not the one their role would give them
-            # (migration 053): `request_review` picks pending or unlisted, and
+            # The gate the author chose, not the one their role would give them:
+            # `request_review` picks pending or unlisted, and
             # both are live for the author's buddies either way. Nobody's link
             # is born approved, an admin's included — so no row leaves
             # here carrying a decision, and `moderated_by`/`moderated_at` stay
@@ -571,7 +570,7 @@ def _create_chapter_sync(
     new_id = insert.data[0]["id"]
 
     # Auto-add to creator's guide. `state` is written out rather than left to
-    # the column default (migration 033) because this row is the one place the
+    # the column default because this row is the one place the
     # table is populated by something other than a deliberate add/dislike, and
     # a reader working out what a row means should not have to go and look up
     # what the default is.
@@ -616,7 +615,7 @@ async def create_chapter(
     A rulebook link starts `pending` when its author asks for review and
     `unlisted` when they don't (`chapter_rulebook.initial_status`), admins
     included. Either way it is visible to its author and their accepted buddies;
-    only a pending one sits in the admin queue (migrations 052, 053).
+    only a pending one sits in the admin queue.
     """
     sb = get_supabase()
     return await asyncio.to_thread(_create_chapter_sync, sb, game_id, body, user)
@@ -695,7 +694,7 @@ def _update_chapter_sync(
     # and then point the same approved row anywhere, and every reader following
     # the app's own "approved" badge would go there. So a changed URL drops the
     # badge it had and goes back through the gate — whoever is editing, admins
-    # included (migration 053): an admin approves it from the queue, which is
+    # included: an admin approves it from the queue, which is
     # one tap and leaves an audit trail a self-approval would not.
     #
     # Unchanged URL, unchanged status: re-submitting the same link by saving the
@@ -717,8 +716,8 @@ def _update_chapter_sync(
         updates["title"] = chapter_rulebook.rulebook_title(
             link_game.data[0].get("name") if link_game.data else None
         )
-        # The review toggle (migration 053). None means the caller did not send
-        # one — a pre-053 client, or an edit that is not about the gate — and
+        # The review toggle. None means the caller did not send
+        # one — an older client, or an edit that is not about the gate — and
         # then the row's current state answers for it: still submitted if it
         # was pending, still not if it was unlisted, and True for anything else,
         # since a decided link that is about to be re-opened by a changed URL
@@ -780,7 +779,7 @@ async def update_chapter(
     """Edit an existing chapter. Creator-only (admins can edit by deleting + recreating).
 
     Changing a rulebook link's URL sends it back to the admin queue — an
-    approval is a decision about a destination, not about a row (migration 052).
+    approval is a decision about a destination, not about a row.
     """
     sb = get_supabase()
     return await asyncio.to_thread(_update_chapter_sync, sb, chapter_id, body, user)
@@ -869,7 +868,7 @@ def _get_my_chapters_sync(
     exp_ids = parse_csv_param(expansion_ids)
     all_game_ids = [game_id, *exp_ids]
 
-    # `state='kept'` (migration 033): the guide is the kept half of this table.
+    # `state='kept'`: the guide is the kept half of this table.
     # Its disliked half is the builder's Disliked section, which reads it off
     # the chapter pool rather than from here — this endpoint answers "what is
     # in my guide", and a chapter turned down is the opposite of that.
@@ -1054,7 +1053,7 @@ async def remove_chapter_from_my_guide(
         .eq("user_id", user.user_id)
         .eq("game_id", game_id)
         .eq("chapter_id", chapter_id)
-        # Scoped to the kept half (migration 033). Removing a chapter from the
+        # Scoped to the kept half. Removing a chapter from the
         # guide is not un-disliking one, and without this filter the two
         # endpoints would share a delete: a client that fired both would clear
         # a dislike the user had not touched.
@@ -1067,8 +1066,10 @@ async def remove_chapter_from_my_guide(
 # ── Dislikes ──────────────────────────────────────────────────────────────────
 #
 # The inverse of the my-chapters pair above, on the same table and against the
-# same UNIQUE (user_id, chapter_id) — see migration 033 for why a dislike is a
-# state on that row rather than a table of its own.
+# same UNIQUE (user_id, chapter_id). A dislike is a state on that row rather
+# than a table of its own because that UNIQUE is then the rule that one viewer
+# cannot both keep and dislike a chapter, and disliking a kept chapter is one
+# UPDATE.
 #
 # Only the two writes live here. There is no GET: a disliked chapter comes back
 # tagged on the chapter pool the builder already fetches, so a third endpoint

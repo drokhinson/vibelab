@@ -1,36 +1,1395 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- boardgamebuddy — baseline: social functions
+-- boardgamebuddy 059 — comments describe the schema as it is
 --
--- Run on an empty database in this order: 001_baseline_tables.sql,
---   002_baseline_functions_play.sql,
---   003_baseline_functions_social.sql (this file), 004_seed.sql
--- then every later NNN_*.sql in this directory, in number order.
+-- Rewrites the database's own comments so they name tables, columns and
+-- functions instead of citing the migration that introduced them: 38
+-- COMMENT ON statements, and 19 functions re-issued with CREATE OR REPLACE
+-- whose bodies differ from the live definitions in `--` comments only. No
+-- signature, body, grant or behaviour changes; CREATE OR REPLACE keeps each
+-- function's ACL.
 --
--- Generated on 2026-09-29 by .claude/skills/squash-migrations/squash.py from
--- the 58 migrations in archive/2026-09-28/ and
--- 059_comments_describe_current_schema.sql: they were replayed into an empty
--- database and these files were read back out of its catalog. A database built
--- from them diffs clean against that replay.
---
--- FRESH-DB ONLY. Production reaches this state through the migrations it was
--- generated from. Never run these files there.
---
--- Needs these first, for the cross-app tables it reads:
--- _shared/001_analytics.sql, _shared/004_api_logs.sql,
--- _shared/005_api_sessions.sql, _shared/006_drop_api_sessions.sql.
---
--- People and what they see: profiles, the feed, buddies and suggestions,
--- notifications, stats, achievements, account deletion, admin usage. 20
--- functions, callees first, so the file runs top to bottom. Bodies are
--- pg_get_functiondef() output: the server's normalized rendering.
---
--- Grants are the difference from Supabase's defaults, which give anon,
--- authenticated and service_role everything on a new table or function (and
--- EXECUTE to PUBLIC). An object with no GRANT/REVOKE lines keeps them.
+-- Safe to run on production and on a fresh database built from the baseline,
+-- which already contains this end state; a second run changes nothing.
 -- ─────────────────────────────────────────────────────────────────────────────
 
+COMMENT ON TABLE public.boardgamebuddy_bgg_thumb_cache IS 'BGG thumbnail per bgg_id for BGG search results. NULL thumbnail_url = BGG has none. Not a catalog: a game here is not imported. Written and read only by the API (service role).';
 
--- bgb_admin_usage_stats(p_exclude_admins boolean)
+COMMENT ON TABLE public.boardgamebuddy_countries IS 'ISO 3166-1 alpha-2 → continent, for the location achievements. The code set is exactly the one web/domain/geo-data.js can produce, so no country the app can detect or offer is missing a continent.';
+
+COMMENT ON TABLE public.boardgamebuddy_feedback_topics IS 'Lookup for boardgamebuddy_feedback.topic — which surface of the app an item is about. The set mirrors the bottom nav plus the two header screens. `icon` is a Lucide slug into web/ui/icons.js. Served by GET /feedback-topics.';
+
+COMMENT ON TABLE public.boardgamebuddy_feedback_types IS 'Lookup for boardgamebuddy_feedback.feedback_type. `icon` is a Lucide slug into web/ui/icons.js, never an emoji. Served by GET /feedback-types and denormalised onto every row bgb_feedback_list returns, so the list paints from one call.';
+
+COMMENT ON COLUMN public.boardgamebuddy_games.rulebook_url IS 'LEGACY, left in place only because forty RPCs and bundles select it. Nothing in the app writes or reads it: a game''s rulebook link is an approved layout=''rulebook_link'' chapter in boardgamebuddy_guide_chapters, and every value in this column has one. Do not wire anything new to it and do not treat it as a second source of truth for a game''s rulebook; the chapters table is the one.';
+
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_stats_synced_at IS 'When the BGG rating/rank/weight last landed. Not a queue marker — bgg_meta_synced_at is — but still written by every sync.';
+
+COMMENT ON COLUMN public.boardgamebuddy_games.publishers IS 'BGG boardgamepublisher links, in BGG''s order. ''{}'' = BGG credits nobody. NULL does not mean "never synced" (bgg_meta_synced_at says that); readers coerce both to [].';
+
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_meta_synced_at IS 'When POST /games/admin/backfill-metadata last read BGG''s /thing?stats=1 record for this game. NULL with a non-null bgg_id IS the backfill queue. Stamped even when BGG had no description or no year, so the queue terminates — the panel keeps listing those rows from the field predicate instead.';
+
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_image_url IS 'BoardGameGeek''s own box-art URL, recorded next to the re-hosted image_url so the app can switch to serving BGG directly. Written by import, image refresh and POST /games/admin/backfill-image-links.';
+
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_thumbnail_url IS 'BoardGameGeek''s own thumbnail URL; see bgg_image_url.';
+
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_images_synced_at IS 'When BGG''s image URLs were last read for this game. NULL with a non-null bgg_id IS the image-links backfill queue. Stamped even when BGG has no art, so the queue terminates.';
+
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_family IS 'The BGG family rank list this game ranks highest in, raw (strategygames, familygames, partygames, thematic, wargames, abstracts, childrensgames, cgs). NULL = not synced yet, or BGG files it in none. Decides which category a game is ranked in. Written by import, refresh-metadata and backfill-metadata.';
+
+COMMENT ON COLUMN public.boardgamebuddy_profiles.app_installed_at IS 'First time this account was seen running as an installed PWA. Drives the "Pocket Buddy" achievement; nothing else reads it.';
+
+COMMENT ON COLUMN public.boardgamebuddy_profiles.link_notifications_seen_at IS 'Read watermark for the WHOLE notification bell — plays you were seated in, buddy requests received, and requests of yours that were accepted — not just link notifications, despite the name. Written by bgb_mark_link_notifications_seen; read by bgb_notifications and bgb_notifications_unread.';
+
+COMMENT ON COLUMN public.boardgamebuddy_profiles.release_notices_seen_at IS 'Watermark: release notices published at or before this are not shown again. NOT NULL DEFAULT now() so a new account starts watermarked at signup and never sees the backlog. Advanced only by bgb_mark_release_notices_seen; read by bgb_release_notices_unseen.';
+
+COMMENT ON TABLE public.boardgamebuddy_bga_player_links IS 'Board Game Arena handle → the person the owner says it is. Written by the import wizard when a handle is resolved by hand, read on the next import to pre-seat it. No API-role grant: only the service role touches it.';
+
+COMMENT ON COLUMN public.boardgamebuddy_collections.played_before_at IS 'The played mark: set when the user says they played this game somewhere they did not log it. On a row of any status, independent of it; a game on no shelf carries it on a status ''played'' row. Read by the Played shelf, the status map''s played_marks, the Shelf of Shame block of bgb_user_stats_detail and the rank queue. It is not a play and must never be counted as one.';
+
+COMMENT ON TABLE public.boardgamebuddy_game_ranks IS 'A player''s ranking of the games they own or have played. Per category, tiers love → good → not, position dense 0..n-1 within a tier. Written only through bgb_rank_game / bgb_unrank_game; read by GET /ranks*.';
+
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.grid IS 'Row definitions for a layout=''scoring_grid'' chapter: {"v":1,"mode":…,"rows":[{"label":…,"color":…,"note":…}]}. `color` is a SLUG from a fixed palette (neutral|red|pink|rust|brown|gold|yellow|green|blue|purple), never a hex — the grid lands on the cream scorepad, and only a fixed palette can be guaranteed legible there in both themes. `mode` is add_on|replace on a grid whose game is an EXPANSION — its rows either join the base game''s grid or stand in for it — and NULL/absent on a base game''s own grid, where the question does not arise. The API resolves it (services/chapter_grid.resolve_grid_mode); the bgb_chapters_grid_mode CHECK only pins the value domain, because a CHECK cannot look up whether the chapter''s game is an expansion. NULL for layout=''text''; see the bgb_chapters_grid_shape constraint.';
+
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'unlisted | pending | approved | denied, on a layout=''rulebook_link'' chapter only (NULL everywhere else). Approved is visible to everyone; unlisted and pending only to the author and their ACCEPTED buddies; denied only to the author and admins. Unlisted and pending differ in ONE respect and it is not visibility: pending is in the admin queue because its author asked for review, unlisted is not. A link authored by an admin is NOT born approved — every author goes through the same gate, and an admin approves their own from the queue like anyone else''s. The rule is applied by routes/services/chapter_rulebook.py on every chapter read path, NOT by RLS — this API is service-role and bypasses RLS, and nothing reads chapters browser-direct. A denial is deliberately not a delete: the row is what stops the same author re-posting the same link past idx_bgb_chapters_rulebook_author.';
+
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderated_by IS 'The admin whose decision moderation_status records. NULL while unlisted or pending — including on a link an admin wrote themselves, which is not self-approved on the way in — and NULL on the approved links carried over from boardgamebuddy_games.rulebook_url, which were approved by having been admin-only data in the first place. Naming an admin who never looked at a link would be a lie the audit trail cannot tell apart from a real decision, which is also why re-opening the gate (a changed URL, a withdrawn request) clears this column rather than leaving the last decision''s author on a row nobody has decided.';
+
+COMMENT ON COLUMN public.boardgamebuddy_plays.bgg_play_id IS 'The BoardGameGeek play id this row came from. Written by the importer''s BoardGameGeek source (through bgb_log_play) and by the pending-imports worker still draining legacy kind=''play'' rows. The partial UNIQUE idx_bgb_plays_user_bgg_play is what makes re-importing from BGG a no-op.';
+
+COMMENT ON COLUMN public.boardgamebuddy_plays.country_code IS 'ISO 3166-1 alpha-2 country where the play happened, uppercase. Resolved by the client from the device timezone (or picked by the host in Settle Up); NULL when unknown, as it is on most older plays. Feeds a future popularity-by-country view and nothing today.';
+
+COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS 'Denormalised snapshot of the scoring grid this play was scored with: {"v":1,"chapter_id":…,"title":…,"rows":[…],"parts":[…]}. NOT a foreign key, on purpose. The chapter is community-owned, editable by its author and deletable by author or admin, so a play holding only an id would render bare R1..Rn the moment a moderator cleared the chapter, and would silently RELABEL a two-year-old play if the author reordered its rows — labels that stop describing the numbers under them is precisely the failure widgets/round-score-grid.js is written to prevent. ON DELETE SET NULL loses the labels and CASCADE deletes plays, so neither constraint tells the truth. chapter_id rides INSIDE the document as provenance: a bare uuid column would imply an integrity the database is not enforcing. Same reasoning as game_name / game_thumbnail_url on this table. `rows` may be COMPOSED from several grids — a base game''s plus each add-on expansion''s, the add-ons appended in ascending BGG id so every client composes the same scorepad — in which case `chapter_id` names the grid that supplied the leading rows and `parts` lists every contributor in row order as {chapter_id,game_id,game_name,mode,row_count}. A row an add-on contributed also carries that expansion''s `source_color` (boardgamebuddy_games.expansion_color), which draws a rule down the RIGHT edge of its header cell — the left edge carries the row''s own palette tint, so the two never collide; the leading grid''s rows carry none. `parts` is absent, and no row carries a source_color, when one grid supplied the whole thing — so an older snapshot, which never has `parts`, reads the same way.';
+
+COMMENT ON COLUMN public.boardgamebuddy_plays.bga_table_id IS 'The Board Game Arena table this play was imported from. NULL for every other origin. Unique per user, which is what makes a re-import offer only new tables.';
+
+COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_at IS 'When this play changed hands because its logger deleted their account. NULL on every play whose author still owns it, which is almost all of them. Two jobs: it drives the play_inherited notification, and it is the standing audit trail for "the current owner did not write this" — worth knowing before trusting plays.user_id as authorship.';
+
+COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_from_name IS 'The display name of the account this play came from, captured at deletion. Denormalized because the profile it names is gone by the time anything reads this — there is nothing left to join to. Carried into bgb_notifications as actor_display_name.';
+
+COMMENT ON COLUMN public.boardgamebuddy_play_players.team IS 'Free-text side this seat played on, as the host typed it. NULL for every competitive and co-op play, and for a team play whose sides were never named. Matched case-insensitively after trimming — the same comparison PlaySession.applyTeamTag uses to keep one side''s win flags in step — so "Red" and "red" are one side. No index: it is only ever read as part of a roster already fetched by play_id.';
+
+COMMENT ON INDEX public.uq_bgb_play_players_play_user IS 'One account, one seat, per play. Ghost seats (player_user_id NULL) are outside the predicate — two same-named ghosts at one table is a legitimate roster.';
+
+COMMENT ON TABLE public.boardgamebuddy_play_reactions IS 'One "good game" from one person to one play. A session footer tap fans out to every play in that night sharing one reaction_group_id, because the feed session is a client-side grouping with no stable id.';
+
+COMMENT ON COLUMN public.boardgamebuddy_play_sessions.play_mode IS 'How the host is scoring this table: competitive / coop / team. NULL = never said, read as competitive. Not the same fact as boardgamebuddy_games.play_mode, which is what the BOX suggests; this is what the table actually did, and it is the gate on whether a spectator''s grid merges a side''s seats into one column.';
+
+COMMENT ON COLUMN public.boardgamebuddy_play_session_participants.team IS 'Free-text side this seat is on, as the host typed it. NULL means no side — every competitive and co-op lobby, and a team lobby whose sides were never named. Matched case-insensitively after trimming, the same comparison ui/team-colors.js and PlaySession.applyTeamTag use, so "Red" and "red" are one side. The lobby twin of boardgamebuddy_play_players.team, which is where the tag lands for good at finalize; this column only has to outlive the session.';
+
+COMMENT ON TABLE public.boardgamebuddy_rank_deferrals IS 'Unranked games a player chose to rank after their next play. Active until a play the player can see is created after deferred_at and played on or after its date — see bgb_rank_deferrals_active. Written by PUT /ranks/games/{id}/defer, deleted when the game is ranked.';
+
+COMMENT ON COLUMN public.boardgamebuddy_user_chapters.state IS 'kept = in this viewer''s guide. disliked = the inverse: the viewer has turned it down, so it is filtered out of their chapter pool, their pool count and the scoring-template offer, and appears only in the builder''s Disliked section. Per-viewer and one-directional — never shown to the author, never a report, and it changes no count anyone else sees.';
+
+COMMENT ON FUNCTION public.bgb_app_uid() IS 'The UUID the app knows this caller by: the app_uid claim, else a UUID-shaped sub, else NULL. The sign-in blocking function sets app_uid (the uid itself when UUID-shaped, else a uuid5 of it); the shape check makes an unusable id deny rather than raise. See projects/boardgame-buddy/Docs/RUNBOOK_AUTH_ROLE_CLAIM.md.';
+
+COMMENT ON FUNCTION public.bgb_rank_deferrals_active(p_viewer uuid) IS 'The game ids p_viewer parked with "Rank after next play" and has not played since, as a JSONB array. Called by GET /api/v1/boardgame_buddy/ranks/queue.';
+
+COMMENT ON FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer) IS 'Insert (or move) a game into a player''s ranking at p_index within p_category/p_tier, keeping positions dense. Returns {category, tier, position} or {error}. Called by PUT /api/v1/boardgame_buddy/ranks/games/{game_id}.';
+
+COMMENT ON FUNCTION public.bgb_unrank_game(p_user uuid, p_game uuid) IS 'Remove a game from a player''s ranking, closing the gap in its tier. Returns {removed}. Called by DELETE /api/v1/boardgame_buddy/ranks/games/{game_id}.';
+
+CREATE OR REPLACE FUNCTION public.bgb_bgg_sync_status(p_user uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_username TEXT;
+  v_has_creds BOOLEAN;
+  v_session_start TIMESTAMPTZ;
+  v_check_start TIMESTAMPTZ;
+  v_pending BIGINT;
+  v_errored BIGINT;
+  v_last_completed TIMESTAMPTZ;
+  v_session_total BIGINT := 0;
+  v_session_done BIGINT := 0;
+  v_session_errored BIGINT := 0;
+  v_names JSONB := '[]'::jsonb;
+  v_cat_total BIGINT := 0;
+  v_cat_done BIGINT := 0;
+  v_cat_errored BIGINT := 0;
+  v_cat_names JSONB := '[]'::jsonb;
+BEGIN
+  SELECT pr.bgg_username,
+         (COALESCE(pr.bgg_username, '') <> '' AND COALESCE(pr.bgg_password_enc, '') <> ''),
+         pr.bgg_last_sync_started_at,
+         pr.bgg_last_check_started_at
+    INTO v_username, v_has_creds, v_session_start, v_check_start
+    FROM boardgamebuddy_profiles pr
+    WHERE pr.id = p_user;
+
+  -- Lifetime counters, unchanged: they back the Settings header copy and are
+  -- deliberately NOT the poll's exit condition.
+  SELECT count(*) FILTER (WHERE status = 'pending'),
+         count(*) FILTER (WHERE status = 'error'),
+         max(completed_at) FILTER (WHERE status = 'done')
+    INTO v_pending, v_errored, v_last_completed
+    FROM boardgamebuddy_bgg_pending_imports
+    WHERE user_id = p_user;
+
+  IF v_session_start IS NOT NULL THEN
+    WITH roll AS (
+      SELECT bgg_id,
+             CASE WHEN bool_or(status = 'pending') THEN 'pending'
+                  WHEN bool_or(status = 'error') THEN 'error'
+                  ELSE 'done' END AS st
+      FROM boardgamebuddy_bgg_pending_imports
+      WHERE user_id = p_user
+        AND created_at >= v_session_start
+        AND kind <> 'catalog'          -- a check is not an import
+        AND bgg_id IS NOT NULL
+        AND status IS NOT NULL
+      GROUP BY bgg_id
+    )
+    SELECT count(*),
+           count(*) FILTER (WHERE st = 'done'),
+           count(*) FILTER (WHERE st = 'error')
+      INTO v_session_total, v_session_done, v_session_errored
+      FROM roll;
+
+    IF v_session_done > 0 THEN
+      WITH roll AS (
+        SELECT bgg_id,
+               CASE WHEN bool_or(status = 'pending') THEN 'pending'
+                    WHEN bool_or(status = 'error') THEN 'error'
+                    ELSE 'done' END AS st
+        FROM boardgamebuddy_bgg_pending_imports
+        WHERE user_id = p_user
+          AND created_at >= v_session_start
+          AND kind <> 'catalog'
+          AND bgg_id IS NOT NULL
+          AND status IS NOT NULL
+        GROUP BY bgg_id
+      ),
+      -- Most recent all-time completed_at per session-done bgg_id (the
+      -- Python path queried done rows for those ids without the session
+      -- filter), newest 20 first.
+      latest AS (
+        SELECT DISTINCT ON (pi.bgg_id) pi.bgg_id, pi.completed_at
+        FROM boardgamebuddy_bgg_pending_imports pi
+        JOIN roll r ON r.bgg_id = pi.bgg_id AND r.st = 'done'
+        WHERE pi.user_id = p_user AND pi.status = 'done'
+        ORDER BY pi.bgg_id, pi.completed_at DESC
+      ),
+      top20 AS (
+        SELECT bgg_id, completed_at
+        FROM latest
+        ORDER BY completed_at DESC NULLS LAST
+        LIMIT 20
+      )
+      SELECT COALESCE(jsonb_agg(g.name ORDER BY t.completed_at DESC NULLS LAST), '[]'::jsonb)
+        INTO v_names
+        FROM top20 t
+        JOIN boardgamebuddy_games g ON g.bgg_id = t.bgg_id
+        WHERE g.name IS NOT NULL;
+    END IF;
+  END IF;
+
+  -- ── The catalog fill a check kicked off ───────────────────────────────────
+  -- No bgg_id roll-up here: a catalog row is one game by construction
+  -- (unique on user_id, bgg_id, kind), so count(*) is already per-game.
+  IF v_check_start IS NOT NULL THEN
+    SELECT count(*),
+           count(*) FILTER (WHERE status = 'done'),
+           count(*) FILTER (WHERE status = 'error')
+      INTO v_cat_total, v_cat_done, v_cat_errored
+      FROM boardgamebuddy_bgg_pending_imports
+      WHERE user_id = p_user
+        AND kind = 'catalog'
+        AND created_at >= v_check_start;
+
+    IF v_cat_done > 0 THEN
+      SELECT COALESCE(jsonb_agg(g.name ORDER BY t.completed_at DESC NULLS LAST), '[]'::jsonb)
+        INTO v_cat_names
+        FROM (
+          SELECT pi.bgg_id, pi.completed_at
+          FROM boardgamebuddy_bgg_pending_imports pi
+          WHERE pi.user_id = p_user
+            AND pi.kind = 'catalog'
+            AND pi.created_at >= v_check_start
+            AND pi.status = 'done'
+          ORDER BY pi.completed_at DESC NULLS LAST
+          LIMIT 20
+        ) t
+        JOIN boardgamebuddy_games g ON g.bgg_id = t.bgg_id
+        WHERE g.name IS NOT NULL;
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'bgg_username', v_username,
+    'has_credentials', COALESCE(v_has_creds, false),
+    'pending_count', COALESCE(v_pending, 0),
+    'errored_count', COALESCE(v_errored, 0),
+    'last_completed_at', v_last_completed,
+    'session_started_at', v_session_start,
+    'session_total', COALESCE(v_session_total, 0),
+    'session_done', COALESCE(v_session_done, 0),
+    'session_errored', COALESCE(v_session_errored, 0),
+    'session_game_names', v_names,
+    'catalog_session_started_at', v_check_start,
+    'catalog_session_total', COALESCE(v_cat_total, 0),
+    'catalog_session_done', COALESCE(v_cat_done, 0),
+    'catalog_session_errored', COALESCE(v_cat_errored, 0),
+    'catalog_session_game_names', v_cat_names
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.bgb_collection_page(viewer uuid, target uuid, p_status text DEFAULT 'owned'::text, p_search text DEFAULT NULL::text, p_players integer DEFAULT NULL::integer, p_playtime_min integer DEFAULT NULL::integer, p_playtime_max integer DEFAULT NULL::integer, p_play_mode text DEFAULT NULL::text, p_exclude_expansions boolean DEFAULT true, p_sort text DEFAULT 'last_played'::text, p_prioritize_exact_players boolean DEFAULT false, p_page integer DEFAULT 1, p_per_page integer DEFAULT 12)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  -- A blank search is no search. btrim first so a lone space does not filter
+  -- the whole shelf away.
+  v_search TEXT := NULLIF(btrim(COALESCE(p_search, '')), '');
+  v_excl BOOLEAN := COALESCE(p_exclude_expansions, true);
+  -- Clamped to the same bounds FastAPI validates, so a direct caller cannot
+  -- ask for a 10,000-row page.
+  v_per_page INT := LEAST(GREATEST(COALESCE(p_per_page, 12), 1), 100);
+  v_offset INT := GREATEST(COALESCE(p_page, 1) - 1, 0) * LEAST(GREATEST(COALESCE(p_per_page, 12), 1), 100);
+  v_sort TEXT := COALESCE(p_sort, 'last_played');
+  -- The exact-players bucket is opt-in AND needs a player count to be exact
+  -- about; without one it is off, exactly as the Python guard had it.
+  v_exact BOOLEAN := COALESCE(p_prioritize_exact_players, false) AND p_players IS NOT NULL;
+  -- A game you sold is still on your Owned shelf, dimmed. Has to agree with
+  -- bgb_collection_shelf's widening because the client falls back from
+  -- one endpoint to the other mid scroll.
+  v_statuses TEXT[] := CASE
+    WHEN p_status = 'owned' THEN ARRAY['owned', 'prev_owned']
+    ELSE ARRAY[p_status]
+  END;
+  v_total BIGINT := 0;
+  v_parted BIGINT := 0;
+  v_items JSONB;
+BEGIN
+  -- A wishlist is private to its owner. Same gate bgb_collection_shelf and
+  -- bgb_profile_bundle apply, and IS DISTINCT FROM so a NULL viewer is not a
+  -- match. Owned and played shelves are public.
+  IF p_status = 'wishlist' AND viewer IS DISTINCT FROM target THEN
+    RETURN jsonb_build_object('items', '[]'::jsonb, 'total', 0, 'parted_total', 0);
+  END IF;
+
+  IF p_status = 'played' THEN
+    -- Played-not-owned: every game the target has a play for that has NO row
+    -- on their collection table at all (owned AND wishlist both live there).
+    --
+    -- This branch ignores p_sort and p_prioritize_exact_players, which is what
+    -- the Python did: the shelf is defined by recency, and it returned before
+    -- reaching either. Kept rather than quietly widened.
+    WITH played_games AS (
+      -- EXISTS, never a join onto play_players: a join fans one play out to
+      -- one row per participant, which multiplies play_count. Same visibility
+      -- rule as bgb_play_stats — logged by them, or seated on it.
+      SELECT p.game_id,
+             MAX(p.played_at) AS last_played_at,
+             COUNT(*)::INT    AS play_count
+      FROM boardgamebuddy_plays p
+      WHERE p.user_id = target
+         OR EXISTS (
+              SELECT 1 FROM boardgamebuddy_play_players pp
+              WHERE pp.play_id = p.id AND pp.player_user_id = target
+            )
+      GROUP BY p.game_id
+      UNION ALL
+      -- Played but never logged here (status 'played').
+      -- A game with a play is already above, so only the rest join.
+      SELECT c.game_id, NULL, 0
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = target AND c.status = 'played'
+        AND NOT EXISTS (
+              SELECT 1 FROM boardgamebuddy_plays p2
+              WHERE p2.game_id = c.game_id
+                AND (p2.user_id = target OR EXISTS (
+                      SELECT 1 FROM boardgamebuddy_play_players pp2
+                      WHERE pp2.play_id = p2.id AND pp2.player_user_id = target))
+            )
+    ),
+    filtered AS (
+      SELECT pg.last_played_at, pg.play_count, g.*
+      FROM played_games pg
+      JOIN boardgamebuddy_games g ON g.id = pg.game_id
+      WHERE NOT EXISTS (
+              SELECT 1 FROM boardgamebuddy_collections c
+              WHERE c.user_id = target AND c.game_id = pg.game_id AND c.status <> 'played'
+            )
+        AND (NOT v_excl OR NOT g.is_expansion)
+        -- A plain case-insensitive substring, not ILIKE: a user who types a %
+        -- means a percent sign, not a wildcard.
+        AND (v_search IS NULL OR strpos(lower(g.name), lower(v_search)) > 0)
+        -- NULL bounds are permissive: a game that does not say how many can
+        -- play is never filtered out by a player count.
+        AND (p_players IS NULL OR g.max_players IS NULL OR g.max_players >= p_players)
+        -- At six or more, the lower bound is dropped entirely, so a big-group
+        -- search surfaces everything that can reach the table.
+        AND (p_players IS NULL OR p_players >= 6 OR g.min_players IS NULL OR g.min_players <= p_players)
+        -- Unknown playtime counts as zero, so a minimum excludes it and a
+        -- maximum keeps it.
+        AND (p_playtime_min IS NULL OR COALESCE(g.playing_time, 0) >= p_playtime_min)
+        AND (p_playtime_max IS NULL OR COALESCE(g.playing_time, 0) <= p_playtime_max)
+        AND (p_play_mode IS NULL OR g.play_mode = p_play_mode)
+    ),
+    page AS (
+      SELECT f.*
+      FROM filtered f
+      ORDER BY f.last_played_at DESC NULLS LAST, f.id
+      LIMIT v_per_page OFFSET v_offset
+    )
+    SELECT
+      (SELECT COUNT(*) FROM filtered),
+      COALESCE(jsonb_agg(jsonb_build_object(
+        -- The synthetic id and date the Python minted. There is no collection
+        -- row to take them from, and the client keys tiles on both.
+        'id', 'played-' || q.id::TEXT,
+        'game_id', q.id,
+        'status', 'played',
+        'added_at', COALESCE(q.last_played_at::TEXT || 'T00:00:00+00:00', (SELECT to_jsonb(c.added_at) #>> '{}' FROM boardgamebuddy_collections c WHERE c.user_id = target AND c.game_id = q.id)),
+        'last_played_at', q.last_played_at,
+        'play_count', COALESCE(q.play_count, 0),
+        'game', jsonb_build_object(
+          'id', q.id,
+          'bgg_id', q.bgg_id,
+          'name', q.name,
+          'year_published', q.year_published,
+          'min_players', q.min_players,
+          'max_players', q.max_players,
+          'playing_time', q.playing_time,
+          'thumbnail_url', q.thumbnail_url,
+          'image_url', q.image_url,
+          'theme_color', q.theme_color,
+          'is_expansion', q.is_expansion,
+          'base_game_bgg_id', q.base_game_bgg_id,
+          'expansion_color', q.expansion_color,
+          'rulebook_url', q.rulebook_url,
+          'play_mode', q.play_mode,
+          'expansion_count', COALESCE(xc.n, 0)
+        )
+      -- jsonb_agg does not inherit the subquery's order, so the ordering is
+      -- restated here as well as on the LIMIT that chose the page.
+      ) ORDER BY q.last_played_at DESC NULLS LAST, q.id), '[]'::jsonb)
+      INTO v_total, v_items
+      FROM page q
+      LEFT JOIN LATERAL (
+        -- Catalog-wide, not the viewer's own expansions: the tile badge says
+        -- how many exist for this game. An expansion scores 0 by the first
+        -- predicate. This is the third round trip the endpoint used to make.
+        SELECT COUNT(*)::INT AS n
+        FROM boardgamebuddy_games e
+        WHERE NOT q.is_expansion
+          AND q.bgg_id IS NOT NULL
+          AND e.is_expansion = true
+          AND e.base_game_bgg_id = q.bgg_id
+      ) xc ON true;
+
+  ELSE
+    -- Owned (widened to prev_owned) and wishlist.
+    --
+    -- An INNER join, because the Python skipped any collection row whose game
+    -- row had gone. The join is also where every filter reads from: the grid
+    -- has always filtered on the catalog row rather than the denormalized
+    -- game_* columns, and rulebook_url is only on the catalog row.
+    WITH filtered AS (
+      SELECT c.id AS collection_id, c.status, c.added_at, g.*
+      FROM boardgamebuddy_collections c
+      JOIN boardgamebuddy_games g ON g.id = c.game_id
+      WHERE c.user_id = target
+        AND c.status = ANY(v_statuses)
+        AND (NOT v_excl OR NOT g.is_expansion)
+        AND (v_search IS NULL OR strpos(lower(g.name), lower(v_search)) > 0)
+        AND (p_players IS NULL OR g.max_players IS NULL OR g.max_players >= p_players)
+        AND (p_players IS NULL OR p_players >= 6 OR g.min_players IS NULL OR g.min_players <= p_players)
+        AND (p_playtime_min IS NULL OR COALESCE(g.playing_time, 0) >= p_playtime_min)
+        AND (p_playtime_max IS NULL OR COALESCE(g.playing_time, 0) <= p_playtime_max)
+        AND (p_play_mode IS NULL OR g.play_mode = p_play_mode)
+    ),
+    counted AS (
+      -- Both counts are over the FILTERED shelf, not the page: the client
+      -- subtracts parted_total from a count that describes the whole shelf.
+      SELECT COUNT(*) AS total,
+             COUNT(*) FILTER (WHERE f.status = 'prev_owned') AS parted
+      FROM filtered f
+    ),
+    page AS (
+      SELECT f.*, ps.last_played_at, ps.play_count
+      FROM filtered f
+      LEFT JOIN LATERAL (
+        -- Same visibility rule as bgb_play_stats. Per surviving row, and
+        -- before the LIMIT when the sort reads it — nothing materialises a
+        -- last_played_at on the collection row to sort by instead.
+        SELECT MAX(p.played_at) AS last_played_at, COUNT(*)::INT AS play_count
+        FROM boardgamebuddy_plays p
+        WHERE p.game_id = f.id
+          AND (
+            p.user_id = target
+            OR EXISTS (
+                 SELECT 1 FROM boardgamebuddy_play_players pp
+                 WHERE pp.play_id = p.id AND pp.player_user_id = target
+               )
+          )
+      ) ps ON true
+      ORDER BY
+        -- Opt-in bucket first, so an exact fit leads without disturbing the
+        -- chosen sort inside either bucket.
+        CASE WHEN v_exact AND f.max_players = p_players THEN 0 ELSE 1 END,
+        CASE WHEN v_sort = 'last_played' THEN ps.last_played_at END DESC NULLS LAST,
+        CASE WHEN v_sort = 'alphabetical' THEN lower(f.name) END ASC NULLS LAST,
+        CASE WHEN v_sort <> 'alphabetical' THEN f.added_at END DESC NULLS LAST,
+        -- DELIBERATELY NOT PARITY. The Python left ties in whatever order
+        -- PostgREST returned them, which is a paging hazard: a tied row can
+        -- show up on two pages, or on none. A unique key makes the order total.
+        f.id
+      LIMIT v_per_page OFFSET v_offset
+    )
+    SELECT
+      (SELECT total FROM counted),
+      (SELECT parted FROM counted),
+      COALESCE(jsonb_agg(jsonb_build_object(
+        'id', q.collection_id,
+        'game_id', q.id,
+        'status', q.status,
+        'added_at', q.added_at,
+        'last_played_at', q.last_played_at,
+        'play_count', COALESCE(q.play_count, 0),
+        'game', jsonb_build_object(
+          'id', q.id,
+          'bgg_id', q.bgg_id,
+          'name', q.name,
+          'year_published', q.year_published,
+          'min_players', q.min_players,
+          'max_players', q.max_players,
+          'playing_time', q.playing_time,
+          'thumbnail_url', q.thumbnail_url,
+          'image_url', q.image_url,
+          'theme_color', q.theme_color,
+          'is_expansion', q.is_expansion,
+          'base_game_bgg_id', q.base_game_bgg_id,
+          'expansion_color', q.expansion_color,
+          'rulebook_url', q.rulebook_url,
+          'play_mode', q.play_mode,
+          'expansion_count', COALESCE(xc.n, 0)
+        )
+      ) ORDER BY
+        CASE WHEN v_exact AND q.max_players = p_players THEN 0 ELSE 1 END,
+        CASE WHEN v_sort = 'last_played' THEN q.last_played_at END DESC NULLS LAST,
+        CASE WHEN v_sort = 'alphabetical' THEN lower(q.name) END ASC NULLS LAST,
+        CASE WHEN v_sort <> 'alphabetical' THEN q.added_at END DESC NULLS LAST,
+        q.id
+      ), '[]'::jsonb)
+      INTO v_total, v_parted, v_items
+      FROM page q
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::INT AS n
+        FROM boardgamebuddy_games e
+        WHERE NOT q.is_expansion
+          AND q.bgg_id IS NOT NULL
+          AND e.is_expansion = true
+          AND e.base_game_bgg_id = q.bgg_id
+      ) xc ON true;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'items', COALESCE(v_items, '[]'::jsonb),
+    'total', COALESCE(v_total, 0),
+    'parted_total', COALESCE(v_parted, 0)
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.bgb_game_detail_bundle(game_uuid uuid, viewer uuid, plays_limit integer DEFAULT 5)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_game JSONB;
+  v_base JSONB;
+  v_status TEXT;
+  v_plays JSONB;
+  v_expansions JSONB;
+  v_exp_count_viewer INT;
+  v_is_expansion BOOLEAN;
+  v_base_bgg_id INT;
+  v_bgg_id INT;
+  v_viewer_stats JSONB;
+BEGIN
+  SELECT to_jsonb(g.*), g.is_expansion, g.base_game_bgg_id, g.bgg_id
+    INTO v_game, v_is_expansion, v_base_bgg_id, v_bgg_id
+    FROM boardgamebuddy_games g WHERE g.id = game_uuid;
+  IF v_game IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  IF v_is_expansion AND v_base_bgg_id IS NOT NULL THEN
+    SELECT jsonb_build_object(
+      'id', g.id,
+      'name', g.name,
+      'thumbnail_url', g.thumbnail_url
+    ) INTO v_base
+    FROM boardgamebuddy_games g
+    WHERE g.bgg_id = v_base_bgg_id
+    LIMIT 1;
+  END IF;
+
+  -- Viewer's pill: collection row wins; otherwise fall through to 'played'
+  -- when the viewer has any visible play (own or as a participant) so the
+  -- played-not-owned case paints the purple Played banner instead of the
+  -- bare "+ Add" picker.
+  SELECT status INTO v_status
+    FROM boardgamebuddy_collections
+    WHERE user_id = viewer AND game_id = game_uuid;
+  IF v_status IS NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM boardgamebuddy_plays p
+      WHERE p.game_id = game_uuid
+        AND (
+          p.user_id = viewer
+          OR EXISTS (
+            SELECT 1 FROM boardgamebuddy_play_players pp
+            WHERE pp.play_id = p.id AND pp.player_user_id = viewer
+          )
+        )
+    ) THEN
+      v_status := 'played';
+    END IF;
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(play_row ORDER BY played_at DESC, created_at DESC), '[]'::jsonb)
+    INTO v_plays
+    FROM (
+      SELECT
+        p.played_at,
+        p.created_at,
+        jsonb_build_object(
+          'id', p.id,
+          'game_id', p.game_id,
+          'game_name', p.game_name,
+          'game_thumbnail', p.game_thumbnail_url,
+          'played_at', p.played_at,
+          'notes', p.notes,
+          'photo_url', p.photo_url,
+          'play_mode', COALESCE(p.play_mode, 'competitive'),
+          'created_at', p.created_at,
+          'logged_by_id', p.user_id,
+          'logged_by_name', COALESCE(pr.display_name, 'Unknown'),
+          'is_own', p.user_id = viewer,
+          'players', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+              'user_id', pp.player_user_id,
+              'name', COALESCE(pp_pr.display_name, pp.player_display_name, 'Unknown'),
+              'is_winner', COALESCE(pp.is_winner, false),
+              'score', pp.score
+            ) ORDER BY pp.id)
+            FROM boardgamebuddy_play_players pp
+            LEFT JOIN boardgamebuddy_profiles pp_pr ON pp_pr.id = pp.player_user_id
+            WHERE pp.play_id = p.id
+          ), '[]'::jsonb),
+          'expansions', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+              'expansion_game_id', pe.expansion_game_id,
+              'name', eg.name,
+              'color', eg.expansion_color
+            ))
+            FROM boardgamebuddy_play_expansions pe
+            JOIN boardgamebuddy_games eg ON eg.id = pe.expansion_game_id
+            WHERE pe.play_id = p.id
+          ), '[]'::jsonb)
+        ) AS play_row
+      FROM boardgamebuddy_plays p
+      LEFT JOIN boardgamebuddy_profiles pr ON pr.id = p.user_id
+      WHERE p.game_id = game_uuid
+        AND (
+          p.user_id = viewer
+          OR EXISTS (
+            SELECT 1 FROM boardgamebuddy_play_players pl
+            WHERE pl.play_id = p.id AND pl.player_user_id = viewer
+          )
+        )
+      ORDER BY p.played_at DESC, p.created_at DESC
+      LIMIT plays_limit
+    ) ranked;
+
+  IF NOT v_is_expansion AND v_bgg_id IS NOT NULL THEN
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+      'expansion_game_id', g.id,
+      'bgg_id', g.bgg_id,
+      'name', g.name,
+      'thumbnail_url', g.thumbnail_url,
+      -- Full-size art for the expansion reel's polaroids: at 132x110 with
+      -- object-fit: cover, BGG's ~200px thumbnail was being upscaled.
+      'image_url', g.image_url,
+      'color', g.expansion_color,
+      'is_enabled', EXISTS (
+        SELECT 1 FROM boardgamebuddy_user_expansions ue
+        WHERE ue.user_id = viewer AND ue.expansion_game_id = g.id
+      ),
+      'rulebook_url', g.rulebook_url
+    ) ORDER BY g.name), '[]'::jsonb)
+      INTO v_expansions
+      FROM boardgamebuddy_games g
+      WHERE g.is_expansion = true AND g.base_game_bgg_id = v_bgg_id;
+
+    SELECT COUNT(*) INTO v_exp_count_viewer
+      FROM boardgamebuddy_games g
+      JOIN boardgamebuddy_collections c
+        ON c.game_id = g.id
+       AND c.user_id = viewer
+       AND c.status = 'owned'
+      WHERE g.is_expansion = true AND g.base_game_bgg_id = v_bgg_id;
+  ELSE
+    v_expansions := '[]'::jsonb;
+    v_exp_count_viewer := 0;
+  END IF;
+
+  -- ── Viewer's record with this game ──────────────────────────────────────
+  WITH my_plays AS (
+    SELECT p.id, p.played_at
+      FROM boardgamebuddy_plays p
+     WHERE p.game_id = game_uuid
+       AND (
+         p.user_id = viewer
+         OR EXISTS (
+           SELECT 1 FROM boardgamebuddy_play_players pp
+            WHERE pp.play_id = p.id AND pp.player_user_id = viewer
+         )
+       )
+  ),
+  -- The viewer's own seat on each of those plays. A play they logged but sat
+  -- out has no row here, so it has no result and no score.
+  mine AS (
+    SELECT mp.id AS play_id, pp.is_winner, pp.score,
+           EXISTS (
+             SELECT 1 FROM boardgamebuddy_play_players d
+              WHERE d.play_id = mp.id
+                AND (d.is_winner OR d.score IS NOT NULL)
+           ) AS decided
+      FROM my_plays mp
+      JOIN boardgamebuddy_play_players pp
+        ON pp.play_id = mp.id AND pp.player_user_id = viewer
+  ),
+  winner_scores AS (
+    SELECT w.play_id, w.score
+      FROM boardgamebuddy_play_players w
+      JOIN my_plays mp ON mp.id = w.play_id
+     WHERE w.is_winner AND w.score IS NOT NULL
+  )
+  SELECT CASE WHEN (SELECT COUNT(*) FROM my_plays) = 0 THEN NULL ELSE
+    jsonb_build_object(
+      'game_id',           game_uuid,
+      'play_mode',         COALESCE(v_game->>'play_mode', 'competitive'),
+      'plays',             (SELECT COUNT(*)::INT FROM my_plays),
+      'wins',              (SELECT COUNT(*)::INT FROM mine WHERE is_winner),
+      'decided_plays',     (SELECT COUNT(*)::INT FROM mine WHERE decided),
+      'scored_plays',      (SELECT COUNT(DISTINCT play_id)::INT FROM winner_scores),
+      'avg_winning_score', (SELECT ROUND(AVG(score))::INT FROM winner_scores),
+      'your_avg_score',    (SELECT ROUND(AVG(score))::INT FROM mine WHERE score IS NOT NULL),
+      'your_best_score',   (SELECT MAX(score) FROM mine),
+      'first_played_at',   (SELECT MIN(played_at) FROM my_plays),
+      'last_played_at',    (SELECT MAX(played_at) FROM my_plays)
+    )
+  END INTO v_viewer_stats;
+
+  RETURN jsonb_build_object(
+    'game', v_game,
+    'base_game', v_base,
+    'viewer_status', v_status,
+    'recent_plays', v_plays,
+    'expansions', v_expansions,
+    'expansion_count_for_viewer', v_exp_count_viewer,
+    'viewer_stats', v_viewer_stats
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.bgb_link_ghost_rows(p_owner uuid, p_name_key text, p_target uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_updated INT;
+BEGIN
+  -- Scoped to plays the owner logged, so a caller can never touch someone
+  -- else's roster.
+  UPDATE boardgamebuddy_play_players pp
+     SET player_user_id = p_target
+   WHERE pp.play_id IN (
+           SELECT id FROM boardgamebuddy_plays WHERE user_id = p_owner
+         )
+     AND pp.player_user_id IS NULL
+     AND lower(btrim(COALESCE(pp.player_display_name, ''))) = p_name_key;
+
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.bgb_log_play(p_user uuid, p_payload jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_game        RECORD;
+  v_mode        TEXT;
+  v_play        RECORD;
+  v_logged_name TEXT;
+  v_roster      JSONB;
+  v_players     JSONB;
+  v_expansions  JSONB;
+  v_client_key  UUID;
+  v_existing    UUID;
+  v_country     TEXT;
+  v_group       UUID;
+  v_batch       UUID;
+  v_template    JSONB;
+  v_bga_table   BIGINT;
+  v_bgg_play_id BIGINT;
+BEGIN
+  -- Empty string and absent both mean "no key" — the client omits the field
+  -- entirely for live writes, but a serializer that emits "" must not be read
+  -- as a key shared by every unkeyed play.
+  v_client_key := NULLIF(p_payload->>'client_key', '')::UUID;
+
+  -- Set only by the Settings play importer, and only on plays
+  -- it judged identical to at least one other in the same import: same game,
+  -- same date, same players, same winner, and no score or note on either. The
+  -- feed and the plays log show one card per group; every counter still sees
+  -- the individual rows, which is the whole reason this is a tag rather than
+  -- a row multiplier.
+  v_group := NULLIF(p_payload->>'import_group_id', '')::UUID;
+
+  -- One id per IMPORT, where the group above is one per RUN.
+  -- Both are set only by the importer; a live log has neither, and neither is
+  -- read by anything that counts plays.
+  v_batch := NULLIF(p_payload->>'import_batch_id', '')::UUID;
+
+  -- The scoring grid this play was scored on, snapshotted.
+  -- jsonb 'null' and absent both mean "no template": the client sends an
+  -- explicit null for a play scored on the plain R1..Rn grid.
+  v_template := NULLIF(p_payload->'scoring_template', 'null'::jsonb);
+
+  -- The BGA table this play came from, if any.
+  v_bga_table := NULLIF(p_payload->>'bga_table_id', '')::BIGINT;
+
+  -- The BoardGameGeek play this row came from, set only by the
+  -- importer's BoardGameGeek source. Same empty-string rule as the two keys
+  -- above.
+  v_bgg_play_id := NULLIF(p_payload->>'bgg_play_id', '')::BIGINT;
+
+  IF v_client_key IS NOT NULL THEN
+    SELECT p.id INTO v_existing
+      FROM boardgamebuddy_plays p
+     WHERE p.user_id = p_user AND p.client_key = v_client_key;
+    IF FOUND THEN
+      RETURN jsonb_build_object('duplicate', true, 'id', v_existing);
+    END IF;
+  END IF;
+
+  -- Same envelope, different key: a table already imported is
+  -- not a failure, it is the answer "you already have this one".
+  IF v_bga_table IS NOT NULL THEN
+    SELECT p.id INTO v_existing
+      FROM boardgamebuddy_plays p
+     WHERE p.user_id = p_user AND p.bga_table_id = v_bga_table;
+    IF FOUND THEN
+      RETURN jsonb_build_object('duplicate', true, 'id', v_existing);
+    END IF;
+  END IF;
+
+  -- The third key, and the only one that can see the plays the
+  -- RETIRED POST /bgg/sync write path landed: those rows carry a bgg_play_id
+  -- and no client_key at all, so nothing derived from the importer's own draft
+  -- ids could ever recognise them. This is what makes re-importing from
+  -- BoardGameGeek a no-op rather than a duplicate.
+  IF v_bgg_play_id IS NOT NULL THEN
+    SELECT p.id INTO v_existing
+      FROM boardgamebuddy_plays p
+     WHERE p.user_id = p_user AND p.bgg_play_id = v_bgg_play_id;
+    IF FOUND THEN
+      RETURN jsonb_build_object('duplicate', true, 'id', v_existing);
+    END IF;
+  END IF;
+
+  -- The roster gate, before anything is written.
+  SELECT COALESCE(jsonb_agg(kept.seat ORDER BY kept.ord), '[]'::JSONB)
+    INTO v_roster
+    FROM (
+      SELECT s.seat, s.ord
+        FROM jsonb_array_elements(COALESCE(p_payload->'players', '[]'::JSONB))
+               WITH ORDINALITY AS s(seat, ord)
+       WHERE NULLIF(btrim(COALESCE(s.seat->>'user_id', '')), '') IS NOT NULL
+          OR NULLIF(btrim(COALESCE(s.seat->>'name', '')), '') IS NOT NULL
+    ) kept;
+
+  IF jsonb_array_length(v_roster) = 0 THEN
+    RETURN jsonb_build_object('error', 'no_players');
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM jsonb_array_elements(v_roster) AS s(seat)
+     WHERE NULLIF(btrim(COALESCE(s.seat->>'user_id', '')), '') IS NOT NULL
+     GROUP BY NULLIF(btrim(s.seat->>'user_id'), '')::UUID
+    HAVING count(*) > 1
+  ) THEN
+    RETURN jsonb_build_object('error', 'duplicate_player');
+  END IF;
+
+  -- Unresolvable / malformed becomes NULL — "we don't know
+  -- where this was played" is a legitimate row and a rejected save is not.
+  v_country := upper(NULLIF(btrim(COALESCE(p_payload->>'country_code', '')), ''));
+  IF v_country IS NOT NULL AND v_country !~ '^[A-Z]{2}$' THEN
+    v_country := NULL;
+  END IF;
+
+  SELECT g.id, g.name, g.thumbnail_url, g.play_mode
+    INTO v_game
+    FROM boardgamebuddy_games g
+   WHERE g.id = (p_payload->>'game_id')::UUID;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('error', 'game_not_found');
+  END IF;
+
+  -- Explicit override wins; otherwise inherit the game's intrinsic mode.
+  v_mode := COALESCE(
+    NULLIF(p_payload->>'play_mode', ''),
+    v_game.play_mode,
+    'competitive'
+  );
+
+  BEGIN
+    INSERT INTO boardgamebuddy_plays (
+      user_id, game_id, played_at, notes, photo_url, play_mode,
+      game_name, game_thumbnail_url, client_key, country_code,
+      import_group_id, import_batch_id, imported_at, scoring_template,
+      bga_table_id, bgg_play_id
+    )
+    VALUES (
+      p_user,
+      v_game.id,
+      (p_payload->>'played_at')::DATE,
+      p_payload->>'notes',
+      p_payload->>'photo_url',
+      v_mode,
+      v_game.name,
+      v_game.thumbnail_url,
+      v_client_key,
+      v_country,
+      v_group,
+      v_batch,
+      -- Stamped server-side, and only for an import: a client clock is the one
+      -- thing here nobody should have to trust, and the Settings list orders by
+      -- this value.
+      CASE WHEN v_batch IS NULL THEN NULL ELSE now() END,
+      v_template,
+      v_bga_table,
+      v_bgg_play_id
+    )
+    RETURNING id, created_at INTO v_play;
+  EXCEPTION WHEN unique_violation THEN
+    -- Lost the race against a concurrent flush of the same queued play, or
+    -- against a concurrent import of the same BGA table. The winner's row is
+    -- the canonical one; hand its id back on the same duplicate envelope the
+    -- pre-checks use.
+    --
+    -- EVERY key, not just client_key: there are
+    -- three unique indexes a play can violate now, and resolving on the wrong
+    -- one returns id: null — a wrong answer that raises nothing and looks like
+    -- success. The BGG arm also covers the pending-imports worker still
+    -- draining legacy kind='play' rows, which writes a bgg_play_id and no
+    -- client_key, so no other arm could resolve that race.
+    SELECT p.id INTO v_existing
+      FROM boardgamebuddy_plays p
+     WHERE p.user_id = p_user
+       AND ((v_client_key  IS NOT NULL AND p.client_key   = v_client_key)
+         OR (v_bga_table   IS NOT NULL AND p.bga_table_id = v_bga_table)
+         OR (v_bgg_play_id IS NOT NULL AND p.bgg_play_id  = v_bgg_play_id));
+    RETURN jsonb_build_object('duplicate', true, 'id', v_existing);
+  END;
+
+  INSERT INTO boardgamebuddy_play_players (
+    play_id, player_user_id, player_display_name, is_winner, score, round_scores,
+    team
+  )
+  SELECT
+    v_play.id,
+    pl.user_id,
+    pl.name,
+    COALESCE(pl.is_winner, false),
+    pl.score,
+    pl.round_scores,
+    -- '' is the COMMON case, not an edge one: the client seeds every seat with
+    -- team:"" and writes "" back when a tag is cleared. Stored as NULL, or
+    -- every untagged seat in the app would share one anonymous side.
+    NULLIF(btrim(pl.team), '')
+  FROM jsonb_to_recordset(v_roster)
+         AS pl(name TEXT, is_winner BOOLEAN, score INTEGER,
+               user_id UUID, round_scores JSONB, team TEXT);
+
+  -- DISTINCT guards the (play_id, expansion_game_id) primary key against a
+  -- payload that repeats an id.
+  INSERT INTO boardgamebuddy_play_expansions (play_id, expansion_game_id)
+  SELECT DISTINCT v_play.id, eid::UUID
+    FROM jsonb_array_elements_text(
+           COALESCE(p_payload->'expansion_ids', '[]'::JSONB)
+         ) AS eid
+   WHERE COALESCE(eid, '') <> '';
+
+  SELECT pr.display_name INTO v_logged_name
+    FROM boardgamebuddy_profiles pr
+   WHERE pr.id = p_user;
+
+  -- Response blocks are built from the NORMALIZED roster (plus the profile/game
+  -- joins they need), not by reading the rows back — the values are identical
+  -- and WITH ORDINALITY keeps the player list in the order the host entered it,
+  -- which a RETURNING or a re-SELECT wouldn't guarantee.
+  SELECT COALESCE(jsonb_agg(
+           jsonb_build_object(
+             'user_id',      pl.user_id,
+             'name',         COALESCE(prof.display_name, pl.name, 'Unknown'),
+             'avatar',       prof.avatar,
+             'is_winner',    COALESCE(pl.is_winner, false),
+             'score',        pl.score,
+             'round_scores', pl.round_scores,
+             -- Echoed from the same NULLIF the INSERT used, for the reason
+             -- country_code is echoed from its normalized local below: the
+             -- client has to read back the value that actually landed.
+             'team',         NULLIF(btrim(pl.team), '')
+           ) ORDER BY pl.ord
+         ), '[]'::JSONB)
+    INTO v_players
+    FROM ROWS FROM (
+           jsonb_to_recordset(v_roster)
+             AS (name TEXT, is_winner BOOLEAN, score INTEGER,
+                 user_id UUID, round_scores JSONB, team TEXT)
+         ) WITH ORDINALITY AS pl(name, is_winner, score, user_id, round_scores,
+                                 team, ord)
+    LEFT JOIN boardgamebuddy_profiles prof ON prof.id = pl.user_id;
+
+  SELECT COALESCE(jsonb_agg(
+           jsonb_build_object(
+             'expansion_game_id', eg.id,
+             'name',              eg.name,
+             'color',             eg.expansion_color
+           ) ORDER BY eg.name
+         ), '[]'::JSONB)
+    INTO v_expansions
+    FROM (
+      SELECT DISTINCT eid::UUID AS id
+        FROM jsonb_array_elements_text(
+               COALESCE(p_payload->'expansion_ids', '[]'::JSONB)
+             ) AS eid
+       WHERE COALESCE(eid, '') <> ''
+    ) picked
+    JOIN boardgamebuddy_games eg ON eg.id = picked.id;
+
+  -- country_code is echoed from the NORMALIZED local, not from the payload:
+  -- the client has to see the value that actually landed, or a "gb" it sent
+  -- would read back as "gb" while the row holds "GB". scoring_template is
+  -- echoed from its local for the same reason (an absent key vs. an explicit
+  -- null must read back identically).
+  RETURN jsonb_build_object(
+    'id',               v_play.id,
+    'game_id',          v_game.id,
+    'game_name',        v_game.name,
+    'game_thumbnail',   v_game.thumbnail_url,
+    'played_at',        (p_payload->>'played_at')::DATE,
+    'notes',            p_payload->>'notes',
+    'players',          v_players,
+    'photo_url',        p_payload->>'photo_url',
+    'expansions',       v_expansions,
+    'created_at',       v_play.created_at,
+    'play_mode',        v_mode,
+    'country_code',     v_country,
+    'scoring_template', v_template,
+    'group_count',      1,
+    'logged_by_id',     p_user,
+    'logged_by_name',   COALESCE(v_logged_name, ''),
+    'is_own',           true
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.bgb_collection_shelf(viewer uuid, target uuid, p_status text DEFAULT 'owned'::text, p_exclude_expansions boolean DEFAULT true, p_limit integer DEFAULT 1000)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_items JSONB;
+  v_total BIGINT := 0;
+  v_parted BIGINT := 0;
+  v_limit INT := LEAST(GREATEST(COALESCE(p_limit, 1000), 1), 5000);
+  v_excl BOOLEAN := COALESCE(p_exclude_expansions, true);
+  -- 'owned' is a SET of statuses, not one: a prev_owned game (sold, gifted,
+  -- donated) is still on your Owned shelf, just dimmed and
+  -- stamped by the client. It is excluded from every owned COUNT, which is why
+  -- v_parted comes back alongside v_total for the caller to subtract. Every
+  -- other status is its own single-element set.
+  v_statuses TEXT[] := CASE
+    WHEN p_status = 'owned' THEN ARRAY['owned', 'prev_owned']
+    ELSE ARRAY[p_status]
+  END;
+BEGIN
+  -- Wishlist is private to its owner (bgb_profile_bundle gates it the same way).
+  IF p_status = 'wishlist' AND viewer IS DISTINCT FROM target THEN
+    RETURN jsonb_build_object(
+      'items', '[]'::jsonb, 'total', 0, 'parted_total', 0, 'truncated', false
+    );
+  END IF;
+
+  IF p_status = 'played' THEN
+    -- Played-not-owned: every game the target has a play for that has NO row
+    -- on their collection table at all (owned AND wishlist both live there).
+    -- Mirrors collection_routes.py:335-404 and bgb_profile_bundle's played_not_owned CTE.
+    -- No denormalized columns available here — a played game has no
+    -- collection row, or only a 'played' one — so this branch joins
+    -- boardgamebuddy_games.
+    WITH played_games AS (
+      -- EXISTS, not a LEFT JOIN onto play_players: the join fans one play out
+      -- to one row per participant, which would multiply play_count. Matches
+      -- bgb_play_stats.
+      SELECT p.game_id
+      FROM boardgamebuddy_plays p
+      WHERE p.user_id = target
+         OR EXISTS (
+              SELECT 1 FROM boardgamebuddy_play_players pp
+              WHERE pp.play_id = p.id AND pp.player_user_id = target
+            )
+      GROUP BY p.game_id
+      UNION ALL
+      -- Played but never logged here (status 'played').
+      -- A game with a play is already above, so only the rest join.
+      SELECT c.game_id
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = target AND c.status = 'played'
+        AND NOT EXISTS (
+              SELECT 1 FROM boardgamebuddy_plays p2
+              WHERE p2.game_id = c.game_id
+                AND (p2.user_id = target OR EXISTS (
+                      SELECT 1 FROM boardgamebuddy_play_players pp2
+                      WHERE pp2.play_id = p2.id AND pp2.player_user_id = target))
+            )
+    )
+    SELECT COUNT(*) INTO v_total
+      FROM played_games pg
+      JOIN boardgamebuddy_games g ON g.id = pg.game_id
+      WHERE NOT EXISTS (
+              SELECT 1 FROM boardgamebuddy_collections c
+              WHERE c.user_id = target AND c.game_id = pg.game_id AND c.status <> 'played'
+            )
+        AND (NOT v_excl OR COALESCE(g.is_expansion, false) = false);
+
+    WITH played_games AS (
+      SELECT p.game_id,
+             MAX(p.played_at) AS last_played_at,
+             COUNT(*)::INT    AS play_count
+      FROM boardgamebuddy_plays p
+      WHERE p.user_id = target
+         OR EXISTS (
+              SELECT 1 FROM boardgamebuddy_play_players pp
+              WHERE pp.play_id = p.id AND pp.player_user_id = target
+            )
+      GROUP BY p.game_id
+      UNION ALL
+      -- Played but never logged here (status 'played').
+      -- A game with a play is already above, so only the rest join.
+      SELECT c.game_id, NULL, 0
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = target AND c.status = 'played'
+        AND NOT EXISTS (
+              SELECT 1 FROM boardgamebuddy_plays p2
+              WHERE p2.game_id = c.game_id
+                AND (p2.user_id = target OR EXISTS (
+                      SELECT 1 FROM boardgamebuddy_play_players pp2
+                      WHERE pp2.play_id = p2.id AND pp2.player_user_id = target))
+            )
+    ),
+    played_not_owned AS (
+      SELECT pg.*
+      FROM played_games pg
+      WHERE NOT EXISTS (
+        SELECT 1 FROM boardgamebuddy_collections c
+        WHERE c.user_id = target AND c.game_id = pg.game_id AND c.status <> 'played'
+      )
+    )
+    SELECT COALESCE(jsonb_agg(row_jsonb ORDER BY sort_a DESC NULLS LAST), '[]'::jsonb)
+      INTO v_items
+      FROM (
+        SELECT
+          pno.last_played_at AS sort_a,
+          jsonb_build_object(
+            -- Matches the synthetic id the Python branch minted so the client
+            -- can key tiles identically across both endpoints.
+            'id', 'played-' || g.id::TEXT,
+            'game_id', g.id,
+            'status', 'played',
+            'added_at', COALESCE(pno.last_played_at::TEXT || 'T00:00:00+00:00', (SELECT to_jsonb(c.added_at) #>> '{}' FROM boardgamebuddy_collections c WHERE c.user_id = target AND c.game_id = pno.game_id)),
+            'last_played_at', pno.last_played_at,
+            'play_count', COALESCE(pno.play_count, 0),
+            'played_before', EXISTS (
+              SELECT 1 FROM boardgamebuddy_collections c
+              WHERE c.user_id = target AND c.game_id = pno.game_id
+                AND c.played_before_at IS NOT NULL),
+            'game', jsonb_build_object(
+              'id', g.id,
+              'bgg_id', g.bgg_id,
+              'name', g.name,
+              'year_published', g.year_published,
+              'min_players', g.min_players,
+              'max_players', g.max_players,
+              'playing_time', g.playing_time,
+              'thumbnail_url', g.thumbnail_url,
+              'image_url', g.image_url,
+              'theme_color', g.theme_color,
+              'is_expansion', COALESCE(g.is_expansion, false),
+              'base_game_bgg_id', g.base_game_bgg_id,
+              'expansion_color', g.expansion_color,
+              'play_mode', COALESCE(g.play_mode, 'competitive'),
+              'expansion_count', COALESCE(xc.n, 0)
+            ),
+            'expansions', '[]'::jsonb
+          ) AS row_jsonb
+        FROM played_not_owned pno
+        JOIN boardgamebuddy_games g ON g.id = pno.game_id
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*)::INT AS n
+          FROM boardgamebuddy_games e
+          WHERE COALESCE(g.is_expansion, false) = false
+            AND g.bgg_id IS NOT NULL
+            AND e.is_expansion = true
+            AND e.base_game_bgg_id = g.bgg_id
+        ) xc ON true
+        WHERE (NOT v_excl OR COALESCE(g.is_expansion, false) = false)
+        ORDER BY pno.last_played_at DESC NULLS LAST
+        LIMIT v_limit
+      ) q;
+
+  ELSE
+    -- owned / wishlist: served entirely from the denormalized c.game_* columns.
+    -- v_total counts every row the items array can draw from, prev_owned
+    -- included, because `truncated` below has to be about the rows on offer.
+    -- v_parted is how many of those the client must not count as owned.
+    SELECT COUNT(*), COUNT(*) FILTER (WHERE c.status = 'prev_owned')
+      INTO v_total, v_parted
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = target AND c.status = ANY(v_statuses)
+        AND (NOT v_excl OR COALESCE(c.game_is_expansion, false) = false);
+
+    SELECT COALESCE(
+             jsonb_agg(row_jsonb ORDER BY sort_a DESC NULLS LAST, sort_b DESC),
+             '[]'::jsonb
+           )
+      INTO v_items
+      FROM (
+        SELECT
+          -- Wishlist sorts on added_at alone (matching bgb_profile_bundle and
+          -- the Python grid); collapsing sort_a to NULL makes the shared
+          -- ORDER BY above degrade to `added_at DESC` for it.
+          CASE WHEN p_status = 'wishlist' THEN NULL ELSE ps.last_played_at END AS sort_a,
+          c.added_at AS sort_b,
+          jsonb_build_object(
+            'id', c.id,
+            'game_id', c.game_id,
+            'status', c.status,
+            'added_at', c.added_at,
+            'last_played_at', ps.last_played_at,
+            'play_count', COALESCE(ps.play_count, 0),
+            -- The played mark, so an unlogged but marked game can join
+            -- the client's Most played order as a logged one does.
+            'played_before', c.played_before_at IS NOT NULL,
+            'game', jsonb_build_object(
+              'id', c.game_id,
+              'bgg_id', c.game_bgg_id,
+              'name', c.game_name,
+              'year_published', c.game_year_published,
+              'min_players', c.game_min_players,
+              'max_players', c.game_max_players,
+              'playing_time', c.game_playing_time,
+              'thumbnail_url', c.game_thumbnail_url,
+              'image_url', gi.image_url,
+              'theme_color', c.game_theme_color,
+              'is_expansion', COALESCE(c.game_is_expansion, false),
+              'base_game_bgg_id', c.game_base_game_bgg_id,
+              'expansion_color', c.game_expansion_color,
+              'play_mode', COALESCE(c.game_play_mode, 'competitive'),
+              'expansion_count', COALESCE(xc.n, 0)
+            ),
+            'expansions', '[]'::jsonb
+          ) AS row_jsonb
+        FROM boardgamebuddy_collections c
+        LEFT JOIN boardgamebuddy_games gi ON gi.id = c.game_id
+        -- image_url only — see the header. Every other game field stays denorm.
+        LEFT JOIN LATERAL (
+          SELECT MAX(p.played_at) AS last_played_at, COUNT(*)::INT AS play_count
+          FROM boardgamebuddy_plays p
+          WHERE p.game_id = c.game_id
+            AND (
+              p.user_id = target
+              OR EXISTS (
+                   SELECT 1 FROM boardgamebuddy_play_players pp
+                   WHERE pp.play_id = p.id AND pp.player_user_id = target
+                 )
+            )
+        ) ps ON true
+        LEFT JOIN LATERAL (
+          -- CATALOG-wide expansion count, not the viewer's owned ones — the
+          -- same number the game page's "Expansions (N)" heading shows.
+          -- _attach_page_expansion_counts (collection_routes.py:238-251) is
+          -- explicit about this: expansions arrive via the import popup
+          -- without touching anyone's collection, so an owned-only count
+          -- reads as zero for a game that plainly has eleven of them.
+          -- Only base games get a count; expansion rows stay at 0.
+          SELECT COUNT(*)::INT AS n
+          FROM boardgamebuddy_games e
+          WHERE COALESCE(c.game_is_expansion, false) = false
+            AND c.game_bgg_id IS NOT NULL
+            AND e.is_expansion = true
+            AND e.base_game_bgg_id = c.game_bgg_id
+        ) xc ON true
+        WHERE c.user_id = target AND c.status = ANY(v_statuses)
+          AND (NOT v_excl OR COALESCE(c.game_is_expansion, false) = false)
+        ORDER BY
+          CASE WHEN p_status = 'wishlist' THEN NULL ELSE ps.last_played_at END
+            DESC NULLS LAST,
+          c.added_at DESC
+        LIMIT v_limit
+      ) q;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'items', COALESCE(v_items, '[]'::jsonb),
+    'total', v_total,
+    -- Zero on every branch but owned/wishlist, and always zero for wishlist.
+    'parted_total', v_parted,
+    'truncated', v_total > v_limit
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.bgb_collection_status_map(p_viewer uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_status_map JSONB;
+  v_expansion_counts JSONB;
+  v_played_marks JSONB;
+BEGIN
+  -- Collection rows first, then a derived 'played' entry for every game the
+  -- viewer has a play for and no collection row on. Matches GET /collection's
+  -- semantics: there, owned/wishlist rows come from the table and played rows
+  -- are synthesized for games with plays but no owned row.
+  --
+  -- The visibility rule for "has a play" is the participated-in one shared by
+  -- bgb_play_stats and every other play count: a play counts when
+  -- the viewer logged it OR appears on it as a participant. EXISTS rather than
+  -- a join, so a multi-player play can't fan out.
+  SELECT COALESCE(jsonb_object_agg(game_id, status), '{}'::jsonb)
+    INTO v_status_map
+    FROM (
+      SELECT c.game_id::TEXT AS game_id, c.status AS status
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = p_viewer
+        AND c.status IN ('owned', 'wishlist', 'played', 'prev_owned')
+      UNION
+      SELECT DISTINCT p.game_id::TEXT, 'played'::TEXT
+      FROM boardgamebuddy_plays p
+      WHERE (
+              p.user_id = p_viewer
+              OR EXISTS (
+                   SELECT 1 FROM boardgamebuddy_play_players pp
+                   WHERE pp.play_id = p.id AND pp.player_user_id = p_viewer
+                 )
+            )
+        AND NOT EXISTS (
+              SELECT 1 FROM boardgamebuddy_collections c2
+              WHERE c2.user_id = p_viewer AND c2.game_id = p.game_id
+            )
+    ) m;
+
+  -- Owned expansions per base game's bgg_id. Reads the denormalized game_*
+  -- columns, so no join to boardgamebuddy_games at all.
+  -- Identical to bgb_profile_bundle's expansion_counts block.
+  --
+  -- `= 'owned'` here is deliberate and NOT widened to prev_owned: an
+  -- expansion you sold is not clutter on your shelf any more, and this number
+  -- is what the tile's expansion badge counts.
+  SELECT COALESCE(jsonb_object_agg(base_bgg, cnt), '{}'::jsonb)
+    INTO v_expansion_counts
+    FROM (
+      SELECT c.game_base_game_bgg_id AS base_bgg, COUNT(*)::INT AS cnt
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = p_viewer
+        AND c.status = 'owned'
+        AND COALESCE(c.game_is_expansion, false) = true
+        AND c.game_base_game_bgg_id IS NOT NULL
+      GROUP BY c.game_base_game_bgg_id
+    ) e;
+
+  -- Every game the viewer marked played without a logged play, on
+  -- a row of any status. The map alone cannot say: it reads 'played' for a
+  -- mark and for logged plays alike, and a shelf status for a marked
+  -- owned or wishlisted game. This is what the sheet's switch shows.
+  SELECT COALESCE(jsonb_agg(c.game_id::TEXT), '[]'::jsonb)
+    INTO v_played_marks
+    FROM boardgamebuddy_collections c
+    WHERE c.user_id = p_viewer AND c.played_before_at IS NOT NULL;
+
+  RETURN jsonb_build_object(
+    'status_map', v_status_map,
+    'expansion_counts', v_expansion_counts,
+    'played_marks', v_played_marks
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.boardgamebuddy_search_games(p_viewer uuid, p_query text, p_limit integer DEFAULT 20, p_include_expansions boolean DEFAULT false)
+ RETURNS TABLE(id uuid, bgg_id integer, name text, year_published integer, min_players integer, max_players integer, playing_time integer, thumbnail_url text, image_url text, theme_color text, is_expansion boolean, base_game_bgg_id integer, expansion_color text, rulebook_url text, play_mode text, collection_status text, in_collection boolean)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT
+    g.id,
+    g.bgg_id,
+    g.name,
+    g.year_published,
+    g.min_players,
+    g.max_players,
+    g.playing_time,
+    g.thumbnail_url,
+    g.image_url,
+    g.theme_color,
+    g.is_expansion,
+    g.base_game_bgg_id,
+    g.expansion_color,
+    g.rulebook_url,
+    g.play_mode,
+    c.status                 AS collection_status,
+    (c.user_id IS NOT NULL)  AS in_collection
+  FROM public.boardgamebuddy_games g
+  -- A mark-only 'played' row is not a shelf: the game is a catalog hit,
+  -- as one with only logged plays is.
+  LEFT JOIN public.boardgamebuddy_collections c
+    ON c.game_id = g.id AND c.user_id = p_viewer AND c.status <> 'played'
+  WHERE g.name ILIKE '%' || COALESCE(p_query, '') || '%'
+    AND (COALESCE(p_include_expansions, false) OR NOT g.is_expansion)
+  ORDER BY (c.user_id IS NOT NULL) DESC, g.name
+  LIMIT GREATEST(COALESCE(p_limit, 20), 0);
+$function$;
+
 CREATE OR REPLACE FUNCTION public.bgb_admin_usage_stats(p_exclude_admins boolean DEFAULT false)
  RETURNS jsonb
  LANGUAGE sql
@@ -294,121 +1653,7 @@ SELECT jsonb_build_object(
   'play_origins',  (SELECT j FROM play_origins)
 );
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_admin_usage_stats(p_exclude_admins boolean) FROM PUBLIC, anon, authenticated;
-COMMENT ON FUNCTION public.bgb_admin_usage_stats(p_exclude_admins boolean) IS 'App-wide usage for the admin Usage spoke: accounts, active accounts (from api_logs), Postgres footprint, screen views, domain counters, play origins. p_exclude_admins leaves out is_admin accounts from every per-account figure. Read by GET /api/v1/boardgame_buddy/admin/usage.';
 
--- bgb_delete_account_rows(p_user uuid)
-CREATE OR REPLACE FUNCTION public.bgb_delete_account_rows(p_user uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_name        TEXT;
-  v_photos      INT := 0;
-  v_names       INT := 0;
-  v_reassigned  INT := 0;
-  v_deleted     INT := 0;
-BEGIN
-  SELECT pr.display_name INTO v_name
-  FROM boardgamebuddy_profiles pr WHERE pr.id = p_user;
-
-  -- (a) Unlink photos whose objects the caller has already removed.
-  --
-  -- Matched on the URL rather than on user_id, and NOT restricted to this
-  -- account's plays. The plays layout is `{user_id}/{uuid4hex}.{ext}`, which
-  -- appears identically inside both the R2 and the Supabase Storage public
-  -- URL, so this is exactly the set of objects that just went. Only the
-  -- owner-gated PATCH can attach one, so in practice they are all on this
-  -- account's own plays — but a row that pointed at a deleted object from
-  -- anywhere else is a broken image either way, and matching the URL costs
-  -- one scan of a small table and cannot be wrong. It also makes this
-  -- statement independent of the reassignment below, so their order is free.
-  --
-  -- A uuid contains only hex and hyphens: no `%`, and no `_`, which is the
-  -- LIKE wildcard that would otherwise need escaping here.
-  UPDATE boardgamebuddy_plays
-     SET photo_url = NULL
-   WHERE photo_url LIKE '%/' || p_user::text || '/%';
-  GET DIAGNOSTICS v_photos = ROW_COUNT;
-
-  -- (b) Give every nameless seat of theirs a name, BEFORE anything nulls the
-  -- account off it. See the header: without this the FK's SET NULL can leave a
-  -- row failing bgb_play_players_identity_chk and abort the whole delete.
-  -- Same expression as bgb_ghost_out_of_plays, including the 'Player' floor
-  -- for an account whose own display_name is somehow blank.
-  UPDATE boardgamebuddy_play_players pp
-     SET player_display_name =
-           COALESCE(NULLIF(btrim(COALESCE(v_name, '')), ''), 'Player')
-   WHERE pp.player_user_id = p_user
-     AND btrim(COALESCE(pp.player_display_name, '')) = '';
-  GET DIAGNOSTICS v_names = ROW_COUNT;
-
-  -- (c) Hand over every play that somebody else was also at.
-  WITH candidates AS (
-    SELECT p.id           AS play_id,
-           pp.player_user_id AS heir,
-           pp.linked_at   AS seated_at
-      FROM boardgamebuddy_plays p
-      JOIN boardgamebuddy_play_players pp ON pp.play_id = p.id
-     WHERE p.user_id = p_user
-       AND pp.player_user_id IS NOT NULL
-       AND pp.player_user_id <> p_user
-       -- Not a candidate if the play would collide with one this account
-       -- already holds on any of the three per-owner unique keys. See the
-       -- header: BGA tables are the real case, and an heir who already has a
-       -- row for the same table already has that night.
-       AND NOT EXISTS (
-             SELECT 1
-               FROM boardgamebuddy_plays x
-              WHERE x.user_id = pp.player_user_id
-                AND (
-                      (p.bgg_play_id  IS NOT NULL AND x.bgg_play_id  = p.bgg_play_id)
-                   OR (p.bga_table_id IS NOT NULL AND x.bga_table_id = p.bga_table_id)
-                   OR (p.client_key   IS NOT NULL AND x.client_key   = p.client_key)
-                )
-           )
-  ),
-  heirs AS (
-    -- Earliest seated wins; the uid breaks the tie so a re-run picks the same
-    -- person. DISTINCT ON needs the leading ORDER BY column to be the group.
-    SELECT DISTINCT ON (c.play_id) c.play_id AS play_id, c.heir AS heir
-      FROM candidates c
-     ORDER BY c.play_id, c.seated_at ASC, c.heir ASC
-  )
-  UPDATE boardgamebuddy_plays p
-     SET user_id             = h.heir,
-         inherited_at        = now(),
-         inherited_from_name = COALESCE(NULLIF(btrim(COALESCE(v_name, '')), ''), 'Player')
-    FROM heirs h
-   WHERE p.id = h.play_id;
-  GET DIAGNOSTICS v_reassigned = ROW_COUNT;
-
-  -- (d) Whatever is left was theirs alone, and goes with them.
-  SELECT COUNT(*)::int INTO v_deleted
-    FROM boardgamebuddy_plays WHERE user_id = p_user;
-
-  -- (e) The profile, and every cascade hanging off it: collections, the
-  -- remaining plays, buddies, buddy edges, sessions and participants,
-  -- achievements, push subscriptions, pending imports, feedback, BGA links.
-  -- Seats on the plays handed over in (c) are NOT among them — they take the
-  -- FK's SET NULL and become named ghosts. Guide chapters they authored keep
-  -- their text under a NULL created_by.
-  DELETE FROM boardgamebuddy_profiles WHERE id = p_user;
-
-  RETURN jsonb_build_object(
-    'plays_reassigned', v_reassigned,
-    'plays_deleted',    v_deleted,
-    'photos_unlinked',  v_photos,
-    'names_backfilled', v_names
-  );
-END;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_delete_account_rows(p_user uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_delete_account_rows(p_user uuid) TO boardgamebuddy_role;
-
--- bgb_feed_plays(viewer uuid, before_played_at date, before_created_at timestamp with time zone, lim integer)
 CREATE OR REPLACE FUNCTION public.bgb_feed_plays(viewer uuid, before_played_at date DEFAULT NULL::date, before_created_at timestamp with time zone DEFAULT NULL::timestamp with time zone, lim integer DEFAULT 20)
  RETURNS TABLE(play_id uuid, play_user_id uuid, play_user_name text, play_user_avatar jsonb, game_id uuid, game_name text, game_image_url text, game_thumbnail_url text, played_at date, created_at timestamp with time zone, notes text, photo_url text, play_mode text, winner_display_name text, participant_count integer, participants jsonb, group_count integer, import_group_id uuid, players jsonb, expansions jsonb, country_code text, reaction_count integer, viewer_reacted boolean, reactors jsonb, import_batch_id uuid, scoring_template jsonb)
  LANGUAGE plpgsql
@@ -676,101 +1921,7 @@ BEGIN
   USING viewer, before_played_at, before_created_at;
 END;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_feed_plays(viewer uuid, before_played_at date, before_created_at timestamp with time zone, lim integer) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_feed_plays(viewer uuid, before_played_at date, before_created_at timestamp with time zone, lim integer) TO boardgamebuddy_role;
 
--- bgb_feedback_list(viewer_id uuid, want_status text, want_type text, want_topic text, want_id uuid)
-CREATE OR REPLACE FUNCTION public.bgb_feedback_list(viewer_id uuid, want_status text, want_type text DEFAULT NULL::text, want_topic text DEFAULT NULL::text, want_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(id uuid, user_id uuid, author_name text, feedback_type text, feedback_type_label text, feedback_type_icon text, topic text, topic_label text, topic_icon text, body text, status text, resolved_at timestamp with time zone, resolver_name text, created_at timestamp with time zone, like_count bigint, viewer_liked boolean)
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-  SELECT
-    f.id,
-    f.user_id,
-    author.display_name,
-    f.feedback_type,
-    ft.label,
-    ft.icon,
-    f.topic,
-    tp.label,
-    tp.icon,
-    f.body,
-    f.status,
-    f.resolved_at,
-    resolver.display_name,
-    f.created_at,
-    -- A correlated count rather than a LEFT JOIN + GROUP BY: it reads off the
-    -- likes PK directly (feedback_id leads it) and keeps every column above out
-    -- of a GROUP BY clause that would have to list all fourteen of them.
-    (SELECT COUNT(*) FROM public.boardgamebuddy_feedback_likes l
-      WHERE l.feedback_id = f.id),
-    EXISTS (SELECT 1 FROM public.boardgamebuddy_feedback_likes l
-             WHERE l.feedback_id = f.id AND l.user_id = viewer_id)
-  FROM public.boardgamebuddy_feedback f
-  JOIN public.boardgamebuddy_profiles author ON author.id = f.user_id
-  JOIN public.boardgamebuddy_feedback_types  ft ON ft.id = f.feedback_type
-  JOIN public.boardgamebuddy_feedback_topics tp ON tp.id = f.topic
-  -- LEFT, unlike the three above: resolved_by is null on every open item, and an
-  -- inner join here would return an empty board.
-  LEFT JOIN public.boardgamebuddy_profiles resolver ON resolver.id = f.resolved_by
-  WHERE (want_id IS NULL     OR f.id     = want_id)
-    -- Skipped entirely on an id lookup — see the header.
-    AND (want_id IS NOT NULL OR f.status = want_status)
-    AND (want_type  IS NULL OR f.feedback_type = want_type)
-    AND (want_topic IS NULL OR f.topic         = want_topic)
-  ORDER BY (SELECT COUNT(*) FROM public.boardgamebuddy_feedback_likes l
-             WHERE l.feedback_id = f.id) DESC,
-           f.created_at DESC;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_feedback_list(viewer_id uuid, want_status text, want_type text, want_topic text, want_id uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_feedback_list(viewer_id uuid, want_status text, want_type text, want_topic text, want_id uuid) TO boardgamebuddy_role;
-
--- bgb_mark_link_notifications_seen(p_viewer uuid, p_through timestamp with time zone)
-CREATE OR REPLACE FUNCTION public.bgb_mark_link_notifications_seen(p_viewer uuid, p_through timestamp with time zone DEFAULT NULL::timestamp with time zone)
- RETURNS timestamp with time zone
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_through TIMESTAMPTZ := COALESCE(p_through, now());
-  v_result  TIMESTAMPTZ;
-BEGIN
-  UPDATE boardgamebuddy_profiles
-     SET link_notifications_seen_at =
-           GREATEST(COALESCE(link_notifications_seen_at, '-infinity'::timestamptz), v_through)
-   WHERE id = p_viewer
-   RETURNING link_notifications_seen_at INTO v_result;
-  RETURN v_result;
-END;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_mark_link_notifications_seen(p_viewer uuid, p_through timestamp with time zone) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_mark_link_notifications_seen(p_viewer uuid, p_through timestamp with time zone) TO boardgamebuddy_role;
-
--- bgb_mark_release_notices_seen(p_viewer uuid, p_through timestamp with time zone)
-CREATE OR REPLACE FUNCTION public.bgb_mark_release_notices_seen(p_viewer uuid, p_through timestamp with time zone DEFAULT NULL::timestamp with time zone)
- RETURNS timestamp with time zone
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_through TIMESTAMPTZ := COALESCE(p_through, now());
-  v_result  TIMESTAMPTZ;
-BEGIN
-  UPDATE public.boardgamebuddy_profiles
-     SET release_notices_seen_at = GREATEST(release_notices_seen_at, v_through)
-   WHERE id = p_viewer
-   RETURNING release_notices_seen_at INTO v_result;
-  RETURN v_result;
-END;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_mark_release_notices_seen(p_viewer uuid, p_through timestamp with time zone) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_mark_release_notices_seen(p_viewer uuid, p_through timestamp with time zone) TO boardgamebuddy_role;
-
--- bgb_notifications(p_viewer uuid, p_limit integer, p_before timestamp with time zone, p_before_key text)
 CREATE OR REPLACE FUNCTION public.bgb_notifications(p_viewer uuid, p_limit integer DEFAULT 20, p_before timestamp with time zone DEFAULT NULL::timestamp with time zone, p_before_key text DEFAULT NULL::text)
  RETURNS TABLE(entry_key text, kind text, occurred_at timestamp with time zone, is_unread boolean, actor_id uuid, actor_display_name text, actor_username text, actor_avatar jsonb, play_group text, play_id uuid, play_ids uuid[], group_count integer, game_count integer, played_from date, played_to date, game_id uuid, game_name text, game_thumbnail_url text, import_batch_id uuid, edge_id uuid)
  LANGUAGE plpgsql
@@ -994,10 +2145,7 @@ BEGIN
   LIMIT v_lim;
 END;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_notifications(p_viewer uuid, p_limit integer, p_before timestamp with time zone, p_before_key text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_notifications(p_viewer uuid, p_limit integer, p_before timestamp with time zone, p_before_key text) TO boardgamebuddy_role;
 
--- bgb_notifications_unread(p_viewer uuid)
 CREATE OR REPLACE FUNCTION public.bgb_notifications_unread(p_viewer uuid)
  RETURNS integer
  LANGUAGE plpgsql
@@ -1062,10 +2210,7 @@ BEGIN
   RETURN v_n;
 END;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_notifications_unread(p_viewer uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_notifications_unread(p_viewer uuid) TO boardgamebuddy_role;
 
--- bgb_onboarding_buddy_suggestions(uid uuid, lim integer, active_window_days integer)
 CREATE OR REPLACE FUNCTION public.bgb_onboarding_buddy_suggestions(uid uuid, lim integer DEFAULT 12, active_window_days integer DEFAULT 90)
  RETURNS TABLE(user_id uuid, mutual_count bigint, play_count bigint, pending_mutual_count bigint, via_user_id uuid, source text)
  LANGUAGE sql
@@ -1234,10 +2379,7 @@ AS $function$
    ORDER BY t.tier, t.rank_in_tier
    LIMIT lim;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_onboarding_buddy_suggestions(uid uuid, lim integer, active_window_days integer) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_onboarding_buddy_suggestions(uid uuid, lim integer, active_window_days integer) TO boardgamebuddy_role;
 
--- bgb_onboarding_suggestion_network(uid uuid, seed_ids uuid[], per_seed integer, lim integer)
 CREATE OR REPLACE FUNCTION public.bgb_onboarding_suggestion_network(uid uuid, seed_ids uuid[], per_seed integer DEFAULT 6, lim integer DEFAULT 48)
  RETURNS TABLE(via_user_id uuid, user_id uuid, buddy_count bigint, rank_in_seed integer)
  LANGUAGE sql
@@ -1309,10 +2451,7 @@ AS $function$
    ORDER BY r.rank_in_seed, r.n DESC, r.via, r.candidate
    LIMIT lim;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_onboarding_suggestion_network(uid uuid, seed_ids uuid[], per_seed integer, lim integer) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_onboarding_suggestion_network(uid uuid, seed_ids uuid[], per_seed integer, lim integer) TO boardgamebuddy_role;
 
--- bgb_play_partners(p_viewer uuid)
 CREATE OR REPLACE FUNCTION public.bgb_play_partners(p_viewer uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1462,36 +2601,7 @@ BEGIN
   );
 END;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_play_partners(p_viewer uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_play_partners(p_viewer uuid) TO boardgamebuddy_role;
 
--- bgb_play_stats(p_viewer uuid, p_game_ids uuid[])
-CREATE OR REPLACE FUNCTION public.bgb_play_stats(p_viewer uuid, p_game_ids uuid[] DEFAULT NULL::uuid[])
- RETURNS jsonb
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-  SELECT COALESCE(jsonb_agg(jsonb_build_object(
-           'game_id', s.game_id,
-           'play_count', s.play_count,
-           'last_played_at', s.last_played_at
-         )), '[]'::jsonb)
-  FROM (
-    SELECT p.game_id, count(*) AS play_count, max(p.played_at) AS last_played_at
-    FROM boardgamebuddy_plays p
-    WHERE (p.user_id = p_viewer
-           OR EXISTS (
-                SELECT 1 FROM boardgamebuddy_play_players pp
-                WHERE pp.play_id = p.id AND pp.player_user_id = p_viewer))
-      AND (p_game_ids IS NULL OR p.game_id = ANY (p_game_ids))
-    GROUP BY p.game_id
-  ) s;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_play_stats(p_viewer uuid, p_game_ids uuid[]) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_play_stats(p_viewer uuid, p_game_ids uuid[]) TO boardgamebuddy_role;
-
--- bgb_plays_page(p_target uuid, p_page integer, p_per_page integer, p_game uuid, p_buddy uuid, p_search text, p_own_only boolean)
 CREATE OR REPLACE FUNCTION public.bgb_plays_page(p_target uuid, p_page integer DEFAULT 1, p_per_page integer DEFAULT 20, p_game uuid DEFAULT NULL::uuid, p_buddy uuid DEFAULT NULL::uuid, p_search text DEFAULT NULL::text, p_own_only boolean DEFAULT false)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1597,34 +2707,7 @@ BEGIN
   RETURN jsonb_build_object('plays', v_plays, 'total', COALESCE(v_total, 0));
 END;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_plays_page(p_target uuid, p_page integer, p_per_page integer, p_game uuid, p_buddy uuid, p_search text, p_own_only boolean) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_plays_page(p_target uuid, p_page integer, p_per_page integer, p_game uuid, p_buddy uuid, p_search text, p_own_only boolean) TO boardgamebuddy_role;
 
--- bgb_release_notices_unseen(p_viewer uuid, p_limit integer)
-CREATE OR REPLACE FUNCTION public.bgb_release_notices_unseen(p_viewer uuid, p_limit integer DEFAULT 5)
- RETURNS TABLE(id uuid, title text, body_md text, link_route text, link_label text, published_at timestamp with time zone)
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-  SELECT newest.id, newest.title, newest.body_md,
-         newest.link_route, newest.link_label, newest.published_at
-    FROM (
-      SELECT n.id, n.title, n.body_md, n.link_route, n.link_label, n.published_at
-        FROM public.boardgamebuddy_release_notices n
-       WHERE n.published_at IS NOT NULL
-         AND n.published_at > (SELECT pr.release_notices_seen_at
-                                 FROM public.boardgamebuddy_profiles pr
-                                WHERE pr.id = p_viewer)
-       ORDER BY n.published_at DESC
-       LIMIT GREATEST(COALESCE(p_limit, 5), 1)
-    ) newest
-   ORDER BY newest.published_at ASC;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_release_notices_unseen(p_viewer uuid, p_limit integer) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_release_notices_unseen(p_viewer uuid, p_limit integer) TO boardgamebuddy_role;
-
--- bgb_suggested_buddies(uid uuid, lim integer)
 CREATE OR REPLACE FUNCTION public.bgb_suggested_buddies(uid uuid, lim integer DEFAULT 5)
  RETURNS TABLE(user_id uuid, mutual_count bigint, play_count bigint, pending_mutual_count bigint, via_user_id uuid)
  LANGUAGE sql
@@ -1751,10 +2834,7 @@ AS $function$
             c.pending_mutuals DESC, c.candidate
    LIMIT lim;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_suggested_buddies(uid uuid, lim integer) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_suggested_buddies(uid uuid, lim integer) TO boardgamebuddy_role;
 
--- bgb_sync_achievements(uid uuid)
 CREATE OR REPLACE FUNCTION public.bgb_sync_achievements(uid uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1984,73 +3064,7 @@ BEGIN
   RETURN payload;
 END;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_sync_achievements(uid uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_sync_achievements(uid uuid) TO boardgamebuddy_role;
 
--- bgb_user_stats(uid uuid)
-CREATE OR REPLACE FUNCTION public.bgb_user_stats(uid uuid)
- RETURNS TABLE(total_plays bigint, unique_games bigint, win_count bigint, last_played_at date, hours_played numeric, owned_games bigint, owned_expansions bigint, favorite_game_id uuid, favorite_game_name text, favorite_play_count bigint)
- LANGUAGE sql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-  WITH my_plays AS (
-    SELECT p.id, p.game_id, p.played_at
-    FROM public.boardgamebuddy_plays p
-    WHERE p.user_id = uid
-    UNION
-    SELECT p.id, p.game_id, p.played_at
-    FROM public.boardgamebuddy_plays p
-    JOIN public.boardgamebuddy_play_players pp ON pp.play_id = p.id
-    WHERE pp.player_user_id = uid
-  ),
-  game_counts AS (
-    SELECT game_id, COUNT(*)::BIGINT AS n
-    FROM my_plays
-    GROUP BY game_id
-  ),
-  favorite AS (
-    SELECT gc.game_id, gc.n, g.name
-    FROM game_counts gc
-    LEFT JOIN public.boardgamebuddy_games g ON g.id = gc.game_id
-    ORDER BY gc.n DESC, g.name
-    LIMIT 1
-  )
-  SELECT
-    (SELECT COUNT(*)::BIGINT FROM my_plays)                                      AS total_plays,
-    (SELECT COUNT(DISTINCT game_id)::BIGINT FROM my_plays)                       AS unique_games,
-    (SELECT COUNT(*)::BIGINT
-       FROM public.boardgamebuddy_play_players pp
-       WHERE pp.player_user_id = uid AND pp.is_winner = true)                    AS win_count,
-    (SELECT MAX(played_at) FROM my_plays)                                        AS last_played_at,
-    COALESCE(
-      (SELECT SUM(g.playing_time)::NUMERIC / 60.0
-         FROM my_plays mp
-         LEFT JOIN public.boardgamebuddy_games g ON g.id = mp.game_id),
-      0
-    )                                                                            AS hours_played,
-    -- Owned BASE games only — what the user thinks of as "my games".
-    (SELECT COUNT(*)::BIGINT
-       FROM public.boardgamebuddy_collections c
-       JOIN public.boardgamebuddy_games g ON g.id = c.game_id
-       WHERE c.user_id = uid
-         AND c.status = 'owned'
-         AND COALESCE(g.is_expansion, false) = false)                            AS owned_games,
-    -- Owned expansions — surfaced as a secondary counter on the Profile.
-    (SELECT COUNT(*)::BIGINT
-       FROM public.boardgamebuddy_collections c
-       JOIN public.boardgamebuddy_games g ON g.id = c.game_id
-       WHERE c.user_id = uid
-         AND c.status = 'owned'
-         AND g.is_expansion = true)                                              AS owned_expansions,
-    (SELECT game_id FROM favorite)                                               AS favorite_game_id,
-    (SELECT name     FROM favorite)                                              AS favorite_game_name,
-    (SELECT n        FROM favorite)                                              AS favorite_play_count;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_user_stats(uid uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_user_stats(uid uuid) TO boardgamebuddy_role;
-
--- bgb_profile_bundle(viewer uuid, target uuid, col_per_page integer, plays_per_page integer)
 CREATE OR REPLACE FUNCTION public.bgb_profile_bundle(viewer uuid, target uuid, col_per_page integer DEFAULT 12, plays_per_page integer DEFAULT 10)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2648,437 +3662,3 @@ BEGIN
   );
 END;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_profile_bundle(viewer uuid, target uuid, col_per_page integer, plays_per_page integer) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_profile_bundle(viewer uuid, target uuid, col_per_page integer, plays_per_page integer) TO boardgamebuddy_role;
-
--- bgb_bootstrap(viewer uuid, owned_plays_limit integer, max_game_bundles integer)
-CREATE OR REPLACE FUNCTION public.bgb_bootstrap(viewer uuid, owned_plays_limit integer DEFAULT 5, max_game_bundles integer DEFAULT 250)
- RETURNS jsonb
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_current_user JSONB;
-  v_profile_bundle JSONB;
-  v_game_bundles JSONB := '{}'::jsonb;
-  v_owned_count INT;
-  v_truncated BOOLEAN := false;
-BEGIN
-  -- Current user row.
-  SELECT to_jsonb(p.*) INTO v_current_user
-    FROM boardgamebuddy_profiles p
-    WHERE p.id = viewer;
-
-  -- Profile bundle (stats, shelves, recent plays, status map, buddies,
-  -- requests) for the viewer looking at themselves.
-  v_profile_bundle := bgb_profile_bundle(viewer, viewer, 12, 10);
-
-  -- Owned-game count. Base games only — expansions are surfaced via the base
-  -- game's bundle.expansions block.
-  SELECT COUNT(*) INTO v_owned_count
-    FROM boardgamebuddy_collections c
-    WHERE c.user_id = viewer
-      AND c.status = 'owned'
-      AND COALESCE(c.game_is_expansion, false) = false;
-
-  IF max_game_bundles > 0 THEN
-    v_truncated := v_owned_count > max_game_bundles;
-
-    WITH owned AS (
-      SELECT c.game_id
-      FROM boardgamebuddy_collections c
-      WHERE c.user_id = viewer
-        AND c.status = 'owned'
-        AND COALESCE(c.game_is_expansion, false) = false
-      ORDER BY c.added_at DESC
-      LIMIT max_game_bundles
-    )
-    SELECT COALESCE(jsonb_object_agg(o.game_id::text, bgb_game_detail_bundle(o.game_id, viewer, owned_plays_limit)), '{}'::jsonb)
-      INTO v_game_bundles
-      FROM owned o;
-  END IF;
-
-  RETURN jsonb_build_object(
-    'bootstrap_version', 2,
-    'generated_at', now(),
-    'current_user', v_current_user,
-    'profile_bundle', v_profile_bundle,
-    'game_detail_bundles', v_game_bundles,
-    'owned_count', v_owned_count,
-    'truncated', v_truncated
-  );
-END;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_bootstrap(viewer uuid, owned_plays_limit integer, max_game_bundles integer) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_bootstrap(viewer uuid, owned_plays_limit integer, max_game_bundles integer) TO boardgamebuddy_role;
-
--- bgb_user_stats_detail(uid uuid)
-CREATE OR REPLACE FUNCTION public.bgb_user_stats_detail(uid uuid)
- RETURNS jsonb
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-WITH
--- ── The play set every block below reads ──────────────────────────────────
-my_plays AS (
-  SELECT p.id, p.game_id, p.played_at, p.play_mode, p.game_name
-  FROM public.boardgamebuddy_plays p
-  WHERE p.user_id = uid
-  UNION
-  SELECT p.id, p.game_id, p.played_at, p.play_mode, p.game_name
-  FROM public.boardgamebuddy_plays p
-  JOIN public.boardgamebuddy_play_players pp ON pp.play_id = p.id
-  WHERE pp.player_user_id = uid
-),
--- My own player row on each of those plays. The gap between this and my_plays
--- is the one the header comment describes: a play I logged but sat out has no
--- row here, so it has no result, no score and no side in a co-op record.
-mine AS (
-  SELECT mp.id AS play_id, mp.game_id, mp.played_at, mp.play_mode,
-         pp.is_winner, pp.score, pp.round_scores,
-         -- Did this play record an outcome at all? A play where NO seat is
-         -- flagged a winner and NO seat carries a score says nothing about how
-         -- it went — it is not a loss, it is a blank. It is still a play (it
-         -- counts in total_plays, the heatmap, the podium, table sizes), but a
-         -- win-rate denominator that swallows it reports losses nobody had.
-         -- Read over the whole roster, not just my own seat: a play someone
-         -- else won is decided for me too.
-         EXISTS (
-           SELECT 1 FROM public.boardgamebuddy_play_players d
-            WHERE d.play_id = mp.id
-              AND (d.is_winner OR d.score IS NOT NULL)
-         ) AS decided
-  FROM my_plays mp
-  JOIN public.boardgamebuddy_play_players pp
-    ON pp.play_id = mp.id AND pp.player_user_id = uid
-),
-by_game AS (
-  SELECT mp.game_id,
-         COALESCE(MAX(g.name), MAX(mp.game_name))    AS name,
-         MAX(g.thumbnail_url)                        AS thumbnail_url,
-         COALESCE(MAX(g.play_mode), 'competitive')   AS play_mode,
-         COUNT(*)::INT                               AS plays,
-         MAX(mp.played_at)                           AS last_played_at
-  FROM my_plays mp
-  LEFT JOIN public.boardgamebuddy_games g ON g.id = mp.game_id
-  GROUP BY mp.game_id
-),
-
--- ── Per-game breakdown (drives the picker) ────────────────────────────────
--- avg_winning_score averages the WINNER's score across my plays of that game —
--- the bar to clear, carried alongside my own average rather than in place of
--- it. Both are NULL when nobody logged a score (co-op games, and any table that
--- just called a winner), which is what the screen's "no scores" state reads.
-winner_scores AS (
-  SELECT mp.game_id, w.play_id, w.score
-  FROM public.boardgamebuddy_play_players w
-  JOIN my_plays mp ON mp.id = w.play_id
-  WHERE w.is_winner AND w.score IS NOT NULL
-),
-game_rows AS (
-  SELECT
-    bg.game_id, bg.name, bg.thumbnail_url, bg.play_mode, bg.plays, bg.last_played_at,
-    (SELECT COUNT(*)::INT FROM mine m
-      WHERE m.game_id = bg.game_id AND m.is_winner)                       AS wins,
-    -- The ring's denominator. `plays` above stays the honest play count (it
-    -- includes plays I logged but sat out, and plays with no result); this is
-    -- the subset that can be won or lost, so wins + losses adds up to it.
-    (SELECT COUNT(*)::INT FROM mine m
-      WHERE m.game_id = bg.game_id AND m.decided)                         AS decided_plays,
-    (SELECT COUNT(DISTINCT ws.play_id)::INT FROM winner_scores ws
-      WHERE ws.game_id = bg.game_id)                                      AS scored_plays,
-    (SELECT ROUND(AVG(ws.score))::INT FROM winner_scores ws
-      WHERE ws.game_id = bg.game_id)                                      AS avg_winning_score,
-    (SELECT ROUND(AVG(m.score))::INT FROM mine m
-      WHERE m.game_id = bg.game_id AND m.score IS NOT NULL)               AS your_avg_score,
-    (SELECT MAX(m.score) FROM mine m WHERE m.game_id = bg.game_id)        AS your_best_score
-  FROM by_game bg
-  ORDER BY bg.plays DESC, bg.name
-  LIMIT 100
-),
-
--- ── Nemesis ───────────────────────────────────────────────────────────────
--- The account that has beaten me most across COMPETITIVE plays we both sat in.
--- Ranked by their wins, then by how often we've played; a 3-play floor keeps
--- one lucky evening from crowning anyone. Ghost players (no player_user_id)
--- can't be a nemesis — there is no profile to name or badge.
---
--- Co-op plays are excluded, and not just because "who beat whom" is meaningless
--- when you are on the same side: in co-op EVERY seat at the table wins or loses
--- together, so counting them made your_wins and their_wins both fire on the
--- same play. That double-count is visible, not academic — the screen draws
--- you/them/someone-else as one split bar, and with co-op folded in the segments
--- summed past the total.
-opponents AS (
-  SELECT o.play_id, o.player_user_id, o.is_winner
-  FROM public.boardgamebuddy_play_players o
-  JOIN mine m ON m.play_id = o.play_id
-  WHERE o.player_user_id IS NOT NULL
-    AND o.player_user_id <> uid
-    AND COALESCE(m.play_mode, 'competitive') <> 'coop'
-    AND m.decided
-),
-nemesis_row AS (
-  SELECT
-    op.player_user_id                                    AS user_id,
-    pr.display_name,
-    pr.avatar,
-    COUNT(DISTINCT op.play_id)::INT                      AS shared_plays,
-    COUNT(*) FILTER (WHERE op.is_winner)::INT            AS their_wins,
-    COUNT(*) FILTER (WHERE EXISTS (
-      SELECT 1 FROM mine m2 WHERE m2.play_id = op.play_id AND m2.is_winner
-    ))::INT                                              AS your_wins
-  FROM opponents op
-  JOIN public.boardgamebuddy_profiles pr ON pr.id = op.player_user_id
-  GROUP BY op.player_user_id, pr.display_name, pr.avatar
-  HAVING COUNT(DISTINCT op.play_id) >= 3
-  ORDER BY their_wins DESC, shared_plays DESC
-  LIMIT 1
-),
-
--- ── Play rhythm ───────────────────────────────────────────────────────────
--- 26 weeks of buckets for the heatmap, plus streaks over ALL history — the
--- longest streak predates the window more often than not.
-week_buckets AS (
-  SELECT date_trunc('week', mp.played_at)::DATE AS wk, COUNT(*)::INT AS n
-  FROM my_plays mp
-  GROUP BY 1
-),
-heat AS (
-  SELECT s.wk::DATE AS wk, COALESCE(wb.n, 0) AS n
-  FROM generate_series(
-         date_trunc('week', CURRENT_DATE) - INTERVAL '25 weeks',
-         date_trunc('week', CURRENT_DATE),
-         INTERVAL '1 week') AS s(wk)
-  LEFT JOIN week_buckets wb ON wb.wk = s.wk::DATE
-),
--- Gaps-and-islands: consecutive weeks share (wk - row_number * 7).
-streak_runs AS (
-  SELECT COUNT(*)::INT AS len, MAX(wk) AS last_wk
-  FROM (
-    SELECT wk, wk - (ROW_NUMBER() OVER (ORDER BY wk))::INT * 7 AS grp
-    FROM week_buckets
-  ) g
-  GROUP BY grp
-),
-weekday AS (
-  SELECT EXTRACT(DOW FROM mp.played_at)::INT AS dow, COUNT(*)::INT AS plays
-  FROM my_plays mp
-  GROUP BY 1
-  ORDER BY 2 DESC, 1
-  LIMIT 1
-),
-
--- ── Table size ────────────────────────────────────────────────────────────
--- Buckets cap at 5+; the tail past six players is one thin bar nobody reads.
--- Plays with no roster at all (a bare BGG import) are excluded so they can't
--- drag the average toward zero.
-roster AS (
-  SELECT mp.id AS play_id,
-         (SELECT COUNT(*)::INT FROM public.boardgamebuddy_play_players pp
-           WHERE pp.play_id = mp.id) AS n
-  FROM my_plays mp
-),
-
--- ── Comeback kid ──────────────────────────────────────────────────────────
--- Plays I won after trailing at the halfway round. Only computable because
--- round_scores stores the round-by-round breakdown; every other surface in the
--- app can see a play's result but not its shape.
-tracked AS (
-  SELECT pp.play_id, pp.player_user_id, pp.is_winner, pp.round_scores,
-         jsonb_array_length(pp.round_scores) AS n
-  FROM public.boardgamebuddy_play_players pp
-  JOIN my_plays mp ON mp.id = pp.play_id
-  WHERE pp.round_scores IS NOT NULL
-    AND jsonb_typeof(pp.round_scores) = 'array'
-    AND jsonb_array_length(pp.round_scores) >= 2
-),
-half AS (
-  -- Cumulative score through the midpoint. A round cell holds null until it is
-  -- entered, so anything that isn't a JSON number counts as zero rather than
-  -- failing the whole call on a cast.
-  SELECT t.play_id, t.player_user_id, t.is_winner,
-         (SELECT COALESCE(SUM(CASE WHEN jsonb_typeof(e.value) = 'number'
-                                   THEN (e.value #>> '{}')::NUMERIC
-                                   ELSE 0 END), 0)
-            FROM jsonb_array_elements(t.round_scores) WITH ORDINALITY AS e(value, idx)
-           WHERE e.idx <= GREATEST(1, t.n / 2)) AS half_score
-  FROM tracked t
-),
-half_lead AS (
-  SELECT play_id, MAX(half_score) AS best_half FROM half GROUP BY play_id
-),
-
--- ── Personal bests ────────────────────────────────────────────────────────
--- Ordered by how much I play the game, not by score: 168 at Brass and 94 at
--- Wingspan are not comparable numbers, so the useful ordering is "the records
--- you would actually try to beat".
-best_rows AS (
-  SELECT bg.game_id, bg.name, bg.plays, b.score, b.played_at
-  FROM by_game bg
-  JOIN LATERAL (
-    SELECT m.score, m.played_at
-    FROM mine m
-    WHERE m.game_id = bg.game_id AND m.score IS NOT NULL
-      -- A co-op loss records a deliberate 0 (see the FE's _stampCoopLoss), and
-      -- "your personal best at Pandemic: 0" is not a record anybody set.
-      AND COALESCE(m.play_mode, 'competitive') <> 'coop'
-    ORDER BY m.score DESC, m.played_at DESC
-    LIMIT 1
-  ) b ON true
-  ORDER BY bg.plays DESC, bg.name
-  LIMIT 5
-)
-
-SELECT jsonb_build_object(
-  -- career.win_rate is left to the caller: it divides rated_wins by
-  -- rated_plays, never win_count by total_plays. A co-op win is the table
-  -- beating the game and belongs in its own block; a play I logged but sat
-  -- out has no result at all; and neither does a play nobody won and nobody
-  -- scored, which is what `decided` filters out of every ratio below.
-  'career', jsonb_build_object(
-    'total_plays',     (SELECT COUNT(*)::INT FROM my_plays),
-    'unique_games',    (SELECT COUNT(DISTINCT game_id)::INT FROM my_plays),
-    'win_count',       (SELECT COUNT(*)::INT FROM mine WHERE is_winner),
-    'rated_plays',     (SELECT COUNT(*)::INT FROM mine WHERE COALESCE(play_mode, 'competitive') <> 'coop' AND decided),
-    'rated_wins',      (SELECT COUNT(*)::INT FROM mine WHERE COALESCE(play_mode, 'competitive') <> 'coop' AND is_winner),
-    'first_played_at', (SELECT MIN(played_at) FROM my_plays),
-    'last_played_at',  (SELECT MAX(played_at) FROM my_plays),
-    'hours_played',    COALESCE((
-      SELECT ROUND(SUM(g.playing_time)::NUMERIC / 60.0)
-      FROM my_plays mp LEFT JOIN public.boardgamebuddy_games g ON g.id = mp.game_id
-    ), 0)::FLOAT
-  ),
-
-  'podium', COALESCE((
-    SELECT jsonb_agg(jsonb_build_object(
-             'game_id', game_id, 'name', name,
-             'thumbnail_url', thumbnail_url, 'plays', plays)
-             ORDER BY plays DESC, name)
-    FROM (SELECT * FROM game_rows ORDER BY plays DESC, name LIMIT 3) p
-  ), '[]'::JSONB),
-
-  'games', COALESCE((SELECT jsonb_agg(to_jsonb(gr) ORDER BY gr.plays DESC, gr.name)
-                       FROM game_rows gr), '[]'::JSONB),
-
-  'nemesis', (SELECT to_jsonb(n) FROM nemesis_row n),
-
-  'rhythm', jsonb_build_object(
-    'weeks', COALESCE((
-      SELECT jsonb_agg(jsonb_build_object('week_start', wk, 'plays', n) ORDER BY wk)
-      FROM heat
-    ), '[]'::JSONB),
-    'longest_streak_weeks', COALESCE((SELECT MAX(len) FROM streak_runs), 0),
-    -- The run that is still alive must reach this week or last week. Requiring
-    -- the current week would reset every streak each Monday morning, before
-    -- that week's game night has happened.
-    'current_streak_weeks', COALESCE((
-      SELECT MAX(len) FROM streak_runs
-      WHERE last_wk >= (date_trunc('week', CURRENT_DATE)::DATE - 7)
-    ), 0),
-    'busiest_weekday', (SELECT to_jsonb(w) FROM weekday w)
-  ),
-
-  -- Owned BASE games only, matching what bgb_user_stats calls owned_games — an
-  -- unplayed expansion is not a guilt trip, it is a box on a shelf.
-  --
-  -- 'played' counts a game the viewer has plays for OR has hand-marked as
-  -- played before they joined (played_before_at). The mark is deliberately
-  -- scoped to THIS block: it creates no play row, so every other aggregate on
-  -- this screen — the podium, the rhythm heatmap, personal bests, career
-  -- totals — is untouched by it, and so is the collection's status map.
-  --
-  -- 'games' is the list the Stats spoke's shelf sheet renders: every owned
-  -- base game with NO logged plays, marked or not. A game with real plays is
-  -- not a shelf-of-shame candidate and has no mark to undo, so it never needs
-  -- to be in here. Capped, because a BGG import can be four figures.
-  'shelf', (
-    WITH owned_base AS (
-      SELECT c.game_id, c.game_name, c.game_thumbnail_url, c.game_year_published,
-             c.played_before_at,
-             EXISTS (SELECT 1 FROM my_plays mp WHERE mp.game_id = c.game_id) AS has_plays
-      FROM public.boardgamebuddy_collections c
-      JOIN public.boardgamebuddy_games g ON g.id = c.game_id
-      WHERE c.user_id = uid AND c.status = 'owned'
-        AND COALESCE(g.is_expansion, false) = false
-    )
-    SELECT jsonb_build_object(
-      'owned',    COUNT(*)::INT,
-      'played',   COUNT(*) FILTER (WHERE has_plays OR played_before_at IS NOT NULL)::INT,
-      'unplayed', COUNT(*) FILTER (WHERE NOT has_plays AND played_before_at IS NULL)::INT,
-      'marked',   COUNT(*) FILTER (WHERE NOT has_plays AND played_before_at IS NOT NULL)::INT,
-      'games', COALESCE((
-        SELECT jsonb_agg(jsonb_build_object(
-                 'game_id',        t.game_id,
-                 'name',           t.game_name,
-                 'thumbnail_url',  t.game_thumbnail_url,
-                 'year_published', t.game_year_published,
-                 'played_before',  t.played_before_at IS NOT NULL
-               ) ORDER BY t.game_name)
-        FROM (
-          SELECT * FROM owned_base WHERE NOT has_plays
-          ORDER BY game_name LIMIT 300
-        ) t
-      ), '[]'::JSONB),
-      'games_truncated',
-        (SELECT COUNT(*) FROM owned_base WHERE NOT has_plays) > 300
-    )
-    FROM owned_base
-  ),
-
-  'table_size', jsonb_build_object(
-    'avg', (SELECT ROUND(AVG(n)::NUMERIC, 1)::FLOAT FROM roster WHERE n > 0),
-    'buckets', COALESCE((
-      SELECT jsonb_agg(jsonb_build_object('size', size, 'plays', plays) ORDER BY size)
-      FROM (
-        SELECT LEAST(n, 5) AS size, COUNT(*)::INT AS plays
-        FROM roster WHERE n > 0 GROUP BY 1
-      ) b
-    ), '[]'::JSONB)
-  ),
-
-  -- Weighted by plays, not by what is on the shelf: this answers "what do you
-  -- actually put on the table", which the collection cannot.
-  'taste', COALESCE((
-    SELECT jsonb_agg(jsonb_build_object('name', cat, 'plays', n) ORDER BY n DESC, cat)
-    FROM (
-      SELECT cat, COUNT(*)::INT AS n
-      FROM my_plays mp
-      JOIN public.boardgamebuddy_games g ON g.id = mp.game_id
-      CROSS JOIN LATERAL unnest(COALESCE(g.categories, '{}')) AS cat
-      WHERE cat IS NOT NULL AND cat <> ''
-      GROUP BY cat
-      ORDER BY n DESC, cat
-      LIMIT 6
-    ) q
-  ), '[]'::JSONB),
-
-  'comeback', jsonb_build_object(
-    'wins_from_behind', (
-      SELECT COUNT(*)::INT
-      FROM half h JOIN half_lead hl ON hl.play_id = h.play_id
-      WHERE h.player_user_id = uid AND h.is_winner AND h.half_score < hl.best_half
-    ),
-    'tracked_plays', (
-      SELECT COUNT(DISTINCT h.play_id)::INT FROM half h WHERE h.player_user_id = uid
-    )
-  ),
-
-  -- Kept out of the competitive win rate on purpose: folding co-op in would
-  -- quietly inflate a number people read as head-to-head.
-  'coop', (
-    SELECT jsonb_build_object(
-      'wins',   COUNT(*) FILTER (WHERE is_winner)::INT,
-      'losses', COUNT(*) FILTER (WHERE NOT COALESCE(is_winner, false))::INT
-    )
-    FROM mine WHERE play_mode = 'coop' AND decided
-  ),
-
-  'personal_bests', COALESCE((SELECT jsonb_agg(to_jsonb(br) ORDER BY br.plays DESC, br.name)
-                               FROM best_rows br), '[]'::JSONB)
-);
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_user_stats_detail(uid uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_user_stats_detail(uid uuid) TO boardgamebuddy_role;

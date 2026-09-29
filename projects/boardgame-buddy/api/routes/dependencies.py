@@ -39,7 +39,7 @@ _USERNAME_RE = re.compile(r"[^a-z0-9_]")
 def _derive_username(sb: Client, email: str | None, user_id: str) -> str:
     """Pick an unused username handle for a new profile.
 
-    Mirrors migration 017's backfill: lower-case the email local-part,
+    Lower-case the email local-part,
     strip everything that's not [a-z0-9_], pad if too short, then probe
     for collisions by appending an incrementing numeric suffix. Empty/
     bogus input falls back to ``user_<8-char uuid prefix>``.

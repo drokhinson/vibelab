@@ -4,13 +4,16 @@
 -- Run on an empty database in this order: 001_baseline_tables.sql,
 --   002_baseline_functions_play.sql (this file),
 --   003_baseline_functions_social.sql, 004_seed.sql
+-- then every later NNN_*.sql in this directory, in number order.
 --
 -- Generated on 2026-09-29 by .claude/skills/squash-migrations/squash.py from
--- the 58 migrations in archive/2026-09-28/: they were replayed into an
--- empty database and these files were read back out of its catalog. A
--- database built from them diffs clean against that replay.
+-- the 58 migrations in archive/2026-09-28/ and
+-- 059_comments_describe_current_schema.sql: they were replayed into an empty
+-- database and these files were read back out of its catalog. A database built
+-- from them diffs clean against that replay.
 --
--- FRESH-DB ONLY. Production is already at this state. Do not run it there.
+-- FRESH-DB ONLY. Production reaches this state through the migrations it was
+-- generated from. Never run these files there.
 --
 -- Needs these first, for the cross-app tables it reads:
 -- _shared/001_analytics.sql, _shared/004_api_logs.sql,
@@ -200,7 +203,7 @@ BEGIN
       FROM boardgamebuddy_bgg_pending_imports
       WHERE user_id = p_user
         AND created_at >= v_session_start
-        AND kind <> 'catalog'          -- migration 006: a check is not an import
+        AND kind <> 'catalog'          -- a check is not an import
         AND bgg_id IS NOT NULL
         AND status IS NOT NULL
       GROUP BY bgg_id
@@ -323,7 +326,7 @@ DECLARE
   -- about; without one it is off, exactly as the Python guard had it.
   v_exact BOOLEAN := COALESCE(p_prioritize_exact_players, false) AND p_players IS NOT NULL;
   -- A game you sold is still on your Owned shelf, dimmed. Has to agree with
-  -- bgb_collection_shelf's widening (069) because the client falls back from
+  -- bgb_collection_shelf's widening because the client falls back from
   -- one endpoint to the other mid scroll.
   v_statuses TEXT[] := CASE
     WHEN p_status = 'owned' THEN ARRAY['owned', 'prev_owned']
@@ -362,7 +365,7 @@ BEGIN
             )
       GROUP BY p.game_id
       UNION ALL
-      -- Played but never logged here (status 'played', migration 057).
+      -- Played but never logged here (status 'played').
       -- A game with a play is already above, so only the rest join.
       SELECT c.game_id, NULL, 0
       FROM boardgamebuddy_collections c
@@ -566,6 +569,349 @@ END;
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_collection_page(viewer uuid, target uuid, p_status text, p_search text, p_players integer, p_playtime_min integer, p_playtime_max integer, p_play_mode text, p_exclude_expansions boolean, p_sort text, p_prioritize_exact_players boolean, p_page integer, p_per_page integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.bgb_collection_page(viewer uuid, target uuid, p_status text, p_search text, p_players integer, p_playtime_min integer, p_playtime_max integer, p_play_mode text, p_exclude_expansions boolean, p_sort text, p_prioritize_exact_players boolean, p_page integer, p_per_page integer) TO boardgamebuddy_role;
+
+-- bgb_collection_shelf(viewer uuid, target uuid, p_status text, p_exclude_expansions boolean, p_limit integer)
+CREATE OR REPLACE FUNCTION public.bgb_collection_shelf(viewer uuid, target uuid, p_status text DEFAULT 'owned'::text, p_exclude_expansions boolean DEFAULT true, p_limit integer DEFAULT 1000)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_items JSONB;
+  v_total BIGINT := 0;
+  v_parted BIGINT := 0;
+  v_limit INT := LEAST(GREATEST(COALESCE(p_limit, 1000), 1), 5000);
+  v_excl BOOLEAN := COALESCE(p_exclude_expansions, true);
+  -- 'owned' is a SET of statuses, not one: a prev_owned game (sold, gifted,
+  -- donated) is still on your Owned shelf, just dimmed and
+  -- stamped by the client. It is excluded from every owned COUNT, which is why
+  -- v_parted comes back alongside v_total for the caller to subtract. Every
+  -- other status is its own single-element set.
+  v_statuses TEXT[] := CASE
+    WHEN p_status = 'owned' THEN ARRAY['owned', 'prev_owned']
+    ELSE ARRAY[p_status]
+  END;
+BEGIN
+  -- Wishlist is private to its owner (bgb_profile_bundle gates it the same way).
+  IF p_status = 'wishlist' AND viewer IS DISTINCT FROM target THEN
+    RETURN jsonb_build_object(
+      'items', '[]'::jsonb, 'total', 0, 'parted_total', 0, 'truncated', false
+    );
+  END IF;
+
+  IF p_status = 'played' THEN
+    -- Played-not-owned: every game the target has a play for that has NO row
+    -- on their collection table at all (owned AND wishlist both live there).
+    -- Mirrors collection_routes.py:335-404 and bgb_profile_bundle's played_not_owned CTE.
+    -- No denormalized columns available here — a played game has no
+    -- collection row, or only a 'played' one — so this branch joins
+    -- boardgamebuddy_games.
+    WITH played_games AS (
+      -- EXISTS, not a LEFT JOIN onto play_players: the join fans one play out
+      -- to one row per participant, which would multiply play_count. Matches
+      -- bgb_play_stats.
+      SELECT p.game_id
+      FROM boardgamebuddy_plays p
+      WHERE p.user_id = target
+         OR EXISTS (
+              SELECT 1 FROM boardgamebuddy_play_players pp
+              WHERE pp.play_id = p.id AND pp.player_user_id = target
+            )
+      GROUP BY p.game_id
+      UNION ALL
+      -- Played but never logged here (status 'played').
+      -- A game with a play is already above, so only the rest join.
+      SELECT c.game_id
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = target AND c.status = 'played'
+        AND NOT EXISTS (
+              SELECT 1 FROM boardgamebuddy_plays p2
+              WHERE p2.game_id = c.game_id
+                AND (p2.user_id = target OR EXISTS (
+                      SELECT 1 FROM boardgamebuddy_play_players pp2
+                      WHERE pp2.play_id = p2.id AND pp2.player_user_id = target))
+            )
+    )
+    SELECT COUNT(*) INTO v_total
+      FROM played_games pg
+      JOIN boardgamebuddy_games g ON g.id = pg.game_id
+      WHERE NOT EXISTS (
+              SELECT 1 FROM boardgamebuddy_collections c
+              WHERE c.user_id = target AND c.game_id = pg.game_id AND c.status <> 'played'
+            )
+        AND (NOT v_excl OR COALESCE(g.is_expansion, false) = false);
+
+    WITH played_games AS (
+      SELECT p.game_id,
+             MAX(p.played_at) AS last_played_at,
+             COUNT(*)::INT    AS play_count
+      FROM boardgamebuddy_plays p
+      WHERE p.user_id = target
+         OR EXISTS (
+              SELECT 1 FROM boardgamebuddy_play_players pp
+              WHERE pp.play_id = p.id AND pp.player_user_id = target
+            )
+      GROUP BY p.game_id
+      UNION ALL
+      -- Played but never logged here (status 'played').
+      -- A game with a play is already above, so only the rest join.
+      SELECT c.game_id, NULL, 0
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = target AND c.status = 'played'
+        AND NOT EXISTS (
+              SELECT 1 FROM boardgamebuddy_plays p2
+              WHERE p2.game_id = c.game_id
+                AND (p2.user_id = target OR EXISTS (
+                      SELECT 1 FROM boardgamebuddy_play_players pp2
+                      WHERE pp2.play_id = p2.id AND pp2.player_user_id = target))
+            )
+    ),
+    played_not_owned AS (
+      SELECT pg.*
+      FROM played_games pg
+      WHERE NOT EXISTS (
+        SELECT 1 FROM boardgamebuddy_collections c
+        WHERE c.user_id = target AND c.game_id = pg.game_id AND c.status <> 'played'
+      )
+    )
+    SELECT COALESCE(jsonb_agg(row_jsonb ORDER BY sort_a DESC NULLS LAST), '[]'::jsonb)
+      INTO v_items
+      FROM (
+        SELECT
+          pno.last_played_at AS sort_a,
+          jsonb_build_object(
+            -- Matches the synthetic id the Python branch minted so the client
+            -- can key tiles identically across both endpoints.
+            'id', 'played-' || g.id::TEXT,
+            'game_id', g.id,
+            'status', 'played',
+            'added_at', COALESCE(pno.last_played_at::TEXT || 'T00:00:00+00:00', (SELECT to_jsonb(c.added_at) #>> '{}' FROM boardgamebuddy_collections c WHERE c.user_id = target AND c.game_id = pno.game_id)),
+            'last_played_at', pno.last_played_at,
+            'play_count', COALESCE(pno.play_count, 0),
+            'played_before', EXISTS (
+              SELECT 1 FROM boardgamebuddy_collections c
+              WHERE c.user_id = target AND c.game_id = pno.game_id
+                AND c.played_before_at IS NOT NULL),
+            'game', jsonb_build_object(
+              'id', g.id,
+              'bgg_id', g.bgg_id,
+              'name', g.name,
+              'year_published', g.year_published,
+              'min_players', g.min_players,
+              'max_players', g.max_players,
+              'playing_time', g.playing_time,
+              'thumbnail_url', g.thumbnail_url,
+              'image_url', g.image_url,
+              'theme_color', g.theme_color,
+              'is_expansion', COALESCE(g.is_expansion, false),
+              'base_game_bgg_id', g.base_game_bgg_id,
+              'expansion_color', g.expansion_color,
+              'play_mode', COALESCE(g.play_mode, 'competitive'),
+              'expansion_count', COALESCE(xc.n, 0)
+            ),
+            'expansions', '[]'::jsonb
+          ) AS row_jsonb
+        FROM played_not_owned pno
+        JOIN boardgamebuddy_games g ON g.id = pno.game_id
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*)::INT AS n
+          FROM boardgamebuddy_games e
+          WHERE COALESCE(g.is_expansion, false) = false
+            AND g.bgg_id IS NOT NULL
+            AND e.is_expansion = true
+            AND e.base_game_bgg_id = g.bgg_id
+        ) xc ON true
+        WHERE (NOT v_excl OR COALESCE(g.is_expansion, false) = false)
+        ORDER BY pno.last_played_at DESC NULLS LAST
+        LIMIT v_limit
+      ) q;
+
+  ELSE
+    -- owned / wishlist: served entirely from the denormalized c.game_* columns.
+    -- v_total counts every row the items array can draw from, prev_owned
+    -- included, because `truncated` below has to be about the rows on offer.
+    -- v_parted is how many of those the client must not count as owned.
+    SELECT COUNT(*), COUNT(*) FILTER (WHERE c.status = 'prev_owned')
+      INTO v_total, v_parted
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = target AND c.status = ANY(v_statuses)
+        AND (NOT v_excl OR COALESCE(c.game_is_expansion, false) = false);
+
+    SELECT COALESCE(
+             jsonb_agg(row_jsonb ORDER BY sort_a DESC NULLS LAST, sort_b DESC),
+             '[]'::jsonb
+           )
+      INTO v_items
+      FROM (
+        SELECT
+          -- Wishlist sorts on added_at alone (matching bgb_profile_bundle and
+          -- the Python grid); collapsing sort_a to NULL makes the shared
+          -- ORDER BY above degrade to `added_at DESC` for it.
+          CASE WHEN p_status = 'wishlist' THEN NULL ELSE ps.last_played_at END AS sort_a,
+          c.added_at AS sort_b,
+          jsonb_build_object(
+            'id', c.id,
+            'game_id', c.game_id,
+            'status', c.status,
+            'added_at', c.added_at,
+            'last_played_at', ps.last_played_at,
+            'play_count', COALESCE(ps.play_count, 0),
+            -- The played mark, so an unlogged but marked game can join
+            -- the client's Most played order as a logged one does.
+            'played_before', c.played_before_at IS NOT NULL,
+            'game', jsonb_build_object(
+              'id', c.game_id,
+              'bgg_id', c.game_bgg_id,
+              'name', c.game_name,
+              'year_published', c.game_year_published,
+              'min_players', c.game_min_players,
+              'max_players', c.game_max_players,
+              'playing_time', c.game_playing_time,
+              'thumbnail_url', c.game_thumbnail_url,
+              'image_url', gi.image_url,
+              'theme_color', c.game_theme_color,
+              'is_expansion', COALESCE(c.game_is_expansion, false),
+              'base_game_bgg_id', c.game_base_game_bgg_id,
+              'expansion_color', c.game_expansion_color,
+              'play_mode', COALESCE(c.game_play_mode, 'competitive'),
+              'expansion_count', COALESCE(xc.n, 0)
+            ),
+            'expansions', '[]'::jsonb
+          ) AS row_jsonb
+        FROM boardgamebuddy_collections c
+        LEFT JOIN boardgamebuddy_games gi ON gi.id = c.game_id
+        -- image_url only — see the header. Every other game field stays denorm.
+        LEFT JOIN LATERAL (
+          SELECT MAX(p.played_at) AS last_played_at, COUNT(*)::INT AS play_count
+          FROM boardgamebuddy_plays p
+          WHERE p.game_id = c.game_id
+            AND (
+              p.user_id = target
+              OR EXISTS (
+                   SELECT 1 FROM boardgamebuddy_play_players pp
+                   WHERE pp.play_id = p.id AND pp.player_user_id = target
+                 )
+            )
+        ) ps ON true
+        LEFT JOIN LATERAL (
+          -- CATALOG-wide expansion count, not the viewer's owned ones — the
+          -- same number the game page's "Expansions (N)" heading shows.
+          -- _attach_page_expansion_counts (collection_routes.py:238-251) is
+          -- explicit about this: expansions arrive via the import popup
+          -- without touching anyone's collection, so an owned-only count
+          -- reads as zero for a game that plainly has eleven of them.
+          -- Only base games get a count; expansion rows stay at 0.
+          SELECT COUNT(*)::INT AS n
+          FROM boardgamebuddy_games e
+          WHERE COALESCE(c.game_is_expansion, false) = false
+            AND c.game_bgg_id IS NOT NULL
+            AND e.is_expansion = true
+            AND e.base_game_bgg_id = c.game_bgg_id
+        ) xc ON true
+        WHERE c.user_id = target AND c.status = ANY(v_statuses)
+          AND (NOT v_excl OR COALESCE(c.game_is_expansion, false) = false)
+        ORDER BY
+          CASE WHEN p_status = 'wishlist' THEN NULL ELSE ps.last_played_at END
+            DESC NULLS LAST,
+          c.added_at DESC
+        LIMIT v_limit
+      ) q;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'items', COALESCE(v_items, '[]'::jsonb),
+    'total', v_total,
+    -- Zero on every branch but owned/wishlist, and always zero for wishlist.
+    'parted_total', v_parted,
+    'truncated', v_total > v_limit
+  );
+END;
+$function$;
+REVOKE EXECUTE ON FUNCTION public.bgb_collection_shelf(viewer uuid, target uuid, p_status text, p_exclude_expansions boolean, p_limit integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.bgb_collection_shelf(viewer uuid, target uuid, p_status text, p_exclude_expansions boolean, p_limit integer) TO boardgamebuddy_role;
+
+-- bgb_collection_status_map(p_viewer uuid)
+CREATE OR REPLACE FUNCTION public.bgb_collection_status_map(p_viewer uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_status_map JSONB;
+  v_expansion_counts JSONB;
+  v_played_marks JSONB;
+BEGIN
+  -- Collection rows first, then a derived 'played' entry for every game the
+  -- viewer has a play for and no collection row on. Matches GET /collection's
+  -- semantics: there, owned/wishlist rows come from the table and played rows
+  -- are synthesized for games with plays but no owned row.
+  --
+  -- The visibility rule for "has a play" is the participated-in one shared by
+  -- bgb_play_stats and every other play count: a play counts when
+  -- the viewer logged it OR appears on it as a participant. EXISTS rather than
+  -- a join, so a multi-player play can't fan out.
+  SELECT COALESCE(jsonb_object_agg(game_id, status), '{}'::jsonb)
+    INTO v_status_map
+    FROM (
+      SELECT c.game_id::TEXT AS game_id, c.status AS status
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = p_viewer
+        AND c.status IN ('owned', 'wishlist', 'played', 'prev_owned')
+      UNION
+      SELECT DISTINCT p.game_id::TEXT, 'played'::TEXT
+      FROM boardgamebuddy_plays p
+      WHERE (
+              p.user_id = p_viewer
+              OR EXISTS (
+                   SELECT 1 FROM boardgamebuddy_play_players pp
+                   WHERE pp.play_id = p.id AND pp.player_user_id = p_viewer
+                 )
+            )
+        AND NOT EXISTS (
+              SELECT 1 FROM boardgamebuddy_collections c2
+              WHERE c2.user_id = p_viewer AND c2.game_id = p.game_id
+            )
+    ) m;
+
+  -- Owned expansions per base game's bgg_id. Reads the denormalized game_*
+  -- columns, so no join to boardgamebuddy_games at all.
+  -- Identical to bgb_profile_bundle's expansion_counts block.
+  --
+  -- `= 'owned'` here is deliberate and NOT widened to prev_owned: an
+  -- expansion you sold is not clutter on your shelf any more, and this number
+  -- is what the tile's expansion badge counts.
+  SELECT COALESCE(jsonb_object_agg(base_bgg, cnt), '{}'::jsonb)
+    INTO v_expansion_counts
+    FROM (
+      SELECT c.game_base_game_bgg_id AS base_bgg, COUNT(*)::INT AS cnt
+      FROM boardgamebuddy_collections c
+      WHERE c.user_id = p_viewer
+        AND c.status = 'owned'
+        AND COALESCE(c.game_is_expansion, false) = true
+        AND c.game_base_game_bgg_id IS NOT NULL
+      GROUP BY c.game_base_game_bgg_id
+    ) e;
+
+  -- Every game the viewer marked played without a logged play, on
+  -- a row of any status. The map alone cannot say: it reads 'played' for a
+  -- mark and for logged plays alike, and a shelf status for a marked
+  -- owned or wishlisted game. This is what the sheet's switch shows.
+  SELECT COALESCE(jsonb_agg(c.game_id::TEXT), '[]'::jsonb)
+    INTO v_played_marks
+    FROM boardgamebuddy_collections c
+    WHERE c.user_id = p_viewer AND c.played_before_at IS NOT NULL;
+
+  RETURN jsonb_build_object(
+    'status_map', v_status_map,
+    'expansion_counts', v_expansion_counts,
+    'played_marks', v_played_marks
+  );
+END;
+$function$;
+REVOKE EXECUTE ON FUNCTION public.bgb_collection_status_map(p_viewer uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.bgb_collection_status_map(p_viewer uuid) TO boardgamebuddy_role;
 
 -- bgb_delete_import_batch(p_user uuid, p_batch uuid)
 CREATE OR REPLACE FUNCTION public.bgb_delete_import_batch(p_user uuid, p_batch uuid)
@@ -989,7 +1335,7 @@ BEGIN
     v_exp_count_viewer := 0;
   END IF;
 
-  -- ── Viewer's record with this game (migration 030) ──────────────────────
+  -- ── Viewer's record with this game ──────────────────────────────────────
   WITH my_plays AS (
     SELECT p.id, p.played_at
       FROM boardgamebuddy_plays p
@@ -1722,7 +2068,7 @@ DECLARE
   v_updated INT;
 BEGIN
   -- Scoped to plays the owner logged, so a caller can never touch someone
-  -- else's roster (the invariant migration 050 established).
+  -- else's roster.
   UPDATE boardgamebuddy_play_players pp
      SET player_user_id = p_target
    WHERE pp.play_id IN (
@@ -1910,7 +2256,7 @@ BEGIN
   -- as a key shared by every unkeyed play.
   v_client_key := NULLIF(p_payload->>'client_key', '')::UUID;
 
-  -- Migration 005. Set only by the Settings play importer, and only on plays
+  -- Set only by the Settings play importer, and only on plays
   -- it judged identical to at least one other in the same import: same game,
   -- same date, same players, same winner, and no score or note on either. The
   -- feed and the plays log show one card per group; every counter still sees
@@ -1918,20 +2264,20 @@ BEGIN
   -- a row multiplier.
   v_group := NULLIF(p_payload->>'import_group_id', '')::UUID;
 
-  -- Migration 007. One id per IMPORT, where the group above is one per RUN.
+  -- One id per IMPORT, where the group above is one per RUN.
   -- Both are set only by the importer; a live log has neither, and neither is
   -- read by anything that counts plays.
   v_batch := NULLIF(p_payload->>'import_batch_id', '')::UUID;
 
-  -- Migration 018. The scoring grid this play was scored on, snapshotted.
+  -- The scoring grid this play was scored on, snapshotted.
   -- jsonb 'null' and absent both mean "no template": the client sends an
   -- explicit null for a play scored on the plain R1..Rn grid.
   v_template := NULLIF(p_payload->'scoring_template', 'null'::jsonb);
 
-  -- Migration 043. The BGA table this play came from, if any.
+  -- The BGA table this play came from, if any.
   v_bga_table := NULLIF(p_payload->>'bga_table_id', '')::BIGINT;
 
-  -- Migration 044. The BoardGameGeek play this row came from, set only by the
+  -- The BoardGameGeek play this row came from, set only by the
   -- importer's BoardGameGeek source. Same empty-string rule as the two keys
   -- above.
   v_bgg_play_id := NULLIF(p_payload->>'bgg_play_id', '')::BIGINT;
@@ -1945,7 +2291,7 @@ BEGIN
     END IF;
   END IF;
 
-  -- Migration 043. Same envelope, different key: a table already imported is
+  -- Same envelope, different key: a table already imported is
   -- not a failure, it is the answer "you already have this one".
   IF v_bga_table IS NOT NULL THEN
     SELECT p.id INTO v_existing
@@ -1956,7 +2302,7 @@ BEGIN
     END IF;
   END IF;
 
-  -- Migration 044. The third key, and the only one that can see the plays the
+  -- The third key, and the only one that can see the plays the
   -- RETIRED POST /bgg/sync write path landed: those rows carry a bgg_play_id
   -- and no client_key at all, so nothing derived from the importer's own draft
   -- ids could ever recognise them. This is what makes re-importing from
@@ -1970,7 +2316,7 @@ BEGIN
     END IF;
   END IF;
 
-  -- Migration 023. The roster gate, before anything is written.
+  -- The roster gate, before anything is written.
   SELECT COALESCE(jsonb_agg(kept.seat ORDER BY kept.ord), '[]'::JSONB)
     INTO v_roster
     FROM (
@@ -1995,7 +2341,7 @@ BEGIN
     RETURN jsonb_build_object('error', 'duplicate_player');
   END IF;
 
-  -- Migration 060. Unresolvable / malformed becomes NULL — "we don't know
+  -- Unresolvable / malformed becomes NULL — "we don't know
   -- where this was played" is a legitimate row and a rejected save is not.
   v_country := upper(NULLIF(btrim(COALESCE(p_payload->>'country_code', '')), ''));
   IF v_country IS NOT NULL AND v_country !~ '^[A-Z]{2}$' THEN
@@ -2053,12 +2399,12 @@ BEGIN
     -- the canonical one; hand its id back on the same duplicate envelope the
     -- pre-checks use.
     --
-    -- EVERY key, not just client_key (043, widened again by 044): there are
+    -- EVERY key, not just client_key: there are
     -- three unique indexes a play can violate now, and resolving on the wrong
     -- one returns id: null — a wrong answer that raises nothing and looks like
     -- success. The BGG arm also covers the pending-imports worker still
     -- draining legacy kind='play' rows, which writes a bgg_play_id and no
-    -- client_key, so that race was previously unresolvable by construction.
+    -- client_key, so no other arm could resolve that race.
     SELECT p.id INTO v_existing
       FROM boardgamebuddy_plays p
      WHERE p.user_id = p_user
@@ -2307,349 +2653,6 @@ $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_merge_ghosts(p_viewer uuid, p_source text, p_target text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.bgb_merge_ghosts(p_viewer uuid, p_source text, p_target text) TO boardgamebuddy_role;
 
--- bgb_collection_shelf(viewer uuid, target uuid, p_status text, p_exclude_expansions boolean, p_limit integer)
-CREATE OR REPLACE FUNCTION public.bgb_collection_shelf(viewer uuid, target uuid, p_status text DEFAULT 'owned'::text, p_exclude_expansions boolean DEFAULT true, p_limit integer DEFAULT 1000)
- RETURNS jsonb
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_items JSONB;
-  v_total BIGINT := 0;
-  v_parted BIGINT := 0;
-  v_limit INT := LEAST(GREATEST(COALESCE(p_limit, 1000), 1), 5000);
-  v_excl BOOLEAN := COALESCE(p_exclude_expansions, true);
-  -- 'owned' is a SET of statuses, not one: a prev_owned game (sold, gifted,
-  -- donated — migration 069) is still on your Owned shelf, just dimmed and
-  -- stamped by the client. It is excluded from every owned COUNT, which is why
-  -- v_parted comes back alongside v_total for the caller to subtract. Every
-  -- other status is its own single-element set.
-  v_statuses TEXT[] := CASE
-    WHEN p_status = 'owned' THEN ARRAY['owned', 'prev_owned']
-    ELSE ARRAY[p_status]
-  END;
-BEGIN
-  -- Wishlist is private to its owner (bgb_profile_bundle gates it the same way).
-  IF p_status = 'wishlist' AND viewer IS DISTINCT FROM target THEN
-    RETURN jsonb_build_object(
-      'items', '[]'::jsonb, 'total', 0, 'parted_total', 0, 'truncated', false
-    );
-  END IF;
-
-  IF p_status = 'played' THEN
-    -- Played-not-owned: every game the target has a play for that has NO row
-    -- on their collection table at all (owned AND wishlist both live there).
-    -- Mirrors collection_routes.py:335-404 and 045's played_not_owned CTE.
-    -- No denormalized columns available here — a played game has no
-    -- collection row, or only a 'played' one — so this branch joins
-    -- boardgamebuddy_games.
-    WITH played_games AS (
-      -- EXISTS, not a LEFT JOIN onto play_players: the join fans one play out
-      -- to one row per participant, which would multiply play_count. Matches
-      -- bgb_play_stats (039) and the 045 fix.
-      SELECT p.game_id
-      FROM boardgamebuddy_plays p
-      WHERE p.user_id = target
-         OR EXISTS (
-              SELECT 1 FROM boardgamebuddy_play_players pp
-              WHERE pp.play_id = p.id AND pp.player_user_id = target
-            )
-      GROUP BY p.game_id
-      UNION ALL
-      -- Played but never logged here (status 'played', migration 057).
-      -- A game with a play is already above, so only the rest join.
-      SELECT c.game_id
-      FROM boardgamebuddy_collections c
-      WHERE c.user_id = target AND c.status = 'played'
-        AND NOT EXISTS (
-              SELECT 1 FROM boardgamebuddy_plays p2
-              WHERE p2.game_id = c.game_id
-                AND (p2.user_id = target OR EXISTS (
-                      SELECT 1 FROM boardgamebuddy_play_players pp2
-                      WHERE pp2.play_id = p2.id AND pp2.player_user_id = target))
-            )
-    )
-    SELECT COUNT(*) INTO v_total
-      FROM played_games pg
-      JOIN boardgamebuddy_games g ON g.id = pg.game_id
-      WHERE NOT EXISTS (
-              SELECT 1 FROM boardgamebuddy_collections c
-              WHERE c.user_id = target AND c.game_id = pg.game_id AND c.status <> 'played'
-            )
-        AND (NOT v_excl OR COALESCE(g.is_expansion, false) = false);
-
-    WITH played_games AS (
-      SELECT p.game_id,
-             MAX(p.played_at) AS last_played_at,
-             COUNT(*)::INT    AS play_count
-      FROM boardgamebuddy_plays p
-      WHERE p.user_id = target
-         OR EXISTS (
-              SELECT 1 FROM boardgamebuddy_play_players pp
-              WHERE pp.play_id = p.id AND pp.player_user_id = target
-            )
-      GROUP BY p.game_id
-      UNION ALL
-      -- Played but never logged here (status 'played', migration 057).
-      -- A game with a play is already above, so only the rest join.
-      SELECT c.game_id, NULL, 0
-      FROM boardgamebuddy_collections c
-      WHERE c.user_id = target AND c.status = 'played'
-        AND NOT EXISTS (
-              SELECT 1 FROM boardgamebuddy_plays p2
-              WHERE p2.game_id = c.game_id
-                AND (p2.user_id = target OR EXISTS (
-                      SELECT 1 FROM boardgamebuddy_play_players pp2
-                      WHERE pp2.play_id = p2.id AND pp2.player_user_id = target))
-            )
-    ),
-    played_not_owned AS (
-      SELECT pg.*
-      FROM played_games pg
-      WHERE NOT EXISTS (
-        SELECT 1 FROM boardgamebuddy_collections c
-        WHERE c.user_id = target AND c.game_id = pg.game_id AND c.status <> 'played'
-      )
-    )
-    SELECT COALESCE(jsonb_agg(row_jsonb ORDER BY sort_a DESC NULLS LAST), '[]'::jsonb)
-      INTO v_items
-      FROM (
-        SELECT
-          pno.last_played_at AS sort_a,
-          jsonb_build_object(
-            -- Matches the synthetic id the Python branch minted so the client
-            -- can key tiles identically across both endpoints.
-            'id', 'played-' || g.id::TEXT,
-            'game_id', g.id,
-            'status', 'played',
-            'added_at', COALESCE(pno.last_played_at::TEXT || 'T00:00:00+00:00', (SELECT to_jsonb(c.added_at) #>> '{}' FROM boardgamebuddy_collections c WHERE c.user_id = target AND c.game_id = pno.game_id)),
-            'last_played_at', pno.last_played_at,
-            'play_count', COALESCE(pno.play_count, 0),
-            'played_before', EXISTS (
-              SELECT 1 FROM boardgamebuddy_collections c
-              WHERE c.user_id = target AND c.game_id = pno.game_id
-                AND c.played_before_at IS NOT NULL),
-            'game', jsonb_build_object(
-              'id', g.id,
-              'bgg_id', g.bgg_id,
-              'name', g.name,
-              'year_published', g.year_published,
-              'min_players', g.min_players,
-              'max_players', g.max_players,
-              'playing_time', g.playing_time,
-              'thumbnail_url', g.thumbnail_url,
-              'image_url', g.image_url,
-              'theme_color', g.theme_color,
-              'is_expansion', COALESCE(g.is_expansion, false),
-              'base_game_bgg_id', g.base_game_bgg_id,
-              'expansion_color', g.expansion_color,
-              'play_mode', COALESCE(g.play_mode, 'competitive'),
-              'expansion_count', COALESCE(xc.n, 0)
-            ),
-            'expansions', '[]'::jsonb
-          ) AS row_jsonb
-        FROM played_not_owned pno
-        JOIN boardgamebuddy_games g ON g.id = pno.game_id
-        LEFT JOIN LATERAL (
-          SELECT COUNT(*)::INT AS n
-          FROM boardgamebuddy_games e
-          WHERE COALESCE(g.is_expansion, false) = false
-            AND g.bgg_id IS NOT NULL
-            AND e.is_expansion = true
-            AND e.base_game_bgg_id = g.bgg_id
-        ) xc ON true
-        WHERE (NOT v_excl OR COALESCE(g.is_expansion, false) = false)
-        ORDER BY pno.last_played_at DESC NULLS LAST
-        LIMIT v_limit
-      ) q;
-
-  ELSE
-    -- owned / wishlist: served entirely from the denormalized c.game_* columns.
-    -- v_total counts every row the items array can draw from, prev_owned
-    -- included, because `truncated` below has to be about the rows on offer.
-    -- v_parted is how many of those the client must not count as owned.
-    SELECT COUNT(*), COUNT(*) FILTER (WHERE c.status = 'prev_owned')
-      INTO v_total, v_parted
-      FROM boardgamebuddy_collections c
-      WHERE c.user_id = target AND c.status = ANY(v_statuses)
-        AND (NOT v_excl OR COALESCE(c.game_is_expansion, false) = false);
-
-    SELECT COALESCE(
-             jsonb_agg(row_jsonb ORDER BY sort_a DESC NULLS LAST, sort_b DESC),
-             '[]'::jsonb
-           )
-      INTO v_items
-      FROM (
-        SELECT
-          -- Wishlist sorts on added_at alone (matching bgb_profile_bundle and
-          -- the Python grid); collapsing sort_a to NULL makes the shared
-          -- ORDER BY above degrade to `added_at DESC` for it.
-          CASE WHEN p_status = 'wishlist' THEN NULL ELSE ps.last_played_at END AS sort_a,
-          c.added_at AS sort_b,
-          jsonb_build_object(
-            'id', c.id,
-            'game_id', c.game_id,
-            'status', c.status,
-            'added_at', c.added_at,
-            'last_played_at', ps.last_played_at,
-            'play_count', COALESCE(ps.play_count, 0),
-            -- The played mark (057), so an unlogged but marked game can join
-            -- the client's Most played order as a logged one does.
-            'played_before', c.played_before_at IS NOT NULL,
-            'game', jsonb_build_object(
-              'id', c.game_id,
-              'bgg_id', c.game_bgg_id,
-              'name', c.game_name,
-              'year_published', c.game_year_published,
-              'min_players', c.game_min_players,
-              'max_players', c.game_max_players,
-              'playing_time', c.game_playing_time,
-              'thumbnail_url', c.game_thumbnail_url,
-              'image_url', gi.image_url,
-              'theme_color', c.game_theme_color,
-              'is_expansion', COALESCE(c.game_is_expansion, false),
-              'base_game_bgg_id', c.game_base_game_bgg_id,
-              'expansion_color', c.game_expansion_color,
-              'play_mode', COALESCE(c.game_play_mode, 'competitive'),
-              'expansion_count', COALESCE(xc.n, 0)
-            ),
-            'expansions', '[]'::jsonb
-          ) AS row_jsonb
-        FROM boardgamebuddy_collections c
-        LEFT JOIN boardgamebuddy_games gi ON gi.id = c.game_id
-        -- image_url only — see the header. Every other game field stays denorm.
-        LEFT JOIN LATERAL (
-          SELECT MAX(p.played_at) AS last_played_at, COUNT(*)::INT AS play_count
-          FROM boardgamebuddy_plays p
-          WHERE p.game_id = c.game_id
-            AND (
-              p.user_id = target
-              OR EXISTS (
-                   SELECT 1 FROM boardgamebuddy_play_players pp
-                   WHERE pp.play_id = p.id AND pp.player_user_id = target
-                 )
-            )
-        ) ps ON true
-        LEFT JOIN LATERAL (
-          -- CATALOG-wide expansion count, not the viewer's owned ones — the
-          -- same number the game page's "Expansions (N)" heading shows.
-          -- _attach_page_expansion_counts (collection_routes.py:238-251) is
-          -- explicit about this: expansions arrive via the import popup
-          -- without touching anyone's collection, so an owned-only count
-          -- reads as zero for a game that plainly has eleven of them.
-          -- Only base games get a count; expansion rows stay at 0.
-          SELECT COUNT(*)::INT AS n
-          FROM boardgamebuddy_games e
-          WHERE COALESCE(c.game_is_expansion, false) = false
-            AND c.game_bgg_id IS NOT NULL
-            AND e.is_expansion = true
-            AND e.base_game_bgg_id = c.game_bgg_id
-        ) xc ON true
-        WHERE c.user_id = target AND c.status = ANY(v_statuses)
-          AND (NOT v_excl OR COALESCE(c.game_is_expansion, false) = false)
-        ORDER BY
-          CASE WHEN p_status = 'wishlist' THEN NULL ELSE ps.last_played_at END
-            DESC NULLS LAST,
-          c.added_at DESC
-        LIMIT v_limit
-      ) q;
-  END IF;
-
-  RETURN jsonb_build_object(
-    'items', COALESCE(v_items, '[]'::jsonb),
-    'total', v_total,
-    -- Zero on every branch but owned/wishlist, and always zero for wishlist.
-    'parted_total', v_parted,
-    'truncated', v_total > v_limit
-  );
-END;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_collection_shelf(viewer uuid, target uuid, p_status text, p_exclude_expansions boolean, p_limit integer) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_collection_shelf(viewer uuid, target uuid, p_status text, p_exclude_expansions boolean, p_limit integer) TO boardgamebuddy_role;
-
--- bgb_collection_status_map(p_viewer uuid)
-CREATE OR REPLACE FUNCTION public.bgb_collection_status_map(p_viewer uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_status_map JSONB;
-  v_expansion_counts JSONB;
-  v_played_marks JSONB;
-BEGIN
-  -- Collection rows first, then a derived 'played' entry for every game the
-  -- viewer has a play for and no collection row on. Matches GET /collection's
-  -- semantics: there, owned/wishlist rows come from the table and played rows
-  -- are synthesized for games with plays but no owned row.
-  --
-  -- The visibility rule for "has a play" is the participated-in one shared by
-  -- bgb_play_stats (039) and fixed across the board in 045: a play counts when
-  -- the viewer logged it OR appears on it as a participant. EXISTS rather than
-  -- a join, so a multi-player play can't fan out.
-  SELECT COALESCE(jsonb_object_agg(game_id, status), '{}'::jsonb)
-    INTO v_status_map
-    FROM (
-      SELECT c.game_id::TEXT AS game_id, c.status AS status
-      FROM boardgamebuddy_collections c
-      WHERE c.user_id = p_viewer
-        AND c.status IN ('owned', 'wishlist', 'played', 'prev_owned')
-      UNION
-      SELECT DISTINCT p.game_id::TEXT, 'played'::TEXT
-      FROM boardgamebuddy_plays p
-      WHERE (
-              p.user_id = p_viewer
-              OR EXISTS (
-                   SELECT 1 FROM boardgamebuddy_play_players pp
-                   WHERE pp.play_id = p.id AND pp.player_user_id = p_viewer
-                 )
-            )
-        AND NOT EXISTS (
-              SELECT 1 FROM boardgamebuddy_collections c2
-              WHERE c2.user_id = p_viewer AND c2.game_id = p.game_id
-            )
-    ) m;
-
-  -- Owned expansions per base game's bgg_id. Reads the denormalized game_*
-  -- columns (migration 020), so no join to boardgamebuddy_games at all.
-  -- Identical to bgb_profile_bundle's expansion_counts block (045:359-369).
-  --
-  -- `= 'owned'` here is deliberate and NOT widened to prev_owned (069): an
-  -- expansion you sold is not clutter on your shelf any more, and this number
-  -- is what the tile's expansion badge counts.
-  SELECT COALESCE(jsonb_object_agg(base_bgg, cnt), '{}'::jsonb)
-    INTO v_expansion_counts
-    FROM (
-      SELECT c.game_base_game_bgg_id AS base_bgg, COUNT(*)::INT AS cnt
-      FROM boardgamebuddy_collections c
-      WHERE c.user_id = p_viewer
-        AND c.status = 'owned'
-        AND COALESCE(c.game_is_expansion, false) = true
-        AND c.game_base_game_bgg_id IS NOT NULL
-      GROUP BY c.game_base_game_bgg_id
-    ) e;
-
-  -- Every game the viewer marked played without a logged play (057), on
-  -- a row of any status. The map alone cannot say: it reads 'played' for a
-  -- mark and for logged plays alike, and a shelf status for a marked
-  -- owned or wishlisted game. This is what the sheet's switch shows.
-  SELECT COALESCE(jsonb_agg(c.game_id::TEXT), '[]'::jsonb)
-    INTO v_played_marks
-    FROM boardgamebuddy_collections c
-    WHERE c.user_id = p_viewer AND c.played_before_at IS NOT NULL;
-
-  RETURN jsonb_build_object(
-    'status_map', v_status_map,
-    'expansion_counts', v_expansion_counts,
-    'played_marks', v_played_marks
-  );
-END;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_collection_status_map(p_viewer uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_collection_status_map(p_viewer uuid) TO boardgamebuddy_role;
-
 -- bgb_push_note_failure(p_id uuid)
 CREATE OR REPLACE FUNCTION public.bgb_push_note_failure(p_id uuid)
  RETURNS void
@@ -2685,7 +2688,7 @@ AS $function$
                   WHERE pp.play_id = p.id AND pp.player_user_id = p_viewer)));
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_rank_deferrals_active(p_viewer uuid) FROM PUBLIC, anon, authenticated;
-COMMENT ON FUNCTION public.bgb_rank_deferrals_active(p_viewer uuid) IS 'The game ids p_viewer parked with "Rank after next play" and has not played since (migration 058), as a JSONB array. Called by GET /api/v1/boardgame_buddy/ranks/queue.';
+COMMENT ON FUNCTION public.bgb_rank_deferrals_active(p_viewer uuid) IS 'The game ids p_viewer parked with "Rank after next play" and has not played since, as a JSONB array. Called by GET /api/v1/boardgame_buddy/ranks/queue.';
 
 -- bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer)
 CREATE OR REPLACE FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer)
@@ -2736,7 +2739,7 @@ BEGIN
 END;
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer) FROM PUBLIC, anon, authenticated;
-COMMENT ON FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer) IS 'Insert (or move) a game into a player''s ranking at p_index within p_category/p_tier, keeping positions dense. Returns {category, tier, position} or {error}. Called by PUT /api/v1/boardgame_buddy/ranks/games/{game_id} (migration 056).';
+COMMENT ON FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer) IS 'Insert (or move) a game into a player''s ranking at p_index within p_category/p_tier, keeping positions dense. Returns {category, tier, position} or {error}. Called by PUT /api/v1/boardgame_buddy/ranks/games/{game_id}.';
 
 -- bgb_reject_ghost_claim(p_owner uuid, p_claim_id uuid)
 CREATE OR REPLACE FUNCTION public.bgb_reject_ghost_claim(p_owner uuid, p_claim_id uuid)
@@ -3350,7 +3353,7 @@ BEGIN
 END;
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_unrank_game(p_user uuid, p_game uuid) FROM PUBLIC, anon, authenticated;
-COMMENT ON FUNCTION public.bgb_unrank_game(p_user uuid, p_game uuid) IS 'Remove a game from a player''s ranking, closing the gap in its tier. Returns {removed}. Called by DELETE /api/v1/boardgame_buddy/ranks/games/{game_id} (migration 056).';
+COMMENT ON FUNCTION public.bgb_unrank_game(p_user uuid, p_game uuid) IS 'Remove a game from a player''s ranking, closing the gap in its tier. Returns {removed}. Called by DELETE /api/v1/boardgame_buddy/ranks/games/{game_id}.';
 
 -- bgb_update_session_game(p_host uuid, p_code text, p_game uuid)
 CREATE OR REPLACE FUNCTION public.bgb_update_session_game(p_host uuid, p_code text, p_game uuid)
@@ -3447,7 +3450,7 @@ AS $function$
     c.status                 AS collection_status,
     (c.user_id IS NOT NULL)  AS in_collection
   FROM public.boardgamebuddy_games g
-  -- A mark-only 'played' row (057) is not a shelf: the game is a catalog hit,
+  -- A mark-only 'played' row is not a shelf: the game is a catalog hit,
   -- as one with only logged plays is.
   LEFT JOIN public.boardgamebuddy_collections c
     ON c.game_id = g.id AND c.user_id = p_viewer AND c.status <> 'played'

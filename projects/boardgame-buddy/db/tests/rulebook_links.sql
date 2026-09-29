@@ -1,10 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 052_rulebook_links.sql — the half of migration 052 that lives in the database
+-- rulebook_links.sql — the rulebook-link rules that live in the database
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY THIS FILE EXISTS. `api/tests/test_rulebook_links.py` drives the API
 -- against a fake PostgREST, so it can pin who may SEE a link and what the write
--- paths store — and nothing else. The three things 052 puts in Postgres itself
+-- paths store — and nothing else. The three rules that live in Postgres itself
 -- have no test there and cannot have one:
 --
 --   * `bgb_chapters_link_shape`, whose whole job is to be the backstop for a
@@ -27,18 +27,19 @@
 -- transaction that ends in ROLLBACK, and every row it touches is one it
 -- inserted under a uuid it invented. It still writes WAL, so prefer a scratch
 -- database. Same posture, and the same shape, as
--- db/tests/051_account_deletion_handover.sql.
+-- db/tests/account_deletion_handover.sql.
 --
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/052_rulebook_links.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/rulebook_links.sql
 --
 -- Every check is an ASSERT inside one DO block, so the first failure raises
 -- with the name of the property that broke and nothing further runs. Silence
--- plus "ALL 052 CHECKS PASSED" is a pass.
+-- plus "ALL RULEBOOK-LINKS CHECKS PASSED" is a pass.
 --
 -- Standing up a throwaway database to run it against needs the same four
--- Supabase-isms 051's test lists (the three roles, `auth.users`, the
--- `extensions` schema with pg_trgm, and an `auth.uid()` stub), then
--- db/schema/boardgamebuddy.sql, then db/migrations/archive/2026-09-28/052_rulebook_links.sql.
+-- Supabase-isms account_deletion_handover.sql lists (the three roles,
+-- `auth.users`, the `extensions` schema with pg_trgm, and an `auth.uid()`
+-- stub), then db/schema/boardgamebuddy.sql. The rulebook-links migration
+-- itself is run by the two `\i` lines below.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
@@ -61,7 +62,7 @@ INSERT INTO public.boardgamebuddy_games (id, name, rulebook_url) VALUES
   ('052a0000-0000-4000-8000-000000000003', 'No Rulebook Test', NULL);
 
 -- The real migration, run twice. The first pass is what backfills the games
--- above; the second is the idempotency claim in 052's own header, and the
+-- above; the second is the idempotency claim in that file's own header, and the
 -- "exactly one chapter" assertions below are what prove it. Both passes are
 -- inside this transaction, so both roll back.
 \i db/migrations/archive/2026-09-28/052_rulebook_links.sql
@@ -83,11 +84,12 @@ BEGIN
     (other,  'Bram', 'bram_' || left(other::text, 8));
 
   -- The two chapter types the prose and grid cases below are filed under.
-  -- ON CONFLICT DO NOTHING because a real database already has them (002_seed
-  -- and 021) and a scratch one stood up from db/schema/ has NO seed rows at all
+  -- ON CONFLICT DO NOTHING because a real database already has them (they are
+  -- seed rows) and a scratch one stood up from db/schema/ has NO seed rows at all
   -- — the snapshot carries shape, not data. Without this the test fails on an
-  -- FK to the lookup table rather than on anything 052 did. ('rulebook' is not
-  -- here: seeding it is 052's own job, and check 1 is what asserts it.)
+  -- FK to the lookup table rather than on anything the replayed migration did.
+  -- ('rulebook' is not here: seeding it is that migration's own job, and check
+  -- 1 is what asserts it.)
   INSERT INTO public.boardgamebuddy_chapter_types (id, label, icon, display_order) VALUES
     ('setup', 'Setup', 'box', 10),
     ('scoring_grid', 'Scoring Grid Template', 'table', 5)
@@ -117,7 +119,7 @@ BEGIN
     'content is the generated markdown mirror, got ' || COALESCE(ch.content, 'NULL');
   ASSERT ch.grid IS NULL, 'a rulebook link carries no grid';
 
-  -- ── 3. …exactly once, however many times 052 is replayed ───────────────────
+  -- ── 3. …exactly once, however many times the migration is replayed ────────
   SELECT count(*) INTO n FROM public.boardgamebuddy_guide_chapters
    WHERE game_id = g_ok AND layout = 'rulebook_link';
   ASSERT n = 1,
@@ -195,9 +197,9 @@ BEGIN
   END;
 
   -- ── 10. an ordinary prose chapter still inserts ────────────────────────────
-  -- 052 rewrote bgb_chapters_grid_shape to learn a third layout. If that went
-  -- wrong the damage would not be to rulebook links at all — it would be to
-  -- every chapter written since 018.
+  -- The replayed migration re-issues bgb_chapters_grid_shape with a third
+  -- layout branch. If that goes wrong the damage is not to rulebook links at
+  -- all — it is to every text and scoring-grid chapter.
   INSERT INTO public.boardgamebuddy_guide_chapters
     (game_id, chapter_type, title, content, layout, created_by)
   VALUES (g_ok, 'setup', 'Setup', 'Deal seven cards.', 'text', author);
@@ -263,15 +265,15 @@ BEGIN
     'expected the backfilled link plus three authored ones, got ' || n;
 
   -- ── 13. the legacy column is untouched ─────────────────────────────────────
-  -- 052 reads boardgamebuddy_games.rulebook_url and never writes it. If a later
-  -- change starts clearing it, the backfill loses the source it would need to
+  -- The backfill reads boardgamebuddy_games.rulebook_url and never writes it.
+  -- If anything starts clearing it, the backfill loses the source it would need to
   -- be re-run from.
   SELECT rulebook_url INTO txt FROM public.boardgamebuddy_games WHERE id = g_ok;
   ASSERT txt = 'https://example.test/everdell-rules.pdf',
     'the migration must not rewrite the column it reads from, got '
     || COALESCE(txt, 'NULL');
 
-  RAISE NOTICE 'ALL 052 CHECKS PASSED';
+  RAISE NOTICE 'ALL RULEBOOK-LINKS CHECKS PASSED';
 END
 $test$;
 

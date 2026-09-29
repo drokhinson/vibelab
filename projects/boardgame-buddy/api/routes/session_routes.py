@@ -137,7 +137,7 @@ async def watch_session(
     Not a join — it never touches the roster, so a spectator does not become a
     scoring column or a player on the saved play. What it buys them is the
     grid: the live-score table and its Realtime channel are RLS-gated on being
-    host, seated OR watching (migration 027), so without this row a spectator
+    host, seated OR watching (boardgamebuddy_play_session_viewers), so without this row a spectator
     reads an empty table and their screen falls back to the bundle's baked-in
     copy plus a faster poll. Editing stays host-only either way.
     """
@@ -349,9 +349,8 @@ async def finalize_session(
     typed scores.
 
     All of that — the open/expiry/host gates, the live-score overlay, the
-    play write and the finalized stamp — happens inside bgb_finalize_session
-    (migration 042), so this is one round trip rather than the ten it used
-    to take.
+    play write and the finalized stamp — happens inside bgb_finalize_session,
+    so this is one round trip.
     """
     sb = get_supabase()
     play = session_service.finalize_session(

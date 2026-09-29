@@ -93,7 +93,7 @@ async def get_bootstrap(
     # so calling them inline would serialize the round trips *and* block the
     # event loop for every other in-flight request. to_thread + gather makes
     # the wall time the slowest single block instead of the sum — which is why
-    # the buddies / ghosts / played-with trio is one RPC (migration 047): as
+    # the buddies / ghosts / played-with trio is one RPC (bgb_play_partners): as
     # five sequential queries it would be the slowest block, and alone set this
     # endpoint's floor.
     #

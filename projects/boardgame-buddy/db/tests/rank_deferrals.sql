@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 058_rank_deferrals.sql — when a "Rank after next play" deferral lapses
+-- rank_deferrals.sql — when a "Rank after next play" deferral lapses
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY THIS FILE EXISTS. api/tests/test_game_ranks.py fakes
@@ -13,9 +13,10 @@
 -- it inserted under uuids it invented. now() is fixed inside a transaction, so
 -- every timestamp here is written out explicitly.
 --
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/058_rank_deferrals.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/rank_deferrals.sql
 --
--- Needs migration 058 applied. Silence plus "ALL 058 CHECKS PASSED" is a pass.
+-- Needs boardgamebuddy_rank_deferrals and bgb_rank_deferrals_active. Silence
+-- plus "ALL RANK-DEFERRALS CHECKS PASSED" is a pass.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
@@ -76,7 +77,7 @@ BEGIN
   ASSERT bgb_rank_deferrals_active('ffffffff-0000-0000-0000-000000000058') = '[]'::jsonb,
     'empty is []';
 
-  RAISE NOTICE 'ALL 058 CHECKS PASSED';
+  RAISE NOTICE 'ALL RANK-DEFERRALS CHECKS PASSED';
 END;
 $$;
 

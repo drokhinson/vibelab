@@ -7,7 +7,7 @@ is its own: this is its own object with its own lifecycle.
 Both routes take a LIST of play ids because the surface is the session footer —
 one tap covers a whole game night. One play is a list of one, which is what a
 per-card control would send if one ever ships. The counts and the avatar stack
-come back on the feed payload (bgb_feed_plays, migration 016), not from here, so
+come back on the feed payload (bgb_feed_plays), not from here, so
 there is no GET: reacting never costs the client a read.
 """
 

@@ -1,46 +1,47 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 053_rulebook_review_optional.sql — the half of migration 053 that lives in
---                                    the database
+-- rulebook_review_optional.sql — bgb_chapters_link_shape and the 'unlisted'
+--                                rulebook-link status
 -- ─────────────────────────────────────────────────────────────────────────────
 --
--- WHY THIS FILE EXISTS. 053 is one statement — bgb_chapters_link_shape, dropped
--- and re-issued so `moderation_status` admits a fourth value — and that shape
+-- WHY THIS FILE EXISTS. The migration the two `\i` lines below replay is one
+-- statement — bgb_chapters_link_shape, dropped and re-issued so
+-- `moderation_status` admits a fourth value, 'unlisted' — and that shape
 -- is exactly what `api/tests/test_rulebook_links.py` cannot see: it drives the
 -- API against a fake PostgREST, where every INSERT succeeds.
 --
 -- A RE-ISSUED CHECK IS THE RISK, not the new value. Postgres has no ALTER
--- CONSTRAINT for a CHECK, so 053 had to write the whole expression out again —
--- and every clause it reproduces is a clause it could have dropped by accident.
+-- CONSTRAINT for a CHECK, so that file writes the whole expression out again —
+-- and every clause it reproduces is a clause it could drop by accident.
 -- The IS NOT NULL tests are the ones that would go quietly: **a CHECK whose
 -- expression evaluates to NULL PASSES**, so losing one admits a rulebook link
 -- with no URL, or one with no gate at all, and nothing anywhere would complain
--- until a reader hit the row. So this file re-runs 052's own backstop
--- assertions against the NEW constraint rather than trusting that a copy
--- stayed a copy.
+-- until a reader hit the row. So this file re-runs rulebook_links.sql's
+-- backstop assertions against the re-issued constraint rather than trusting
+-- that a copy stayed a copy.
 --
 -- SAFE TO RUN ANYWHERE, including production: the whole thing is one
 -- transaction that ends in ROLLBACK, and every row it touches is one it
 -- inserted under a uuid it invented. It still writes WAL, so prefer a scratch
 -- database. Same posture, and the same shape, as
--- db/tests/052_rulebook_links.sql.
+-- db/tests/rulebook_links.sql.
 --
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/053_rulebook_review_optional.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/rulebook_review_optional.sql
 --
 -- Every check is an ASSERT inside one DO block, so the first failure raises
 -- with the name of the property that broke and nothing further runs. Silence
--- plus "ALL 053 CHECKS PASSED" is a pass.
+-- plus "ALL RULEBOOK-REVIEW CHECKS PASSED" is a pass.
 --
--- Standing up a throwaway database to run it against needs what 052's test
--- lists (the three roles, `auth.users`, the `extensions` schema with pg_trgm,
+-- Standing up a throwaway database to run it against needs what
+-- rulebook_links.sql lists (the three roles, `auth.users`, the `extensions` schema with pg_trgm,
 -- and an `auth.uid()` stub), then db/schema/boardgamebuddy.sql — whose snapshot
--- already carries 053's constraint, which is why the migration is replayed
--- below rather than assumed.
+-- already carries the four-value constraint, which is why the migration is
+-- replayed below rather than assumed.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
 
 -- One game to hang every chapter off. Fixed uuid, v4-shaped, that no real row
--- holds — the same trick 052's test uses so the DO block can name it without a
+-- holds — the same trick rulebook_links.sql uses so the DO block can name it without a
 -- temp table.
 INSERT INTO public.boardgamebuddy_games (id, name) VALUES
   ('053a0000-0000-4000-8000-000000000001', 'Unlisted Test');
@@ -65,8 +66,8 @@ BEGIN
     (author, 'Ana',  'ana_'  || left(author::text, 8)),
     (other,  'Bram', 'bram_' || left(other::text, 8));
 
-  -- ON CONFLICT DO NOTHING for the reason 052's test gives: a real database
-  -- already has these (002_seed, 021, 052) and a scratch one stood up from
+  -- ON CONFLICT DO NOTHING for the reason rulebook_links.sql gives: a real
+  -- database already has these seed rows and a scratch one stood up from
   -- db/schema/ has no seed rows at all — the snapshot carries shape, not data.
   INSERT INTO public.boardgamebuddy_chapter_types (id, label, icon, display_order) VALUES
     ('setup', 'Setup', 'box', 10),
@@ -88,7 +89,7 @@ BEGIN
     || COALESCE(st, 'NULL');
 
   -- ── 2. …and the original three still are ───────────────────────────────────
-  -- 053 re-issued the constraint. A typo in the re-issued array would not break
+  -- The replayed migration re-issues the constraint. A typo in the re-issued array would not break
   -- the new value — it is the one the author of the typo was looking at — it
   -- would break one of the three that were already working.
   UPDATE public.boardgamebuddy_guide_chapters
@@ -187,9 +188,9 @@ BEGIN
   VALUES (g, 'setup', 'Setup', 'Deal seven cards.', 'text', other);
 
   -- ── 8. one link per (game, author), unlisted included ──────────────────────
-  -- 053 adds a status that is not in the queue, and the anti-spam property must
-  -- not depend on which status a row carries: the index is partial on the
-  -- LAYOUT (052), so an unlisted link occupies its author's one slot exactly as
+  -- 'unlisted' is a status that is not in the queue, and the anti-spam property
+  -- must not depend on which status a row carries: the index is partial on the
+  -- LAYOUT, so an unlisted link occupies its author's one slot exactly as
   -- a pending or denied one does.
   BEGIN
     INSERT INTO public.boardgamebuddy_guide_chapters
@@ -205,7 +206,7 @@ BEGIN
    WHERE game_id = g AND layout = 'rulebook_link';
   ASSERT n = 1, 'expected exactly the one authored link, got ' || n;
 
-  RAISE NOTICE 'ALL 053 CHECKS PASSED';
+  RAISE NOTICE 'ALL RULEBOOK-REVIEW CHECKS PASSED';
 END
 $test$;
 
