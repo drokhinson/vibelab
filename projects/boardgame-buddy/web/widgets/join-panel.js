@@ -217,31 +217,28 @@
       // Sessions past Gather are spectator-only — the user lands in the
       // read-only session-viewer and isn't added to the host's player list.
       const spectate = s.phase && s.phase !== "gather";
-      const badges = [];
-      if (s.is_participant) badges.push(`<span class="cascade-join__badge cascade-join__badge--rejoin">Rejoin</span>`);
-      if (s.is_host_buddy && !s.is_participant) badges.push(`<span class="cascade-join__badge">Buddy</span>`);
       return `
         <li class="cascade-card cascade-join__row"
             onclick="window.joinPanel._joinSession('${escapeAttr(s.code)}')">
           ${thumb}
           <div class="cascade-join__row-body">
-            <div class="cascade-join__row-top">
-              <span class="cascade-join__row-host">${escapeHtml(s.host_display_name)}</span>
-              <span class="cascade-join__row-code">${escapeHtml(s.code)}</span>
-            </div>
+            <span class="cascade-join__row-host">${escapeHtml(s.host_display_name)}</span>
             <div class="cascade-join__row-bottom">
-              <span>${escapeHtml(gameName)}</span>
+              <span class="cascade-join__row-game">${escapeHtml(gameName)}</span>
+              <span class="cascade-join__row-sep" aria-hidden="true">·</span>
               <span class="cascade-join__row-count">
                 <i data-icon="users" class="w-3 h-3"></i>
                 ${s.participant_count}
               </span>
             </div>
-            ${badges.length ? `<div class="cascade-join__row-badges">${badges.join("")}</div>` : ""}
           </div>
-          <button type="button" class="btn btn-primary cascade-join__row-action"
-                  onclick="event.stopPropagation(); window.joinPanel._joinSession('${escapeAttr(s.code)}')">
-            ${spectate ? "Spectate" : "Join"}
-          </button>
+          <div class="cascade-join__row-side">
+            <span class="cascade-join__row-code">${escapeHtml(s.code)}</span>
+            <button type="button" class="btn btn-primary cascade-join__row-action"
+                    onclick="event.stopPropagation(); window.joinPanel._joinSession('${escapeAttr(s.code)}')">
+              ${spectate ? "Spectate" : "Join"}
+            </button>
+          </div>
         </li>
       `;
     }

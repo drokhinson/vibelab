@@ -12742,18 +12742,20 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .cascade-join__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .cascade-join__row {
   display: grid;
-  grid-template-columns: 44px 1fr auto;
-  gap: 10px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
   align-items: center;
+  padding: 12px;
   cursor: pointer;
   user-select: none;
 }
 .cascade-join__row:hover { transform: translateY(-1px); }
 .cascade-join__row-action {
   align-self: center;
-  min-height: 44px;
+  min-height: 40px;
   height: auto;
-  padding: 0 16px;
+  padding: 0 14px;
+  font-size: 14px;
   white-space: nowrap;
 }
 .cascade-join__row-thumb {
@@ -12770,13 +12772,21 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   color: var(--polaroid-muted);
 }
 .cascade-join__row-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.cascade-join__row-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
+.cascade-join__row-host {
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.cascade-join__row-host { font-family: var(--font-polaroid); font-weight: 700; font-size: 14px; }
+.cascade-join__row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
 .cascade-join__row-code {
   font-family: var(--font-score);
   font-weight: 700;
@@ -12786,33 +12796,24 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 .cascade-join__row-bottom {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   font-size: 12px;
   color: var(--polaroid-muted);
 }
+.cascade-join__row-game {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cascade-join__row-sep { flex-shrink: 0; }
 .cascade-join__row-count {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 3px;
-}
-.cascade-join__row-badges { display: flex; gap: 6px; margin-top: 4px; }
-.cascade-join__badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  background: var(--polaroid-bg-soft);
-  color: var(--polaroid-muted);
-  border: 1px solid var(--polaroid-line);
-}
-/* --accent with #fff is 4.3:1 in light and 1.9:1 in dark — the badge label was
-   barely there on the very theme its gold is brightest in. --accent-fill /
-   --on-accent is the pair the system keeps for a solid accent chip. */
-.cascade-join__badge--rejoin {
-  background: var(--accent-fill);
-  color: var(--on-accent);
-  border-color: var(--accent-fill);
 }
 /* One box holds the list's whole lifecycle: the buddy loader while a load is
    in flight, then the empty message or the session rows in its place. The
@@ -12828,6 +12829,14 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   justify-content: center;
 }
 .cascade-join__box > .buddy-loader { align-self: center; }
+/* Session rows are cards of their own, so the dashed frame steps aside once
+   they fill the box rather than nesting a card inside a card. */
+.cascade-join__box:has(> .cascade-join__list) {
+  background: none;
+  border: 0;
+  padding: 0;
+  min-height: 0;
+}
 .cascade-join__empty {
   color: var(--polaroid-muted);
   padding: 8px 4px;
