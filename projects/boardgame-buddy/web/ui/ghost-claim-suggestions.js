@@ -17,6 +17,10 @@
 //
 // The view owns all state and all writes; nothing here fetches or mutates.
 // `opts.stateFor(key)` is how it tells a row what this session did to it.
+//
+// "Is this you?" renders on the Feed as well as the Buddies screen, so its
+// buttons call whichever view passed `opts.handler` ("window.feedView");
+// the Buddies screen is the default.
 
 (function () {
   // What the actions cell shows. Deliberately verbs and not list membership,
@@ -75,7 +79,10 @@
     return window.GhostClaim.suggestionKey(s);
   }
 
-  function suggestionActions(s, state) {
+  const DEFAULT_HANDLER = "window.buddiesView";
+
+  function suggestionActions(s, state, handler) {
+    const h = handler || DEFAULT_HANDLER;
     if (state === "busy") return busyChip();
     const chip = resolvedChip(state);
     if (chip) return chip;
@@ -91,8 +98,8 @@
     // ELSE — a ghost called `Bob "the ghost"` would end the onclick attribute
     // early and inject markup.
     const args = `'${jsStr(s.owner_user_id)}','${jsStr(s.ghost_name_key)}','${jsStr(s.ghost_display_name)}'`;
-    const claim = escapeAttr(`event.stopPropagation();window.buddiesView._claimGhost(${args})`);
-    const dismiss = escapeAttr(`event.stopPropagation();window.buddiesView._dismissGhost(${args})`);
+    const claim = escapeAttr(`event.stopPropagation();${h}._claimGhost(${args})`);
+    const dismiss = escapeAttr(`event.stopPropagation();${h}._dismissGhost(${args})`);
     return `
       <button class="btn btn-primary btn-xs" onclick="${claim}">Claim</button>
       <button class="btn btn-ghost btn-xs" onclick="${dismiss}">Not me</button>`;
@@ -100,7 +107,8 @@
 
   /**
    * @param {Array} suggestions GhostClaimSuggestion[] from GET /ghost-claims/suggestions
-   * @param {{stateFor: (key: string) => string|null}} opts
+   * @param {{stateFor: (key: string) => string|null, handler?: string}} opts
+   *   `handler` is the global the Claim / Not me buttons call.
    * @returns {string} "" when there is nothing to suggest — the absence of the
    *   section is the empty state. A heading over "no matches" would be the app
    *   announcing that it looked for you and found nothing, every single visit.
@@ -109,6 +117,7 @@
     const list = suggestions || [];
     if (!list.length) return "";
     const stateFor = (opts && opts.stateFor) || (() => null);
+    const handler = opts && opts.handler;
     return `
       <section class="buddies-section ghost-claim-section">
         <h3>Is this you?</h3>
@@ -138,7 +147,7 @@
                 </div>
               </div>
               <div class="ghost-claim-row__actions" data-claim-actions="${escapeAttr(key)}">
-                ${suggestionActions(s, stateFor(key))}
+                ${suggestionActions(s, stateFor(key), handler)}
               </div>
             </li>`;
           }).join("")}
@@ -281,9 +290,14 @@
    * @param {object} [row] the suggestion / request the cell is for, needed to
    *   rebuild the live buttons when `state` is null
    * @param {"suggestion"|"request"|"sent"} [kind]
+   * @param {{root?: ParentNode, handler?: string}} [opts] `root` scopes the
+   *   lookup to one view's container — the Feed and the Buddies screen render
+   *   the same suggestion rows under the same keys. `handler` as in
+   *   renderGhostClaimSection.
    */
-  function patchGhostClaimRow(key, state, row, kind) {
-    const cell = document.querySelector(`[data-claim-actions="${window.CSS && CSS.escape ? CSS.escape(key) : key}"]`);
+  function patchGhostClaimRow(key, state, row, kind, opts) {
+    const root = (opts && opts.root) || document;
+    const cell = root.querySelector(`[data-claim-actions="${window.CSS && CSS.escape ? CSS.escape(key) : key}"]`);
     if (!cell) return;
     if (state) {
       cell.innerHTML = state === "busy" ? busyChip() : resolvedChip(state);
@@ -292,7 +306,7 @@
     if (!row) return;
     if (kind === "request") cell.innerHTML = requestActions(row, null);
     else if (kind === "sent") cell.innerHTML = sentActions(row, null);
-    else cell.innerHTML = suggestionActions(row, null);
+    else cell.innerHTML = suggestionActions(row, null, opts && opts.handler);
   }
 
   window.renderGhostClaimSection = renderGhostClaimSection;

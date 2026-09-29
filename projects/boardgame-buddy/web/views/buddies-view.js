@@ -1217,6 +1217,12 @@
       return this._claimResolved.get(key) || null;
     }
 
+    // Scoped to this screen: the Feed renders the same "Is this you?" rows
+    // under the same keys.
+    _patchClaim(key, state, row, kind) {
+      window.patchGhostClaimRow(key, state, row, kind, { root: this.container || document });
+    }
+
     // ── Ghost account claims ────────────────────────────────────────────────
     //
     // All five follow the discipline documented at the top of this file:
@@ -1231,14 +1237,14 @@
       if (this._busy.has(busyKey)) return;
       this._busy.add(busyKey);
       this._mutationSeq++;
-      window.patchGhostClaimRow(key, "busy");
+      this._patchClaim(key, "busy");
       const row = (this._claimSuggestions || []).find(
         (s) => s.owner_user_id === ownerId && s.ghost_name_key === nameKey
       );
       try {
         await window.GhostClaim.create(ownerId, displayName);
       } catch (e) {
-        window.patchGhostClaimRow(key, null, row, "suggestion");
+        this._patchClaim(key, null, row, "suggestion");
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't send that request", "error");
         }
@@ -1251,7 +1257,7 @@
       // counterpart: the failure path above returns before this line, so the
       // count was never wrong to begin with.
       window.GhostClaim.settleSuggestion(key);
-      window.patchGhostClaimRow(key, "requested");
+      this._patchClaim(key, "requested");
     }
 
     /** "Not me" — stop suggesting this ghost. The owner is never told. */
@@ -1261,14 +1267,14 @@
       if (this._busy.has(busyKey)) return;
       this._busy.add(busyKey);
       this._mutationSeq++;
-      window.patchGhostClaimRow(key, "busy");
+      this._patchClaim(key, "busy");
       const row = (this._claimSuggestions || []).find(
         (s) => s.owner_user_id === ownerId && s.ghost_name_key === nameKey
       );
       try {
         await window.GhostClaim.dismiss(ownerId, displayName);
       } catch (e) {
-        window.patchGhostClaimRow(key, null, row, "suggestion");
+        this._patchClaim(key, null, row, "suggestion");
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't dismiss that", "error");
         }
@@ -1281,7 +1287,7 @@
       // collapse the list under the finger that just tapped it.
       this._claimResolved.set(key, "dismissed");
       window.GhostClaim.settleSuggestion(key);
-      window.patchGhostClaimRow(key, "dismissed");
+      this._patchClaim(key, "dismissed");
     }
 
     /**
@@ -1328,7 +1334,7 @@
       this._busy.add(busyKey);
       this._mutationSeq++;
       const req = list[at];
-      window.patchGhostClaimRow(claimId, "busy");
+      this._patchClaim(claimId, "busy");
       list.splice(at, 1);
       this._publishClaimCount();
 
@@ -1338,7 +1344,7 @@
       } catch (e) {
         list.splice(at, 0, req);
         this._publishClaimCount();
-        window.patchGhostClaimRow(claimId, null, req, "request");
+        this._patchClaim(claimId, null, req, "request");
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't accept that request", "error");
         }
@@ -1347,7 +1353,7 @@
         this._busy.delete(busyKey);
       }
       this._claimResolved.set(claimId, "accepted");
-      window.patchGhostClaimRow(claimId, "accepted");
+      this._patchClaim(claimId, "accepted");
       window.GhostClaim.invalidate();
       // The plays themselves changed hands, so the play-shaped caches (feed,
       // stats, achievements, profile bundle, collection shelves) are stale.
@@ -1416,7 +1422,7 @@
      */
     async _withClaimCount(claimId, req) {
       if (req.play_count != null) return req;
-      window.patchGhostClaimRow(claimId, "busy");
+      this._patchClaim(claimId, "busy");
       const claims = await window.GhostClaim.list().catch(() => null);
       const fresh = claims
         && (claims.incoming || []).find((r) => r.id === claimId);
@@ -1432,7 +1438,7 @@
       }
       // Buttons back before the dialog opens: however it is answered, the row
       // under it is idle until the accept itself starts.
-      window.patchGhostClaimRow(claimId, null, row, "request");
+      this._patchClaim(claimId, null, row, "request");
       return row;
     }
 
@@ -1446,7 +1452,7 @@
       this._busy.add(busyKey);
       this._mutationSeq++;
       const req = incoming[idx];
-      window.patchGhostClaimRow(claimId, "busy");
+      this._patchClaim(claimId, "busy");
       incoming.splice(idx, 1);
       this._publishClaimCount();
       try {
@@ -1454,7 +1460,7 @@
       } catch (e) {
         incoming.splice(idx, 0, req);
         this._publishClaimCount();
-        window.patchGhostClaimRow(claimId, null, req, "request");
+        this._patchClaim(claimId, null, req, "request");
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't decline that request", "error");
         }
@@ -1463,7 +1469,7 @@
         this._busy.delete(busyKey);
       }
       this._claimResolved.set(claimId, "declined");
-      window.patchGhostClaimRow(claimId, "declined");
+      this._patchClaim(claimId, "declined");
     }
 
     /**
@@ -1480,13 +1486,13 @@
       this._busy.add(busyKey);
       this._mutationSeq++;
       const req = outgoing[idx];
-      window.patchGhostClaimRow(claimId, "busy");
+      this._patchClaim(claimId, "busy");
       outgoing.splice(idx, 1);
       try {
         await window.GhostClaim.cancel(claimId);
       } catch (e) {
         outgoing.splice(idx, 0, req);
-        window.patchGhostClaimRow(claimId, null, req, "sent");
+        this._patchClaim(claimId, null, req, "sent");
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't withdraw that request", "error");
         }
@@ -1497,7 +1503,7 @@
       // "Cancelled", reusing the declined chip's past tense — the row holds
       // its place and drops on the next _load(), like every other verb here.
       this._claimResolved.set(claimId, "cancelled");
-      window.patchGhostClaimRow(claimId, "cancelled");
+      this._patchClaim(claimId, "cancelled");
     }
 
     async _accept(requestId, userId) {

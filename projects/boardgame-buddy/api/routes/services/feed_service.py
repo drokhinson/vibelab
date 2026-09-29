@@ -33,6 +33,9 @@ from ..constants import (
 )
 from ._helpers import fetch_games_by_ids, fetch_profiles_by_ids
 
+# The fewest buddy suggestions worth a Feed card.
+FEED_MIN_BUDDY_SUGGESTIONS = 3
+
 
 def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:
     return FeedPlayCard(
@@ -306,7 +309,7 @@ def _compose_page(
 
     Composition rule (v1): plays form the spine; on the first page, prepend a
     Hot Games card and intersperse a Suggested Buddies card after the first
-    play. Subsequent pages return plays only, and pass None for both.
+    play when there are at least FEED_MIN_BUDDY_SUGGESTIONS of them. Subsequent pages return plays only, and pass None for both.
 
     Pure — no I/O — so the async assembler below can fetch the blocks however it
     likes without this ordering having to be written twice.
@@ -318,8 +321,10 @@ def _compose_page(
     # Interleave suggestions roughly through the page so the feed never feels
     # like a wall of identical units — the order is:
     #   play 1 → suggested-buddies → play 2 → ...
+    # Fewer than FEED_MIN_BUDDY_SUGGESTIONS is no card at all: a rail of one
+    # or two tiles reads as a half-empty shelf, not as people you may know.
     suggestions_card: FeedSuggestedBuddiesCard | None = None
-    if sug and sug.suggestions:
+    if sug and len(sug.suggestions) >= FEED_MIN_BUDDY_SUGGESTIONS:
         suggestions_card = FeedSuggestedBuddiesCard(suggestions=sug.suggestions)
 
     insert_sug_after = 1
