@@ -23,13 +23,10 @@ it is the only record of which rows were one act — reconstructable from nothin
 else afterwards, and what any future consumer would have to start from.
 """
 
-import logging
 import uuid
 from typing import Any
 
 from supabase import Client
-
-logger = logging.getLogger(__name__)
 
 TABLE = "boardgamebuddy_play_reactions"
 
@@ -87,18 +84,3 @@ def remove(sb: Client, viewer_id: str, play_ids: list[str]) -> list[str]:
         return []
     sb.table(TABLE).delete().eq("user_id", viewer_id).in_("play_id", play_ids).execute()
     return list(play_ids)
-
-
-def received_count(sb: Client, user_id: str) -> int | None:
-    """How many "Good game" taps other people have given this user's plays.
-
-    One per tap, not per row — see bgb_good_games_received (migration 059).
-    None when the read fails, so a missing function or a blip hides the
-    profile counter rather than failing the bundle it rides in.
-    """
-    try:
-        data = sb.rpc("bgb_good_games_received", {"p_user": user_id}).execute().data
-    except Exception:  # noqa: BLE001 — a decoration read, never the reason a bundle fails
-        logger.exception("good games received read failed")
-        return None
-    return data if isinstance(data, int) else None

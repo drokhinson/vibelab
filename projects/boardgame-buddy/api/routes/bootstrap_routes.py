@@ -46,7 +46,6 @@ from .services import (
     notification_service,
     played_with_service,
     rank_service,
-    reaction_service,
     release_notice_service,
 )
 
@@ -132,7 +131,6 @@ async def get_bootstrap(
         release_notices,
         ranks,
         rank_queue,
-        good_games,
     ) = await asyncio.gather(
         asyncio.to_thread(
             lambda: sb.rpc(
@@ -154,14 +152,9 @@ async def get_bootstrap(
         # slowest member by. Both are _soft: a failure boots without them.
         _soft("ranks", rank_service.list_ranks, sb, viewer),
         _soft("rank queue", rank_service.queue, sb, viewer),
-        # The Profile hub's Good games counter, seeded into the bundle below
-        # so the hub paints it from the cache this warms.
-        asyncio.to_thread(reaction_service.received_count, sb, viewer),
     )
 
     payload: dict[str, Any] = dict(rpc_result.data or {})
-    if isinstance(payload.get("profile_bundle"), dict):
-        payload["profile_bundle"]["good_games_received"] = good_games
     payload["feed_first_page"] = feed_page.model_dump(mode="json")
     payload["feed_cursor"] = feed_page.next_cursor
     payload["recently_played_games"] = [g.model_dump(mode="json") for g in recent_games]
