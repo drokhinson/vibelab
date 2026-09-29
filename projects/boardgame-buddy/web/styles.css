@@ -4791,13 +4791,15 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   animation: fadeUp 200ms ease both;
 }
 
-/* ── Play-card reels follow the theme ─────────────────────────────────────
+/* ── Play cards follow the theme ──────────────────────────────────────────
    The feed's sessions and game detail's Recent plays reel cut their polaroids
    from the ground's raised step, not from cream paper, so a reel reads as part
-   of the screen instead of a row of lit rectangles on espresso. These are the
-   places a play card follows the theme; every value is a var(), so light keeps
-   white cards on cream. */
-:is(.play-session, .game-detail__plays-scroll) {
+   of the screen instead of a row of lit rectangles on espresso. The play-detail
+   popup those cards open is cut from the same step, so the card you tap and the
+   card it expands into are one object. Every value is a var(), so light keeps
+   white cards on cream. The popup is body-level, so it is named on the card
+   itself rather than inherited from the reel it was opened from. */
+:is(.play-session, .game-detail__plays-scroll, .play-detail-popup__card) {
   --polaroid-bg:       var(--bg-2);
   --polaroid-bg-soft:  color-mix(in srgb, var(--bg-2) 80%, var(--line-strong));
   --polaroid-ink:      var(--ink);
@@ -4808,7 +4810,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 /* Only what a var() cannot supply (theming.md §7). The play card itself
    declares none of these. */
-:root[data-bgb="dark"] :is(.play-session, .game-detail__plays-scroll) {
+:root[data-bgb="dark"] :is(.play-session, .game-detail__plays-scroll, .play-detail-popup__card) {
   --accent-ink:      var(--accent);   /* the paper gold is 2.6:1 on --bg-2 */
   --polaroid-accent: #E87B63;         /* terracotta is 3.4:1 on --bg-2; this is 5.2:1 */
   --ghost-ink:       #C4A987;
@@ -14268,7 +14270,8 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 
 /* ── Expanded play-detail popup ──────────────────────────────────────────
-   In-place modal opened by a tap on a polaroid play card.
+   In-place modal opened by a tap on a polaroid play card. Its tokens come
+   from the "Play cards follow the theme" re-point, shared with the feed.
    Holds the full play record + edit form so the user doesn't have to
    navigate away from whichever surface they're on. Reuses the polaroid
    backdrop pattern and the .play-detail__* read/edit styles. */
@@ -14313,7 +14316,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   justify-content: space-between;
   align-items: center;
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--polaroid-line);
   background: var(--polaroid-bg-soft, #F5EEDC);
   min-height: 44px;
 }
@@ -14324,7 +14327,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   padding: 8px 12px;
   min-height: 36px;
   background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
   color: var(--polaroid-ink);
   font-family: var(--font-sans);
@@ -14334,7 +14337,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   transition: background 120ms ease, border-color 120ms ease;
 }
 .play-detail-popup__edit:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--line);
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -14351,7 +14354,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 120ms ease;
 }
-.play-detail-popup__close:hover { background: rgba(0, 0, 0, 0.08); }
+.play-detail-popup__close:hover { background: var(--line); }
 .play-detail-popup__scroll {
   flex: 1;
   min-height: 0;
@@ -14456,9 +14459,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 120ms ease;
 }
-.play-detail-popup__page:active:not(:disabled) { background: rgba(0, 0, 0, 0.08); }
+.play-detail-popup__page:active:not(:disabled) { background: var(--line); }
 @media (hover: hover) {
-  .play-detail-popup__page:hover:not(:disabled) { background: rgba(0, 0, 0, 0.08); }
+  .play-detail-popup__page:hover:not(:disabled) { background: var(--line); }
 }
 .play-detail-popup__page:disabled { opacity: 0.3; cursor: default; }
 .play-detail-popup__page-count {
@@ -14569,11 +14572,10 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 
 /* Polaroid theme overrides for play-detail content inside the popup.
-   The shared .play-detail__* surfaces default to DaisyUI's dark base
-   palette (oklch(var(--b2/b3))). Inside the cream popup card those
-   backgrounds print as inky slabs — re-skin every surface (view rows,
-   edit rows, form controls) in polaroid tokens so the popup reads as
-   one consistent piece of stationery. */
+   The shared .play-detail__* surfaces default to DaisyUI's base palette
+   (oklch(var(--b2/b3))), which is not the card's surface — re-skin every
+   surface (view rows, edit rows, form controls) in polaroid tokens so the
+   popup reads as one consistent piece in either theme. */
 .play-detail-popup__card .play-detail__meta,
 .play-detail-popup__card .play-detail__player,
 .play-detail-popup__card .play-detail__edit-player,
@@ -14594,8 +14596,8 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .play-detail-popup__card .play-detail__player.is-winner .play-detail__player-score {
   color: #C9922A;
 }
-/* --accent is the app's own hue, which reads as a foreign ink on the cream
-   card — the popup's rows take the polaroid accent on hover instead. */
+/* The popup's rows take the polaroid accent on hover, the same ink as the
+   game name in the title, rather than the app's --accent. */
 .play-detail-popup__card .play-detail__player.is-link:hover,
 .play-detail-popup__card .play-detail__player.is-link:focus-visible {
   border-color: var(--polaroid-accent);
@@ -14612,9 +14614,8 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 
 /* DaisyUI input / textarea controls (date picker, score, add-player,
-   notes textarea). Default DaisyUI styling renders them as dark
-   chips against the cream card — re-skin to cream paper with the
-   polaroid hairline border. */
+   notes textarea). DaisyUI paints them from the ground palette — re-skin
+   to the card's own surface with the polaroid hairline border. */
 .play-detail-popup__card .input,
 .play-detail-popup__card .textarea {
   background: var(--polaroid-bg);
@@ -14632,9 +14633,39 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   outline-color: var(--polaroid-accent);
 }
 
-/* The popup's own copy of the .scoring-* re-skin lived here. Deleted with its
-   twin: this card is paper, it declares no --well, and the family resolves
-   against the root paper aliases on its own. */
+/* The score grid is a score sheet, so it stays paper inside the themed card —
+   the same island the Play step's scorepad is (see "Paper islands" near the
+   top of this file). The card declares no --well, so the cells take the
+   var(--well, var(--polaroid-bg)) fallback and resolve against these, and the
+   sheet paints its own ground so paper ink never lands on the dark card. */
+.play-detail-popup__card .rg {
+  background: var(--paper);
+  border-radius: 8px;
+  padding: 4px;
+
+  --polaroid-bg:       var(--paper);
+  --polaroid-bg-soft:  color-mix(in srgb, var(--paper) 92%, var(--paper-line));
+  --polaroid-ink:      var(--paper-ink);
+  --polaroid-ink-soft: color-mix(in srgb, var(--paper-ink) 78%, var(--paper));
+  --polaroid-muted:    var(--paper-muted);
+  --polaroid-line:     var(--paper-line);
+  --polaroid-accent:   var(--win);
+
+  --accent-ink:        var(--accent-on-paper);
+  --ghost-ink:         var(--ghost-ink-paper);
+}
+/* A team band in the player list sits on the card, not the sheet, so in dark
+   its rule needs a lighter hue than the paper-tuned slots: each is lifted 25%
+   toward white, which keeps every 3px rule at >= 3.1:1 against its own wash on
+   --bg-2. Declared on the band itself, where its inline --team-tint resolves. */
+:root[data-bgb="dark"] .play-detail-popup__card .play-detail__team {
+  --team-1: color-mix(in srgb, #2F6FA8 75%, #FFFFFF);
+  --team-2: color-mix(in srgb, #C2562A 75%, #FFFFFF);
+  --team-3: color-mix(in srgb, #2E7D5B 75%, #FFFFFF);
+  --team-4: color-mix(in srgb, #8A4A9C 75%, #FFFFFF);
+  --team-5: color-mix(in srgb, #9E2B3F 75%, #FFFFFF);
+  --team-6: color-mix(in srgb, #5A6370 75%, #FFFFFF);
+}
 
 /* Read-only score readout shown next to a player row when the rounds
    grid is active (score = sum of rounds, no manual override). */
@@ -14689,7 +14720,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 .play-detail-popup__card .play-detail__game-goto:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--line);
   border-color: var(--polaroid-accent);
   color: var(--polaroid-accent);
 }
@@ -14737,7 +14768,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   flex-wrap: wrap;
   padding: 10px 14px;
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid var(--polaroid-line);
   background: var(--polaroid-bg-soft, #F5EEDC);
   flex-shrink: 0;
 }
