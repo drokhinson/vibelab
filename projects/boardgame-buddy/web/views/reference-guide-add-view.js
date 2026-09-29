@@ -2250,8 +2250,26 @@ components above.
       scroller.scrollTo({ top: Math.max(0, top), behavior: "auto" });
     }
 
-    _tmplRemoveRow(i) {
+    // A row that was never filled in goes without asking; one carrying a name
+    // or a note is the user's work, so the × confirms first.
+    async _tmplRemoveRow(i) {
       if (i < 0 || i >= this._formRows.length) return;
+      const row = this._formRows[i];
+      if ((row.label || "").trim() || (row.note || "").trim()) {
+        const name = (row.label || "").trim();
+        const ok = await window.PolaroidPopup.confirm({
+          title: name ? `Delete "${name}"?` : `Delete row ${i + 1}?`,
+          body: "This row will be removed from the scoring template.",
+          confirmLabel: "Delete row",
+          cancelLabel: "Keep row",
+          destructive: true,
+        });
+        if (!ok) return;
+        // The list can be reordered or trimmed behind the dialog, so the row is
+        // found again by identity rather than trusted to still sit at `i`.
+        i = this._formRows.indexOf(row);
+        if (i < 0) return;
+      }
       this._formRows.splice(i, 1);
       this._error = null;
       // Both disclosures are keyed by index, and every index at or after the

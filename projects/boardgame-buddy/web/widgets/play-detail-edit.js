@@ -506,17 +506,34 @@
     resyncScores(state.draft.players);
     render();
   }
-  function removeRoundAt(r) {
+  async function removeRoundAt(r) {
     if (!state.draft) return;
+    const draft = state.draft;
     // Normalize first so the splice lands on every column. Skipping the ones
     // whose array doesn't reach `r` lets the columns drift to different
     // lengths.
-    const n = normalizeRounds(state.draft.players);
+    const n = normalizeRounds(draft.players);
     if (!(r >= 0 && r < n)) return;
     // A template's rows render no remove button, but this is a global inline
     // handler a stale paint or the console can still reach — and a hole punched
     // mid-grid leaves every label below it describing the wrong numbers.
-    if (r < templateRows(state.draft.scoring_template).length) return;
+    if (r < templateRows(draft.scoring_template).length) return;
+    const hasScores = draft.players.some(
+      (p) => window.parseRoundScore(p.roundScores[r]) != null
+    );
+    if (hasScores) {
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Delete this row?",
+        body: "The scores entered in it will be removed.",
+        confirmLabel: "Delete row",
+        cancelLabel: "Keep row",
+        destructive: true,
+      });
+      // PolaroidPopup.confirm dismissed our backdrop whichever way it was
+      // answered, and the draft is still open either way.
+      remount();
+      if (!ok || state.draft !== draft) { render(); return; }
+    }
     for (const p of state.draft.players) p.roundScores.splice(r, 1);
     resyncScores(state.draft.players);
     // When the grid empties out (or drops to a single round), clear the
