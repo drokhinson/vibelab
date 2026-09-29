@@ -1,6 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 058_rank_deferrals.sql (adds bgb_rank_deferrals_active — which
+-- Last updated: 059_good_games_received.sql (adds bgb_good_games_received —
+--               the Profile hub's Good games counter.)
+--               Before that: 058_rank_deferrals.sql (adds bgb_rank_deferrals_active — which
 --               "Rank after next play" deferrals still hold, i.e. which parked
 --               games have not been played since. db/tests/058_rank_deferrals.sql
 --               is the behavioural test.)
@@ -1677,6 +1679,16 @@
 --               played on or after its date. The date half keeps an import of
 --               old plays from lapsing it. SECURITY DEFINER, REVOKEd from
 --               anon/authenticated.
+
+-- bgb_good_games_received(p_user UUID)
+--   → INT
+--   Defined in: db/migrations/059_good_games_received.sql
+--   Called by:  services/reaction_service.received_count (GET /profile/bundle
+--               for self, and the /bootstrap profile_bundle seed)
+--   Purpose:    How many "Good game" taps other people have given plays p_user
+--               logged or sat in. Distinct reaction_group_id, so one tap over a
+--               whole night counts once; p_user's own reactions are excluded.
+--               SECURITY DEFINER, REVOKEd from anon/authenticated.
 
 -- bgb_notifications(p_viewer UUID, p_limit INT DEFAULT 20,
 --                   p_before TIMESTAMPTZ DEFAULT NULL,

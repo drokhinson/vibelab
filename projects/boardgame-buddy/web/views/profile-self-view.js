@@ -1,7 +1,7 @@
 // views/profile-self-view.js — Profile Hub.
 //
 // Account card → a tappable "Your stats" block → warm-cream preview cards
-// (Collection / Achievements / Recent plays / Buddies). Each
+// (Collection / Achievements / Good games / Recent plays / Buddies). Each
 // preview's "See all →" routes to a dedicated full-screen spoke, and the stats
 // block routes to /profile/stats. Settings is reachable via the avatar in the
 // global header. Every card but Achievements seeds from a single
@@ -147,6 +147,7 @@
         ${this._error ? `<div class="alert alert-error text-sm mt-3">${escapeHtml(this._error)}</div>` : ""}
         ${this._renderCollectionPreview(b)}
         ${this._renderAchievementsPreview()}
+        ${this._renderGoodGames(b)}
         ${this._renderPlaysPreview(b)}
         ${this._renderBuddiesPreview(b)}
         <div style="height: 1rem"></div>
@@ -390,6 +391,29 @@
           ? `<div class="preview-card__covers">${items.slice(0, PREVIEW_COVERS).map((it) => window.BgbPreviewCard.cover(it)).join("")}</div>`
           : `<div class="preview-card__empty">No owned games yet — tap See all to add one.</div>`,
       });
+    }
+
+    // ── Good games ────────────────────────────────────────────────────────────
+    // The "Good game"s other people have said to nights you played, one per
+    // tap however many plays the tap covered (bgb_good_games_received). It sits
+    // above Recent plays because those are the nights it was said about. Not a
+    // link: the feed card that earned each one is where the faces are. Absent
+    // (null) when the backend could not read it, and then the strip is too.
+    _renderGoodGames(b) {
+      const n = b && b.good_games_received;
+      if (typeof n !== "number") return "";
+      const sub = n ? "Said about your sessions" : "None yet — they land here";
+      return `
+        <section class="preview-card gg-tally"
+                 aria-label="${n} good game${n === 1 ? "" : "s"} from other players">
+          <span class="gg-tally__icon"><i data-icon="handshake" class="w-5 h-5"></i></span>
+          <div class="gg-tally__body">
+            <h3 class="gg-tally__title font-display">Good games</h3>
+            <div class="gg-tally__sub">${sub}</div>
+          </div>
+          <div class="gg-tally__v">${n}</div>
+        </section>
+      `;
     }
 
     _renderPlaysPreview(b) {
