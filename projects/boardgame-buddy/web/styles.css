@@ -12742,18 +12742,20 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .cascade-join__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .cascade-join__row {
   display: grid;
-  grid-template-columns: 44px 1fr auto;
-  gap: 10px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
   align-items: center;
+  padding: 12px;
   cursor: pointer;
   user-select: none;
 }
 .cascade-join__row:hover { transform: translateY(-1px); }
 .cascade-join__row-action {
   align-self: center;
-  min-height: 44px;
+  min-height: 40px;
   height: auto;
-  padding: 0 16px;
+  padding: 0 14px;
+  font-size: 14px;
   white-space: nowrap;
 }
 .cascade-join__row-thumb {
@@ -12775,9 +12777,19 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
+  min-width: 0;
 }
-.cascade-join__row-host { font-family: var(--font-polaroid); font-weight: 700; font-size: 14px; }
+.cascade-join__row-host {
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cascade-join__row-code {
+  flex-shrink: 0;
   font-family: var(--font-score);
   font-weight: 700;
   font-size: 12px;
@@ -12787,10 +12799,19 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .cascade-join__row-bottom {
   display: flex;
   justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
   font-size: 12px;
   color: var(--polaroid-muted);
 }
+.cascade-join__row-game {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cascade-join__row-count {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -12828,6 +12849,14 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   justify-content: center;
 }
 .cascade-join__box > .buddy-loader { align-self: center; }
+/* Session rows are cards of their own, so the dashed frame steps aside once
+   they fill the box rather than nesting a card inside a card. */
+.cascade-join__box:has(> .cascade-join__list) {
+  background: none;
+  border: 0;
+  padding: 0;
+  min-height: 0;
+}
 .cascade-join__empty {
   color: var(--polaroid-muted);
   padding: 8px 4px;
