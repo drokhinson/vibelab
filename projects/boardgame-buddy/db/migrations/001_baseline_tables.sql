@@ -7,8 +7,7 @@
 -- then every later NNN_*.sql in this directory, in number order.
 --
 -- Generated on 2026-09-29 by .claude/skills/squash-migrations/squash.py from
--- the 58 migrations in archive/2026-09-28/ and
--- 061_comments_describe_current_schema.sql: they were replayed into an empty
+-- the 59 migrations in archive/2026-09-28/: they were replayed into an empty
 -- database and these files were read back out of its catalog. A database built
 -- from them diffs clean against that replay.
 --

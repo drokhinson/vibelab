@@ -152,6 +152,11 @@ includes it. Keep the migration live until production has run it. Before you
 commit, check that stripping `--` comments leaves every function body
 unchanged.
 
+Once production has run it, move it into the archive generation beside the
+files it was squashed with and regenerate from that directory alone. Only the
+headers should change; diff the rest to be sure. A pair of live migrations
+that cancel out (a create and its drop, both run) is deleted instead.
+
 ### 7. Continue the counter
 
 The next migration takes the number after the highest archived one (or after

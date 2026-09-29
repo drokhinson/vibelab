@@ -9,7 +9,11 @@ through `004_seed.sql`) reproduces the end state of every generation here.
 | Directory | Files | Squashed into | Squashed on |
 |---|---|---|---|
 | `2026-09-01/` | `001`–`073` | the three files that open `2026-09-28/` | 2026-09-01 |
-| `2026-09-28/` | `001`–`058` | `../001_baseline_tables.sql` … `../004_seed.sql` | 2026-09-28 |
+| `2026-09-28/` | `001`–`058`, `061` | `../001_baseline_tables.sql` … `../004_seed.sql` | 2026-09-28 |
+
+`2026-09-28/061` was written after the squash and folded into the baseline
+once production had run it. `059` and `060` cancelled each other out and were
+deleted rather than archived.
 
 These files record how the schema got where it is. Nothing outside this
 directory cites them: code comments and the baseline describe the tables and
