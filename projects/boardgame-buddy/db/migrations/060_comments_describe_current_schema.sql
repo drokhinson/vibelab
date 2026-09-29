@@ -1,94 +1,99 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- boardgamebuddy 060 — comments describe the schema as it is
+-- boardgamebuddy 060 — database comments only where they clarify
 --
--- Rewrites the database's own comments so they name tables, columns and
--- functions instead of citing the migration that introduced them: 39
--- COMMENT ON statements, and 19 functions re-issued with CREATE OR REPLACE
--- whose bodies differ from the live definitions in `--` comments only. No
--- signature, body, grant or behaviour changes; CREATE OR REPLACE keeps each
--- function's ACL.
+-- A COMMENT ON is kept only where an object's name leaves its use unclear: a
+-- misnamed column, a sentinel value, a JSON shape, a visibility rule, a column
+-- nothing uses. 34 comments are set to that short text and the other 41
+-- are cleared. Then 19 functions are re-issued with CREATE OR REPLACE whose
+-- bodies differ from the live definitions in `--` comments only, which no
+-- longer cite migrations. No signature, body, grant or behaviour changes;
+-- CREATE OR REPLACE keeps each function's ACL.
 --
--- Safe to run on production and on a fresh database built from the baseline,
--- which already contains this end state; a second run changes nothing.
+-- Run after 059_good_games_received.sql. Safe on production and on a fresh
+-- database built from the baseline, which already holds this end state; a
+-- second run changes nothing.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-COMMENT ON FUNCTION public.bgb_good_games_received(uuid) IS 'How many "Good game" taps other people have given plays p_user logged or sat in. Distinct reaction_group_id, so a tap covering a whole night counts once. Called by GET /profile/bundle and GET /bootstrap.';
+-- ── Comments that stay ───────────────────────────────────────────────────────
+COMMENT ON TABLE public.boardgamebuddy_affiliate_partners IS 'A partner renders only when enabled AND it has a tracking_tag or a wrapper_template.';
+COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.url_template IS 'Store URL with {query} (the game name, URL-encoded) and optionally {tag} (tracking_tag).';
+COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.wrapper_template IS 'Optional network redirect around the store URL; {url} is that URL, percent-encoded.';
+COMMENT ON TABLE public.boardgamebuddy_bgg_hot_snapshots IS 'BGG''s hot list, one row per (refresh, game). captured_at identifies the refresh: every row of one run shares it.';
+COMMENT ON TABLE public.boardgamebuddy_bgg_thumb_cache IS 'Thumbnails for BGG search results. A game here is not in the catalog.';
+COMMENT ON COLUMN public.boardgamebuddy_games.rulebook_url IS 'Unused: nothing reads or writes it. A game''s rulebook link is an approved layout=''rulebook_link'' chapter. Kept only because many RPCs select it.';
+COMMENT ON COLUMN public.boardgamebuddy_games.publishers IS '''{}'' = BGG credits no publisher; NULL = not read from BGG yet. Readers treat both as an empty list.';
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_meta_synced_at IS 'Last read of the game''s BGG record. NULL with a non-null bgg_id = queued for the metadata backfill.';
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_images_synced_at IS 'Last read of the game''s BGG image URLs. NULL with a non-null bgg_id = queued for the image-links backfill.';
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_family IS 'The BGG family rank list the game ranks highest in (strategygames, familygames, …). Decides the category it is ranked in.';
+COMMENT ON TABLE public.boardgamebuddy_affiliate_clicks IS 'One row per tap on a partner link. No user column, by design: usage records carry no account identifier.';
+COMMENT ON COLUMN public.boardgamebuddy_profiles.avatar IS 'Badge config {icon, iconColor, bgColor}; icon is "initials" or an icon key. NULL = the default badge.';
+COMMENT ON COLUMN public.boardgamebuddy_profiles.link_notifications_seen_at IS 'Read watermark for the whole notification bell (play links, buddy requests, accepted requests), despite the name.';
+COMMENT ON COLUMN public.boardgamebuddy_profiles.push_tier IS 'none | actionable | all. Each tier includes the one before it.';
+COMMENT ON COLUMN public.boardgamebuddy_profiles.bga_password_enc IS 'Encrypted with BGA_CREDENTIAL_KEY, a key separate from the BGG one.';
+COMMENT ON TABLE public.boardgamebuddy_bga_player_links IS 'A Board Game Arena handle mapped by the owner to a person, used to pre-seat that handle on later imports.';
+COMMENT ON COLUMN public.boardgamebuddy_buddy_edges.alias_by_a IS 'Private nickname user_a gave user_b. Shown only to user_a.';
+COMMENT ON COLUMN public.boardgamebuddy_buddy_edges.alias_by_b IS 'Private nickname user_b gave user_a. Shown only to user_b.';
+COMMENT ON COLUMN public.boardgamebuddy_collections.played_before_at IS 'The played mark: played somewhere without logging it here. Never counted as a play. A game on no shelf carries it on a status ''played'' row.';
+COMMENT ON TABLE public.boardgamebuddy_game_ranks IS 'Per player and category: tier love | good | not, position dense from 0 within a tier. Write only through bgb_rank_game / bgb_unrank_game.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.grid IS 'Rows of a layout=''scoring_grid'' chapter: {"v":1,"mode":…,"rows":[{"label":…,"color":…,"note":…}]}. color is a palette slug, never a hex.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'Rulebook links only. approved: everyone sees it; unlisted and pending: the author and their accepted buddies; denied: the author. pending also means it is in the admin queue.';
+COMMENT ON COLUMN public.boardgamebuddy_plays.client_key IS 'Client-generated idempotency key for plays queued offline.';
+COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS 'Snapshot of the scoring grid the play was scored with. Deliberately not a foreign key: editing or deleting the chapter never relabels an old play.';
+COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_at IS 'Set when the play passed to its current owner because the account that logged it was deleted. When set, user_id is not the author.';
+COMMENT ON COLUMN public.boardgamebuddy_play_players.round_scores IS 'Per-round scores as a JSON array of nullable ints; score holds the total.';
+COMMENT ON COLUMN public.boardgamebuddy_play_players.team IS 'Free-text side, as the host typed it. Compared case-insensitively after trimming.';
+COMMENT ON TABLE public.boardgamebuddy_play_reactions IS 'One tap on a night''s footer writes a row for every play of that night, all sharing one reaction_group_id.';
+COMMENT ON COLUMN public.boardgamebuddy_play_sessions.play_mode IS 'How this table is being scored (competitive | coop | team); NULL = competitive. Can differ from boardgamebuddy_games.play_mode, which is what the box suggests.';
+COMMENT ON COLUMN public.boardgamebuddy_play_session_participants.team IS 'Free-text side, as the host typed it. Compared case-insensitively after trimming.';
+COMMENT ON TABLE public.boardgamebuddy_rank_deferrals IS 'Games a player chose to rank after their next play. bgb_rank_deferrals_active says which still hold.';
+COMMENT ON COLUMN public.boardgamebuddy_release_notices.published_at IS 'NULL = draft.';
+COMMENT ON COLUMN public.boardgamebuddy_user_chapters.state IS 'kept = in the viewer''s guide; disliked = turned down, and left out of their chapter pool.';
+COMMENT ON FUNCTION public.bgb_app_uid() IS 'The UUID the app knows the caller by: the app_uid JWT claim, else a UUID-shaped sub, else NULL.';
 
-COMMENT ON TABLE public.boardgamebuddy_bgg_thumb_cache IS 'BGG thumbnail per bgg_id for BGG search results. NULL thumbnail_url = BGG has none. Not a catalog: a game here is not imported. Written and read only by the API (service role).';
+-- ── Comments cleared ────────────────────────────────────────────────────────
+COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.tracking_tag IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.disclosure IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.notes IS NULL;
+COMMENT ON TABLE public.boardgamebuddy_countries IS NULL;
+COMMENT ON TABLE public.boardgamebuddy_feedback_topics IS NULL;
+COMMENT ON TABLE public.boardgamebuddy_feedback_types IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_rating IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_rank IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_weight IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_owned_count IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_stats_synced_at IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_image_url IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_thumbnail_url IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_profiles.needs_setup IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_profiles.app_installed_at IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_profiles.bgg_last_check_started_at IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_profiles.release_notices_seen_at IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_profiles.bga_session_cookies IS NULL;
+COMMENT ON TABLE public.boardgamebuddy_buddy_suggestion_dismissals IS NULL;
+COMMENT ON TABLE public.boardgamebuddy_feedback IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_feedback.resolved_by IS NULL;
+COMMENT ON TABLE public.boardgamebuddy_feedback_likes IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.link_url IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderated_by IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_plays.bgg_play_id IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_plays.country_code IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_plays.bga_table_id IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_from_name IS NULL;
+COMMENT ON INDEX public.uq_bgb_play_players_play_user IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_play_sessions.scoring_template IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_play_session_participants.position IS NULL;
+COMMENT ON TABLE public.boardgamebuddy_push_subscriptions IS NULL;
+COMMENT ON TABLE public.boardgamebuddy_release_notices IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_release_notices.body_md IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_release_notices.link_route IS NULL;
+COMMENT ON COLUMN public.boardgamebuddy_release_notices.created_by IS NULL;
+COMMENT ON FUNCTION public.bgb_rank_deferrals_active(p_viewer uuid) IS NULL;
+COMMENT ON FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer) IS NULL;
+COMMENT ON FUNCTION public.bgb_unrank_game(p_user uuid, p_game uuid) IS NULL;
+COMMENT ON FUNCTION public.bgb_admin_usage_stats(p_exclude_admins boolean) IS NULL;
+COMMENT ON FUNCTION public.bgb_good_games_received(p_user uuid) IS NULL;
 
-COMMENT ON TABLE public.boardgamebuddy_countries IS 'ISO 3166-1 alpha-2 → continent, for the location achievements. The code set is exactly the one web/domain/geo-data.js can produce, so no country the app can detect or offer is missing a continent.';
-
-COMMENT ON TABLE public.boardgamebuddy_feedback_topics IS 'Lookup for boardgamebuddy_feedback.topic — which surface of the app an item is about. The set mirrors the bottom nav plus the two header screens. `icon` is a Lucide slug into web/ui/icons.js. Served by GET /feedback-topics.';
-
-COMMENT ON TABLE public.boardgamebuddy_feedback_types IS 'Lookup for boardgamebuddy_feedback.feedback_type. `icon` is a Lucide slug into web/ui/icons.js, never an emoji. Served by GET /feedback-types and denormalised onto every row bgb_feedback_list returns, so the list paints from one call.';
-
-COMMENT ON COLUMN public.boardgamebuddy_games.rulebook_url IS 'LEGACY, left in place only because forty RPCs and bundles select it. Nothing in the app writes or reads it: a game''s rulebook link is an approved layout=''rulebook_link'' chapter in boardgamebuddy_guide_chapters, and every value in this column has one. Do not wire anything new to it and do not treat it as a second source of truth for a game''s rulebook; the chapters table is the one.';
-
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_stats_synced_at IS 'When the BGG rating/rank/weight last landed. Not a queue marker — bgg_meta_synced_at is — but still written by every sync.';
-
-COMMENT ON COLUMN public.boardgamebuddy_games.publishers IS 'BGG boardgamepublisher links, in BGG''s order. ''{}'' = BGG credits nobody. NULL does not mean "never synced" (bgg_meta_synced_at says that); readers coerce both to [].';
-
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_meta_synced_at IS 'When POST /games/admin/backfill-metadata last read BGG''s /thing?stats=1 record for this game. NULL with a non-null bgg_id IS the backfill queue. Stamped even when BGG had no description or no year, so the queue terminates — the panel keeps listing those rows from the field predicate instead.';
-
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_image_url IS 'BoardGameGeek''s own box-art URL, recorded next to the re-hosted image_url so the app can switch to serving BGG directly. Written by import, image refresh and POST /games/admin/backfill-image-links.';
-
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_thumbnail_url IS 'BoardGameGeek''s own thumbnail URL; see bgg_image_url.';
-
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_images_synced_at IS 'When BGG''s image URLs were last read for this game. NULL with a non-null bgg_id IS the image-links backfill queue. Stamped even when BGG has no art, so the queue terminates.';
-
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_family IS 'The BGG family rank list this game ranks highest in, raw (strategygames, familygames, partygames, thematic, wargames, abstracts, childrensgames, cgs). NULL = not synced yet, or BGG files it in none. Decides which category a game is ranked in. Written by import, refresh-metadata and backfill-metadata.';
-
-COMMENT ON COLUMN public.boardgamebuddy_profiles.app_installed_at IS 'First time this account was seen running as an installed PWA. Drives the "Pocket Buddy" achievement; nothing else reads it.';
-
-COMMENT ON COLUMN public.boardgamebuddy_profiles.link_notifications_seen_at IS 'Read watermark for the WHOLE notification bell — plays you were seated in, buddy requests received, and requests of yours that were accepted — not just link notifications, despite the name. Written by bgb_mark_link_notifications_seen; read by bgb_notifications and bgb_notifications_unread.';
-
-COMMENT ON COLUMN public.boardgamebuddy_profiles.release_notices_seen_at IS 'Watermark: release notices published at or before this are not shown again. NOT NULL DEFAULT now() so a new account starts watermarked at signup and never sees the backlog. Advanced only by bgb_mark_release_notices_seen; read by bgb_release_notices_unseen.';
-
-COMMENT ON TABLE public.boardgamebuddy_bga_player_links IS 'Board Game Arena handle → the person the owner says it is. Written by the import wizard when a handle is resolved by hand, read on the next import to pre-seat it. No API-role grant: only the service role touches it.';
-
-COMMENT ON COLUMN public.boardgamebuddy_collections.played_before_at IS 'The played mark: set when the user says they played this game somewhere they did not log it. On a row of any status, independent of it; a game on no shelf carries it on a status ''played'' row. Read by the Played shelf, the status map''s played_marks, the Shelf of Shame block of bgb_user_stats_detail and the rank queue. It is not a play and must never be counted as one.';
-
-COMMENT ON TABLE public.boardgamebuddy_game_ranks IS 'A player''s ranking of the games they own or have played. Per category, tiers love → good → not, position dense 0..n-1 within a tier. Written only through bgb_rank_game / bgb_unrank_game; read by GET /ranks*.';
-
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.grid IS 'Row definitions for a layout=''scoring_grid'' chapter: {"v":1,"mode":…,"rows":[{"label":…,"color":…,"note":…}]}. `color` is a SLUG from a fixed palette (neutral|red|pink|rust|brown|gold|yellow|green|blue|purple), never a hex — the grid lands on the cream scorepad, and only a fixed palette can be guaranteed legible there in both themes. `mode` is add_on|replace on a grid whose game is an EXPANSION — its rows either join the base game''s grid or stand in for it — and NULL/absent on a base game''s own grid, where the question does not arise. The API resolves it (services/chapter_grid.resolve_grid_mode); the bgb_chapters_grid_mode CHECK only pins the value domain, because a CHECK cannot look up whether the chapter''s game is an expansion. NULL for layout=''text''; see the bgb_chapters_grid_shape constraint.';
-
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'unlisted | pending | approved | denied, on a layout=''rulebook_link'' chapter only (NULL everywhere else). Approved is visible to everyone; unlisted and pending only to the author and their ACCEPTED buddies; denied only to the author and admins. Unlisted and pending differ in ONE respect and it is not visibility: pending is in the admin queue because its author asked for review, unlisted is not. A link authored by an admin is NOT born approved — every author goes through the same gate, and an admin approves their own from the queue like anyone else''s. The rule is applied by routes/services/chapter_rulebook.py on every chapter read path, NOT by RLS — this API is service-role and bypasses RLS, and nothing reads chapters browser-direct. A denial is deliberately not a delete: the row is what stops the same author re-posting the same link past idx_bgb_chapters_rulebook_author.';
-
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderated_by IS 'The admin whose decision moderation_status records. NULL while unlisted or pending — including on a link an admin wrote themselves, which is not self-approved on the way in — and NULL on the approved links carried over from boardgamebuddy_games.rulebook_url, which were approved by having been admin-only data in the first place. Naming an admin who never looked at a link would be a lie the audit trail cannot tell apart from a real decision, which is also why re-opening the gate (a changed URL, a withdrawn request) clears this column rather than leaving the last decision''s author on a row nobody has decided.';
-
-COMMENT ON COLUMN public.boardgamebuddy_plays.bgg_play_id IS 'The BoardGameGeek play id this row came from. Written by the importer''s BoardGameGeek source (through bgb_log_play) and by the pending-imports worker still draining legacy kind=''play'' rows. The partial UNIQUE idx_bgb_plays_user_bgg_play is what makes re-importing from BGG a no-op.';
-
-COMMENT ON COLUMN public.boardgamebuddy_plays.country_code IS 'ISO 3166-1 alpha-2 country where the play happened, uppercase. Resolved by the client from the device timezone (or picked by the host in Settle Up); NULL when unknown, as it is on most older plays. Feeds a future popularity-by-country view and nothing today.';
-
-COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS 'Denormalised snapshot of the scoring grid this play was scored with: {"v":1,"chapter_id":…,"title":…,"rows":[…],"parts":[…]}. NOT a foreign key, on purpose. The chapter is community-owned, editable by its author and deletable by author or admin, so a play holding only an id would render bare R1..Rn the moment a moderator cleared the chapter, and would silently RELABEL a two-year-old play if the author reordered its rows — labels that stop describing the numbers under them is precisely the failure widgets/round-score-grid.js is written to prevent. ON DELETE SET NULL loses the labels and CASCADE deletes plays, so neither constraint tells the truth. chapter_id rides INSIDE the document as provenance: a bare uuid column would imply an integrity the database is not enforcing. Same reasoning as game_name / game_thumbnail_url on this table. `rows` may be COMPOSED from several grids — a base game''s plus each add-on expansion''s, the add-ons appended in ascending BGG id so every client composes the same scorepad — in which case `chapter_id` names the grid that supplied the leading rows and `parts` lists every contributor in row order as {chapter_id,game_id,game_name,mode,row_count}. A row an add-on contributed also carries that expansion''s `source_color` (boardgamebuddy_games.expansion_color), which draws a rule down the RIGHT edge of its header cell — the left edge carries the row''s own palette tint, so the two never collide; the leading grid''s rows carry none. `parts` is absent, and no row carries a source_color, when one grid supplied the whole thing — so an older snapshot, which never has `parts`, reads the same way.';
-
-COMMENT ON COLUMN public.boardgamebuddy_plays.bga_table_id IS 'The Board Game Arena table this play was imported from. NULL for every other origin. Unique per user, which is what makes a re-import offer only new tables.';
-
-COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_at IS 'When this play changed hands because its logger deleted their account. NULL on every play whose author still owns it, which is almost all of them. Two jobs: it drives the play_inherited notification, and it is the standing audit trail for "the current owner did not write this" — worth knowing before trusting plays.user_id as authorship.';
-
-COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_from_name IS 'The display name of the account this play came from, captured at deletion. Denormalized because the profile it names is gone by the time anything reads this — there is nothing left to join to. Carried into bgb_notifications as actor_display_name.';
-
-COMMENT ON COLUMN public.boardgamebuddy_play_players.team IS 'Free-text side this seat played on, as the host typed it. NULL for every competitive and co-op play, and for a team play whose sides were never named. Matched case-insensitively after trimming — the same comparison PlaySession.applyTeamTag uses to keep one side''s win flags in step — so "Red" and "red" are one side. No index: it is only ever read as part of a roster already fetched by play_id.';
-
-COMMENT ON INDEX public.uq_bgb_play_players_play_user IS 'One account, one seat, per play. Ghost seats (player_user_id NULL) are outside the predicate — two same-named ghosts at one table is a legitimate roster.';
-
-COMMENT ON TABLE public.boardgamebuddy_play_reactions IS 'One "good game" from one person to one play. A session footer tap fans out to every play in that night sharing one reaction_group_id, because the feed session is a client-side grouping with no stable id.';
-
-COMMENT ON COLUMN public.boardgamebuddy_play_sessions.play_mode IS 'How the host is scoring this table: competitive / coop / team. NULL = never said, read as competitive. Not the same fact as boardgamebuddy_games.play_mode, which is what the BOX suggests; this is what the table actually did, and it is the gate on whether a spectator''s grid merges a side''s seats into one column.';
-
-COMMENT ON COLUMN public.boardgamebuddy_play_session_participants.team IS 'Free-text side this seat is on, as the host typed it. NULL means no side — every competitive and co-op lobby, and a team lobby whose sides were never named. Matched case-insensitively after trimming, the same comparison ui/team-colors.js and PlaySession.applyTeamTag use, so "Red" and "red" are one side. The lobby twin of boardgamebuddy_play_players.team, which is where the tag lands for good at finalize; this column only has to outlive the session.';
-
-COMMENT ON TABLE public.boardgamebuddy_rank_deferrals IS 'Unranked games a player chose to rank after their next play. Active until a play the player can see is created after deferred_at and played on or after its date — see bgb_rank_deferrals_active. Written by PUT /ranks/games/{id}/defer, deleted when the game is ranked.';
-
-COMMENT ON COLUMN public.boardgamebuddy_user_chapters.state IS 'kept = in this viewer''s guide. disliked = the inverse: the viewer has turned it down, so it is filtered out of their chapter pool, their pool count and the scoring-template offer, and appears only in the builder''s Disliked section. Per-viewer and one-directional — never shown to the author, never a report, and it changes no count anyone else sees.';
-
-COMMENT ON FUNCTION public.bgb_app_uid() IS 'The UUID the app knows this caller by: the app_uid claim, else a UUID-shaped sub, else NULL. The sign-in blocking function sets app_uid (the uid itself when UUID-shaped, else a uuid5 of it); the shape check makes an unusable id deny rather than raise. See projects/boardgame-buddy/Docs/RUNBOOK_AUTH_ROLE_CLAIM.md.';
-
-COMMENT ON FUNCTION public.bgb_rank_deferrals_active(p_viewer uuid) IS 'The game ids p_viewer parked with "Rank after next play" and has not played since, as a JSONB array. Called by GET /api/v1/boardgame_buddy/ranks/queue.';
-
-COMMENT ON FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer) IS 'Insert (or move) a game into a player''s ranking at p_index within p_category/p_tier, keeping positions dense. Returns {category, tier, position} or {error}. Called by PUT /api/v1/boardgame_buddy/ranks/games/{game_id}.';
-
-COMMENT ON FUNCTION public.bgb_unrank_game(p_user uuid, p_game uuid) IS 'Remove a game from a player''s ranking, closing the gap in its tier. Returns {removed}. Called by DELETE /api/v1/boardgame_buddy/ranks/games/{game_id}.';
+-- ── Function bodies: comments only ──────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.bgb_bgg_sync_status(p_user uuid)
  RETURNS jsonb

@@ -295,7 +295,6 @@ SELECT jsonb_build_object(
 );
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_admin_usage_stats(p_exclude_admins boolean) FROM PUBLIC, anon, authenticated;
-COMMENT ON FUNCTION public.bgb_admin_usage_stats(p_exclude_admins boolean) IS 'App-wide usage for the admin Usage spoke: accounts, active accounts (from api_logs), Postgres footprint, screen views, domain counters, play origins. p_exclude_admins leaves out is_admin accounts from every per-account figure. Read by GET /api/v1/boardgame_buddy/admin/usage.';
 
 -- bgb_delete_account_rows(p_user uuid)
 CREATE OR REPLACE FUNCTION public.bgb_delete_account_rows(p_user uuid)
@@ -747,7 +746,6 @@ AS $function$
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_good_games_received(p_user uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.bgb_good_games_received(p_user uuid) TO boardgamebuddy_role;
-COMMENT ON FUNCTION public.bgb_good_games_received(p_user uuid) IS 'How many "Good game" taps other people have given plays p_user logged or sat in. Distinct reaction_group_id, so a tap covering a whole night counts once. Called by GET /profile/bundle and GET /bootstrap.';
 
 -- bgb_mark_link_notifications_seen(p_viewer uuid, p_through timestamp with time zone)
 CREATE OR REPLACE FUNCTION public.bgb_mark_link_notifications_seen(p_viewer uuid, p_through timestamp with time zone DEFAULT NULL::timestamp with time zone)

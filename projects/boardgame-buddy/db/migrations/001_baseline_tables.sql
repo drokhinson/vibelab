@@ -96,12 +96,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_affiliate_partners (
 );
 ALTER TABLE public.boardgamebuddy_affiliate_partners ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_affiliate_partners TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_affiliate_partners IS 'Retailers a game page can link to. live = enabled AND (tracking_tag OR wrapper_template): a row with neither credential never renders, enabled or not. Edited only through /affiliate/admin/*; read by GET /affiliate/links.';
-COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.url_template IS 'The store URL with {query} (the game name, URL-encoded) and optionally {tag} (tracking_tag). Resolved server-side by affiliate_service.build_url.';
-COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.wrapper_template IS 'Optional network redirect wrapped around the resolved store URL, with {url} = that URL percent-encoded (Impact: https://x.sjv.io/c/A/B/C?u={url}). Counts as a credential for the live rule.';
-COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.tracking_tag IS 'The value for {tag}. Counts as a credential for the live rule. NULL until the program approves the account.';
-COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.disclosure IS 'A sentence the program requires beside its links (Amazon''s "As an Amazon Associate…"). Rendered under the pills only while the partner is live.';
-COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.notes IS 'Operator hint shown in the admin editor: what to paste where. Never rendered to readers.';
+COMMENT ON TABLE public.boardgamebuddy_affiliate_partners IS 'A partner renders only when enabled AND it has a tracking_tag or a wrapper_template.';
+COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.url_template IS 'Store URL with {query} (the game name, URL-encoded) and optionally {tag} (tracking_tag).';
+COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.wrapper_template IS 'Optional network redirect around the store URL; {url} is that URL, percent-encoded.';
 
 -- ── boardgamebuddy_bgg_hot_snapshots ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_hot_snapshots (
@@ -116,7 +113,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_hot_snapshots (
 CREATE INDEX IF NOT EXISTS idx_bgb_hot_snapshots_bgg_captured ON public.boardgamebuddy_bgg_hot_snapshots USING btree (bgg_id, captured_at DESC);
 ALTER TABLE public.boardgamebuddy_bgg_hot_snapshots ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_bgg_hot_snapshots TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_bgg_hot_snapshots IS 'BGG /hot?type=boardgame, one row per (run, game). captured_at is the run id — every row of one refresh shares it. Kept 30 days. Read by bgb_bgg_hot_latest(); joined to the catalog by bgg_id at read time, never by a stored game_id.';
+COMMENT ON TABLE public.boardgamebuddy_bgg_hot_snapshots IS 'BGG''s hot list, one row per (refresh, game). captured_at identifies the refresh: every row of one run shares it.';
 
 -- ── boardgamebuddy_bgg_thumb_cache ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_thumb_cache (
@@ -126,7 +123,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_thumb_cache (
   CONSTRAINT boardgamebuddy_bgg_thumb_cache_pkey PRIMARY KEY (bgg_id)
 );
 ALTER TABLE public.boardgamebuddy_bgg_thumb_cache ENABLE ROW LEVEL SECURITY;
-COMMENT ON TABLE public.boardgamebuddy_bgg_thumb_cache IS 'BGG thumbnail per bgg_id for BGG search results. NULL thumbnail_url = BGG has none. Not a catalog: a game here is not imported. Written and read only by the API (service role).';
+COMMENT ON TABLE public.boardgamebuddy_bgg_thumb_cache IS 'Thumbnails for BGG search results. A game here is not in the catalog.';
 
 -- ── boardgamebuddy_chapter_types ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chapter_types (
@@ -149,7 +146,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_countries (
 );
 ALTER TABLE public.boardgamebuddy_countries ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_countries TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_countries IS 'ISO 3166-1 alpha-2 → continent, for the location achievements. The code set is exactly the one web/domain/geo-data.js can produce, so no country the app can detect or offer is missing a continent.';
 
 -- ── boardgamebuddy_feedback_topics ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_topics (
@@ -161,7 +157,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_topics (
 );
 ALTER TABLE public.boardgamebuddy_feedback_topics ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_feedback_topics TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_feedback_topics IS 'Lookup for boardgamebuddy_feedback.topic — which surface of the app an item is about. The set mirrors the bottom nav plus the two header screens. `icon` is a Lucide slug into web/ui/icons.js. Served by GET /feedback-topics.';
 
 -- ── boardgamebuddy_feedback_types ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_types (
@@ -173,7 +168,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_types (
 );
 ALTER TABLE public.boardgamebuddy_feedback_types ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_feedback_types TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_feedback_types IS 'Lookup for boardgamebuddy_feedback.feedback_type. `icon` is a Lucide slug into web/ui/icons.js, never an emoji. Served by GET /feedback-types and denormalised onto every row bgb_feedback_list returns, so the list paints from one call.';
 
 -- ── boardgamebuddy_games ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
@@ -222,18 +216,11 @@ CREATE INDEX IF NOT EXISTS idx_bgb_games_stats_synced ON public.boardgamebuddy_g
 CREATE INDEX IF NOT EXISTS idx_bgb_games_year_rank ON public.boardgamebuddy_games USING btree (year_published DESC, bgg_rank) WHERE (is_expansion = false);
 ALTER TABLE public.boardgamebuddy_games ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_games TO boardgamebuddy_role;
-COMMENT ON COLUMN public.boardgamebuddy_games.rulebook_url IS 'LEGACY, left in place only because forty RPCs and bundles select it. Nothing in the app writes or reads it: a game''s rulebook link is an approved layout=''rulebook_link'' chapter in boardgamebuddy_guide_chapters, and every value in this column has one. Do not wire anything new to it and do not treat it as a second source of truth for a game''s rulebook; the chapters table is the one.';
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_rating IS 'BGG geek rating (statistics/ratings/bayesaverage), 1..10. NULL = never synced or unrated. Written by POST /games/admin/backfill-stats.';
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_rank IS 'BGG overall board game rank (statistics/ratings/ranks/rank[@name=boardgame]). NULL = "Not Ranked" or never synced.';
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_weight IS 'BGG complexity (statistics/ratings/averageweight), 1..5.';
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_owned_count IS 'How many BGG users list the game as owned (statistics/ratings/owned).';
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_stats_synced_at IS 'When the BGG rating/rank/weight last landed. Not a queue marker — bgg_meta_synced_at is — but still written by every sync.';
-COMMENT ON COLUMN public.boardgamebuddy_games.publishers IS 'BGG boardgamepublisher links, in BGG''s order. ''{}'' = BGG credits nobody. NULL does not mean "never synced" (bgg_meta_synced_at says that); readers coerce both to [].';
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_meta_synced_at IS 'When POST /games/admin/backfill-metadata last read BGG''s /thing?stats=1 record for this game. NULL with a non-null bgg_id IS the backfill queue. Stamped even when BGG had no description or no year, so the queue terminates — the panel keeps listing those rows from the field predicate instead.';
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_image_url IS 'BoardGameGeek''s own box-art URL, recorded next to the re-hosted image_url so the app can switch to serving BGG directly. Written by import, image refresh and POST /games/admin/backfill-image-links.';
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_thumbnail_url IS 'BoardGameGeek''s own thumbnail URL; see bgg_image_url.';
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_images_synced_at IS 'When BGG''s image URLs were last read for this game. NULL with a non-null bgg_id IS the image-links backfill queue. Stamped even when BGG has no art, so the queue terminates.';
-COMMENT ON COLUMN public.boardgamebuddy_games.bgg_family IS 'The BGG family rank list this game ranks highest in, raw (strategygames, familygames, partygames, thematic, wargames, abstracts, childrensgames, cgs). NULL = not synced yet, or BGG files it in none. Decides which category a game is ranked in. Written by import, refresh-metadata and backfill-metadata.';
+COMMENT ON COLUMN public.boardgamebuddy_games.rulebook_url IS 'Unused: nothing reads or writes it. A game''s rulebook link is an approved layout=''rulebook_link'' chapter. Kept only because many RPCs select it.';
+COMMENT ON COLUMN public.boardgamebuddy_games.publishers IS '''{}'' = BGG credits no publisher; NULL = not read from BGG yet. Readers treat both as an empty list.';
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_meta_synced_at IS 'Last read of the game''s BGG record. NULL with a non-null bgg_id = queued for the metadata backfill.';
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_images_synced_at IS 'Last read of the game''s BGG image URLs. NULL with a non-null bgg_id = queued for the image-links backfill.';
+COMMENT ON COLUMN public.boardgamebuddy_games.bgg_family IS 'The BGG family rank list the game ranks highest in (strategygames, familygames, …). Decides the category it is ranked in.';
 
 -- ── boardgamebuddy_affiliate_clicks ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_affiliate_clicks (
@@ -251,7 +238,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_affiliate_clicks_game ON public.boardgamebudd
 CREATE INDEX IF NOT EXISTS idx_bgb_affiliate_clicks_partner ON public.boardgamebuddy_affiliate_clicks USING btree (partner_id, clicked_at DESC);
 ALTER TABLE public.boardgamebuddy_affiliate_clicks ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_affiliate_clicks TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_affiliate_clicks IS 'One row per tap on a partner pill. No user column, by design: privacy §5 says usage records carry no account identifier. Written by POST /affiliate/click, summarised by GET /affiliate/admin/clicks.';
+COMMENT ON TABLE public.boardgamebuddy_affiliate_clicks IS 'One row per tap on a partner link. No user column, by design: usage records carry no account identifier.';
 
 -- ── boardgamebuddy_profiles ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
@@ -292,15 +279,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_profiles_bga_username ON public.boardg
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_profiles_bgg_username ON public.boardgamebuddy_profiles USING btree (bgg_username) WHERE (bgg_username IS NOT NULL);
 ALTER TABLE public.boardgamebuddy_profiles ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_profiles TO boardgamebuddy_role;
-COMMENT ON COLUMN public.boardgamebuddy_profiles.avatar IS 'Customizable badge config: {icon, iconColor, bgColor}. icon is "initials" or an icon key from the client library. NULL = use BGB default (brown badge + gold initials).';
-COMMENT ON COLUMN public.boardgamebuddy_profiles.needs_setup IS 'TRUE for brand-new accounts that have not yet completed the "Create your profile" modal. Cleared by the first successful POST /profile.';
-COMMENT ON COLUMN public.boardgamebuddy_profiles.app_installed_at IS 'First time this account was seen running as an installed PWA. Drives the "Pocket Buddy" achievement; nothing else reads it.';
-COMMENT ON COLUMN public.boardgamebuddy_profiles.bgg_last_check_started_at IS 'Stamped at the top of POST /bgg/check. Anchors the catalog_session_* counters on bgb_bgg_sync_status, which count kind=''catalog'' rows only.';
-COMMENT ON COLUMN public.boardgamebuddy_profiles.link_notifications_seen_at IS 'Read watermark for the WHOLE notification bell — plays you were seated in, buddy requests received, and requests of yours that were accepted — not just link notifications, despite the name. Written by bgb_mark_link_notifications_seen; read by bgb_notifications and bgb_notifications_unread.';
-COMMENT ON COLUMN public.boardgamebuddy_profiles.push_tier IS 'How much this account wants pushed: none | actionable | all. Cumulative — all implies actionable. Mirrored by PushTier in the backend constants; the DB values ARE the enum values. Default none: push is opt-in, and a migration that turned it on for every existing account would be a notification nobody asked for.';
-COMMENT ON COLUMN public.boardgamebuddy_profiles.release_notices_seen_at IS 'Watermark: release notices published at or before this are not shown again. NOT NULL DEFAULT now() so a new account starts watermarked at signup and never sees the backlog. Advanced only by bgb_mark_release_notices_seen; read by bgb_release_notices_unseen.';
-COMMENT ON COLUMN public.boardgamebuddy_profiles.bga_password_enc IS 'Fernet-encrypted BGA password, keyed by BGA_CREDENTIAL_KEY. Its own key, not BGG_CREDENTIAL_KEY: rotating one must not force a re-link of the other. Rotating THIS one forces every BGA re-link.';
-COMMENT ON COLUMN public.boardgamebuddy_profiles.bga_session_cookies IS 'Opaque BGA session cookies, whatever names the login returns. Never carried by a response model and never logged.';
+COMMENT ON COLUMN public.boardgamebuddy_profiles.avatar IS 'Badge config {icon, iconColor, bgColor}; icon is "initials" or an icon key. NULL = the default badge.';
+COMMENT ON COLUMN public.boardgamebuddy_profiles.link_notifications_seen_at IS 'Read watermark for the whole notification bell (play links, buddy requests, accepted requests), despite the name.';
+COMMENT ON COLUMN public.boardgamebuddy_profiles.push_tier IS 'none | actionable | all. Each tier includes the one before it.';
+COMMENT ON COLUMN public.boardgamebuddy_profiles.bga_password_enc IS 'Encrypted with BGA_CREDENTIAL_KEY, a key separate from the BGG one.';
 
 -- ── boardgamebuddy_bga_player_links ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bga_player_links (
@@ -319,7 +301,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bga_player_links (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_bga_links_owner_handle ON public.boardgamebuddy_bga_player_links USING btree (owner_id, lower(bga_handle));
 ALTER TABLE public.boardgamebuddy_bga_player_links ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_bga_player_links TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_bga_player_links IS 'Board Game Arena handle → the person the owner says it is. Written by the import wizard when a handle is resolved by hand, read on the next import to pre-seat it. No API-role grant: only the service role touches it.';
+COMMENT ON TABLE public.boardgamebuddy_bga_player_links IS 'A Board Game Arena handle mapped by the owner to a person, used to pre-seat that handle on later imports.';
 
 -- ── boardgamebuddy_bgg_pending_imports ───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_pending_imports (
@@ -410,8 +392,8 @@ CREATE INDEX IF NOT EXISTS idx_bgb_buddy_edges_user_a ON public.boardgamebuddy_b
 CREATE INDEX IF NOT EXISTS idx_bgb_buddy_edges_user_b ON public.boardgamebuddy_buddy_edges USING btree (user_b, status);
 ALTER TABLE public.boardgamebuddy_buddy_edges ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_buddy_edges TO boardgamebuddy_role;
-COMMENT ON COLUMN public.boardgamebuddy_buddy_edges.alias_by_a IS 'Private nickname user_a set FOR user_b. Read only when the viewer is user_a; never returned to user_b. NULL = no alias — the endpoint trims and treats empty as a clear, so '''' never reaches the row.';
-COMMENT ON COLUMN public.boardgamebuddy_buddy_edges.alias_by_b IS 'Private nickname user_b set FOR user_a. Mirror of alias_by_a; see that column. Which of the pair applies is decided by the viewer, not by the row.';
+COMMENT ON COLUMN public.boardgamebuddy_buddy_edges.alias_by_a IS 'Private nickname user_a gave user_b. Shown only to user_a.';
+COMMENT ON COLUMN public.boardgamebuddy_buddy_edges.alias_by_b IS 'Private nickname user_b gave user_a. Shown only to user_b.';
 
 -- ── boardgamebuddy_buddy_suggestion_dismissals ───────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddy_suggestion_dismissals (
@@ -425,7 +407,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddy_suggestion_dismissals (
 );
 ALTER TABLE public.boardgamebuddy_buddy_suggestion_dismissals ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_buddy_suggestion_dismissals TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_buddy_suggestion_dismissals IS 'Per-viewer "stop suggesting this person". Read by the three suggestion RPCs below; never shown to dismissed_user_id and never a block. Cleared when the viewer sends that person a buddy request, so an accidental tap is undone by the act that contradicts it.';
 
 -- ── boardgamebuddy_collections ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
@@ -465,7 +446,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_collections_user_status ON public.boardgamebu
 CREATE INDEX IF NOT EXISTS idx_bgb_collections_user_status_name ON public.boardgamebuddy_collections USING btree (user_id, status, game_name);
 ALTER TABLE public.boardgamebuddy_collections ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_collections TO boardgamebuddy_role;
-COMMENT ON COLUMN public.boardgamebuddy_collections.played_before_at IS 'The played mark: set when the user says they played this game somewhere they did not log it. On a row of any status, independent of it; a game on no shelf carries it on a status ''played'' row. Read by the Played shelf, the status map''s played_marks, the Shelf of Shame block of bgb_user_stats_detail and the rank queue. It is not a play and must never be counted as one.';
+COMMENT ON COLUMN public.boardgamebuddy_collections.played_before_at IS 'The played mark: played somewhere without logging it here. Never counted as a play. A game on no shelf carries it on a status ''played'' row.';
 
 -- ── boardgamebuddy_feedback ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback (
@@ -488,8 +469,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback (
 CREATE INDEX IF NOT EXISTS idx_bgb_feedback_status_created ON public.boardgamebuddy_feedback USING btree (status, created_at DESC);
 ALTER TABLE public.boardgamebuddy_feedback ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_feedback TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_feedback IS 'The Dev feedback board: one row per item a user submitted from Settings → Dev feedback. status=open is what every non-admin sees; resolving hides it from them and leaves it visible to admins under the Resolved filter, which is why resolve is reversible and nothing is deleted. Ordered for display by like count DESC then created_at DESC — see bgb_feedback_list.';
-COMMENT ON COLUMN public.boardgamebuddy_feedback.resolved_by IS 'The admin who resolved it. ON DELETE SET NULL rather than CASCADE: a deleted admin account must not take the resolution with it — the item stays resolved, it just stops naming who did it.';
 
 -- ── boardgamebuddy_feedback_likes ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_likes (
@@ -502,7 +481,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_likes (
 );
 ALTER TABLE public.boardgamebuddy_feedback_likes ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_feedback_likes TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_feedback_likes IS 'One row per (feedback item, person). The composite PK is both the identity and the idempotency guarantee, so POST /feedback/{id}/like upserts ignore_duplicates and returns 200 rather than 201. Counts are aggregated in bgb_feedback_list, never stored on the item.';
 
 -- ── boardgamebuddy_game_ranks ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_game_ranks (
@@ -521,7 +499,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_game_ranks (
 CREATE INDEX IF NOT EXISTS idx_bgb_game_ranks_list ON public.boardgamebuddy_game_ranks USING btree (user_id, category, tier, "position");
 ALTER TABLE public.boardgamebuddy_game_ranks ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_game_ranks TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_game_ranks IS 'A player''s ranking of the games they own or have played. Per category, tiers love → good → not, position dense 0..n-1 within a tier. Written only through bgb_rank_game / bgb_unrank_game; read by GET /ranks*.';
+COMMENT ON TABLE public.boardgamebuddy_game_ranks IS 'Per player and category: tier love | good | not, position dense from 0 within a tier. Write only through bgb_rank_game / bgb_unrank_game.';
 
 -- ── boardgamebuddy_ghost_claims ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_ghost_claims (
@@ -580,10 +558,8 @@ CREATE INDEX IF NOT EXISTS idx_bgb_chapters_rulebook_status ON public.boardgameb
 CREATE INDEX IF NOT EXISTS idx_bgb_chapters_scoring_grid ON public.boardgamebuddy_guide_chapters USING btree (game_id) WHERE (layout = 'scoring_grid'::text);
 ALTER TABLE public.boardgamebuddy_guide_chapters ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_guide_chapters TO boardgamebuddy_role;
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.grid IS 'Row definitions for a layout=''scoring_grid'' chapter: {"v":1,"mode":…,"rows":[{"label":…,"color":…,"note":…}]}. `color` is a SLUG from a fixed palette (neutral|red|pink|rust|brown|gold|yellow|green|blue|purple), never a hex — the grid lands on the cream scorepad, and only a fixed palette can be guaranteed legible there in both themes. `mode` is add_on|replace on a grid whose game is an EXPANSION — its rows either join the base game''s grid or stand in for it — and NULL/absent on a base game''s own grid, where the question does not arise. The API resolves it (services/chapter_grid.resolve_grid_mode); the bgb_chapters_grid_mode CHECK only pins the value domain, because a CHECK cannot look up whether the chapter''s game is an expansion. NULL for layout=''text''; see the bgb_chapters_grid_shape constraint.';
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.link_url IS 'The outbound rulebook URL of a layout=''rulebook_link'' chapter. http(s) only, pinned by bgb_chapters_link_shape — this is a link the app sends readers to, so the scheme is not left to the client. NULL for every other layout. `content` carries a generated markdown mirror ("[Rulebook](url)") so the pool''s ILIKE search, the moderation preview and renderMarkdown need no branch; `link_url` is the source of truth and the mirror is derived from it.';
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'unlisted | pending | approved | denied, on a layout=''rulebook_link'' chapter only (NULL everywhere else). Approved is visible to everyone; unlisted and pending only to the author and their ACCEPTED buddies; denied only to the author and admins. Unlisted and pending differ in ONE respect and it is not visibility: pending is in the admin queue because its author asked for review, unlisted is not. A link authored by an admin is NOT born approved — every author goes through the same gate, and an admin approves their own from the queue like anyone else''s. The rule is applied by routes/services/chapter_rulebook.py on every chapter read path, NOT by RLS — this API is service-role and bypasses RLS, and nothing reads chapters browser-direct. A denial is deliberately not a delete: the row is what stops the same author re-posting the same link past idx_bgb_chapters_rulebook_author.';
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderated_by IS 'The admin whose decision moderation_status records. NULL while unlisted or pending — including on a link an admin wrote themselves, which is not self-approved on the way in — and NULL on the approved links carried over from boardgamebuddy_games.rulebook_url, which were approved by having been admin-only data in the first place. Naming an admin who never looked at a link would be a lie the audit trail cannot tell apart from a real decision, which is also why re-opening the gate (a changed URL, a withdrawn request) clears this column rather than leaving the last decision''s author on a row nobody has decided.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.grid IS 'Rows of a layout=''scoring_grid'' chapter: {"v":1,"mode":…,"rows":[{"label":…,"color":…,"note":…}]}. color is a palette slug, never a hex.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'Rulebook links only. approved: everyone sees it; unlisted and pending: the author and their accepted buddies; denied: the author. pending also means it is in the admin queue.';
 
 -- ── boardgamebuddy_chapter_reports ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chapter_reports (
@@ -646,13 +622,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_user_bgg_play ON public.boardgam
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_user_played ON public.boardgamebuddy_plays USING btree (user_id, played_at DESC, created_at DESC);
 ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_plays TO boardgamebuddy_role;
-COMMENT ON COLUMN public.boardgamebuddy_plays.bgg_play_id IS 'The BoardGameGeek play id this row came from. Written by the importer''s BoardGameGeek source (through bgb_log_play) and by the pending-imports worker still draining legacy kind=''play'' rows. The partial UNIQUE idx_bgb_plays_user_bgg_play is what makes re-importing from BGG a no-op.';
-COMMENT ON COLUMN public.boardgamebuddy_plays.client_key IS 'Client-generated idempotency key for offline-queued plays. NULL for live writes.';
-COMMENT ON COLUMN public.boardgamebuddy_plays.country_code IS 'ISO 3166-1 alpha-2 country where the play happened, uppercase. Resolved by the client from the device timezone (or picked by the host in Settle Up); NULL when unknown, as it is on most older plays. Feeds a future popularity-by-country view and nothing today.';
-COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS 'Denormalised snapshot of the scoring grid this play was scored with: {"v":1,"chapter_id":…,"title":…,"rows":[…],"parts":[…]}. NOT a foreign key, on purpose. The chapter is community-owned, editable by its author and deletable by author or admin, so a play holding only an id would render bare R1..Rn the moment a moderator cleared the chapter, and would silently RELABEL a two-year-old play if the author reordered its rows — labels that stop describing the numbers under them is precisely the failure widgets/round-score-grid.js is written to prevent. ON DELETE SET NULL loses the labels and CASCADE deletes plays, so neither constraint tells the truth. chapter_id rides INSIDE the document as provenance: a bare uuid column would imply an integrity the database is not enforcing. Same reasoning as game_name / game_thumbnail_url on this table. `rows` may be COMPOSED from several grids — a base game''s plus each add-on expansion''s, the add-ons appended in ascending BGG id so every client composes the same scorepad — in which case `chapter_id` names the grid that supplied the leading rows and `parts` lists every contributor in row order as {chapter_id,game_id,game_name,mode,row_count}. A row an add-on contributed also carries that expansion''s `source_color` (boardgamebuddy_games.expansion_color), which draws a rule down the RIGHT edge of its header cell — the left edge carries the row''s own palette tint, so the two never collide; the leading grid''s rows carry none. `parts` is absent, and no row carries a source_color, when one grid supplied the whole thing — so an older snapshot, which never has `parts`, reads the same way.';
-COMMENT ON COLUMN public.boardgamebuddy_plays.bga_table_id IS 'The Board Game Arena table this play was imported from. NULL for every other origin. Unique per user, which is what makes a re-import offer only new tables.';
-COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_at IS 'When this play changed hands because its logger deleted their account. NULL on every play whose author still owns it, which is almost all of them. Two jobs: it drives the play_inherited notification, and it is the standing audit trail for "the current owner did not write this" — worth knowing before trusting plays.user_id as authorship.';
-COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_from_name IS 'The display name of the account this play came from, captured at deletion. Denormalized because the profile it names is gone by the time anything reads this — there is nothing left to join to. Carried into bgb_notifications as actor_display_name.';
+COMMENT ON COLUMN public.boardgamebuddy_plays.client_key IS 'Client-generated idempotency key for plays queued offline.';
+COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS 'Snapshot of the scoring grid the play was scored with. Deliberately not a foreign key: editing or deleting the chapter never relabels an old play.';
+COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_at IS 'Set when the play passed to its current owner because the account that logged it was deleted. When set, user_id is not the author.';
 
 -- ── boardgamebuddy_play_expansions ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_expansions (
@@ -689,9 +661,8 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user_play ON public.boardgamebud
 CREATE UNIQUE INDEX IF NOT EXISTS uq_bgb_play_players_play_user ON public.boardgamebuddy_play_players USING btree (play_id, player_user_id) WHERE (player_user_id IS NOT NULL);
 ALTER TABLE public.boardgamebuddy_play_players ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_play_players TO boardgamebuddy_role;
-COMMENT ON COLUMN public.boardgamebuddy_play_players.round_scores IS 'Per-round score breakdown as a JSON array of nullable ints, e.g. [5, 8, null, 12]. NULL when no rounds were tracked (<= 1 round). The `score` column still holds the final total for backward compatibility and quick aggregation.';
-COMMENT ON COLUMN public.boardgamebuddy_play_players.team IS 'Free-text side this seat played on, as the host typed it. NULL for every competitive and co-op play, and for a team play whose sides were never named. Matched case-insensitively after trimming — the same comparison PlaySession.applyTeamTag uses to keep one side''s win flags in step — so "Red" and "red" are one side. No index: it is only ever read as part of a roster already fetched by play_id.';
-COMMENT ON INDEX public.uq_bgb_play_players_play_user IS 'One account, one seat, per play. Ghost seats (player_user_id NULL) are outside the predicate — two same-named ghosts at one table is a legitimate roster.';
+COMMENT ON COLUMN public.boardgamebuddy_play_players.round_scores IS 'Per-round scores as a JSON array of nullable ints; score holds the total.';
+COMMENT ON COLUMN public.boardgamebuddy_play_players.team IS 'Free-text side, as the host typed it. Compared case-insensitively after trimming.';
 
 -- ── boardgamebuddy_play_reactions ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_reactions (
@@ -707,7 +678,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_reactions_group ON public.boardgamebuddy
 CREATE INDEX IF NOT EXISTS idx_bgb_play_reactions_user ON public.boardgamebuddy_play_reactions USING btree (user_id);
 ALTER TABLE public.boardgamebuddy_play_reactions ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_play_reactions TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_play_reactions IS 'One "good game" from one person to one play. A session footer tap fans out to every play in that night sharing one reaction_group_id, because the feed session is a client-side grouping with no stable id.';
+COMMENT ON TABLE public.boardgamebuddy_play_reactions IS 'One tap on a night''s footer writes a row for every play of that night, all sharing one reaction_group_id.';
 
 -- ── boardgamebuddy_play_sessions ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_sessions (
@@ -736,8 +707,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_sessions_host ON public.boardgamebuddy_p
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_sessions_open_code ON public.boardgamebuddy_play_sessions USING btree (code) WHERE (status = 'open'::text);
 ALTER TABLE public.boardgamebuddy_play_sessions ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_play_sessions TO boardgamebuddy_role;
-COMMENT ON COLUMN public.boardgamebuddy_play_sessions.scoring_template IS 'The template the host applied to this live grid, same shape as boardgamebuddy_plays.scoring_template — composed parts and all. Copied onto the play at finalize.';
-COMMENT ON COLUMN public.boardgamebuddy_play_sessions.play_mode IS 'How the host is scoring this table: competitive / coop / team. NULL = never said, read as competitive. Not the same fact as boardgamebuddy_games.play_mode, which is what the BOX suggests; this is what the table actually did, and it is the gate on whether a spectator''s grid merges a side''s seats into one column.';
+COMMENT ON COLUMN public.boardgamebuddy_play_sessions.play_mode IS 'How this table is being scored (competitive | coop | team); NULL = competitive. Can differ from boardgamebuddy_games.play_mode, which is what the box suggests.';
 
 -- ── boardgamebuddy_play_session_participants ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_participants (
@@ -758,8 +728,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_session_participants_session ON public.b
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_session_user_unique ON public.boardgamebuddy_play_session_participants USING btree (session_id, user_id) WHERE (user_id IS NOT NULL);
 ALTER TABLE public.boardgamebuddy_play_session_participants ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_play_session_participants TO boardgamebuddy_role;
-COMMENT ON COLUMN public.boardgamebuddy_play_session_participants.position IS 'Host-assigned column order, 0-based. NULL = never ordered; see bgb_session_bundle''s (position NULLS LAST, joined_at) sort.';
-COMMENT ON COLUMN public.boardgamebuddy_play_session_participants.team IS 'Free-text side this seat is on, as the host typed it. NULL means no side — every competitive and co-op lobby, and a team lobby whose sides were never named. Matched case-insensitively after trimming, the same comparison ui/team-colors.js and PlaySession.applyTeamTag use, so "Red" and "red" are one side. The lobby twin of boardgamebuddy_play_players.team, which is where the tag lands for good at finalize; this column only has to outlive the session.';
+COMMENT ON COLUMN public.boardgamebuddy_play_session_participants.team IS 'Free-text side, as the host typed it. Compared case-insensitively after trimming.';
 
 -- ── boardgamebuddy_play_session_scores ───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_scores (
@@ -805,7 +774,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_push_subscriptions (
 CREATE INDEX IF NOT EXISTS idx_bgb_push_subs_user ON public.boardgamebuddy_push_subscriptions USING btree (user_id);
 ALTER TABLE public.boardgamebuddy_push_subscriptions ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_push_subscriptions TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_push_subscriptions IS 'One Web Push subscription per browser per account. Written by POST /push/subscriptions, read by services/push_service when fanning a notification out, and deleted on a 404/410 from the push service. No Data API grant: only the service-role backend touches it.';
 
 -- ── boardgamebuddy_rank_deferrals ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_rank_deferrals (
@@ -818,7 +786,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_rank_deferrals (
 );
 ALTER TABLE public.boardgamebuddy_rank_deferrals ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_rank_deferrals TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_rank_deferrals IS 'Unranked games a player chose to rank after their next play. Active until a play the player can see is created after deferred_at and played on or after its date — see bgb_rank_deferrals_active. Written by PUT /ranks/games/{id}/defer, deleted when the game is ranked.';
+COMMENT ON TABLE public.boardgamebuddy_rank_deferrals IS 'Games a player chose to rank after their next play. bgb_rank_deferrals_active says which still hold.';
 
 -- ── boardgamebuddy_release_notices ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_release_notices (
@@ -837,11 +805,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_release_notices (
 CREATE INDEX IF NOT EXISTS idx_bgb_release_notices_published ON public.boardgamebuddy_release_notices USING btree (published_at DESC) WHERE (published_at IS NOT NULL);
 ALTER TABLE public.boardgamebuddy_release_notices ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_release_notices TO boardgamebuddy_role;
-COMMENT ON TABLE public.boardgamebuddy_release_notices IS 'Admin-authored "what''s new" notes shown once per user in a popup on their next visit. Written from /admin/release-notices; read by bgb_release_notices_unseen (the popup) and GET /release-notices (the Settings archive).';
-COMMENT ON COLUMN public.boardgamebuddy_release_notices.body_md IS 'Markdown, rendered by web/ui/markdown.js — which escapes first and allows only http(s), mailto and root-relative hrefs. Note that renderer opens every link in a new tab, so an in-app destination belongs in link_route, not in a markdown link here.';
-COMMENT ON COLUMN public.boardgamebuddy_release_notices.link_route IS 'Optional router route name for the "take me there" button (web/domain/view.js _routes). Plain TEXT, not an enum: the backend has no route table, so any server-side enum would be a copy that drifts the first time a route is renamed. The admin picker offers only param-free routes and both render paths drop the button when router.pathFor() cannot build a URL, which also covers a route retired after the notice was written.';
-COMMENT ON COLUMN public.boardgamebuddy_release_notices.published_at IS 'NULL = draft, never sent. Set by POST /release-notices/admin/{id}/publish and never by the client, because a backdated timestamp would sort behind watermarks users already hold and be invisible to exactly the people it was written for. Republishing moves it forward, so an unpublish/republish cycle re-shows the notice.';
-COMMENT ON COLUMN public.boardgamebuddy_release_notices.created_by IS 'ON DELETE SET NULL, not CASCADE: deleting an admin''s account must not delete the notices everyone else is still reading.';
+COMMENT ON COLUMN public.boardgamebuddy_release_notices.published_at IS 'NULL = draft.';
 
 -- ── boardgamebuddy_user_achievements ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_achievements (
@@ -875,7 +839,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_disliked ON public.boardgamebud
 CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_user_game ON public.boardgamebuddy_user_chapters USING btree (user_id, game_id);
 ALTER TABLE public.boardgamebuddy_user_chapters ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_user_chapters TO boardgamebuddy_role;
-COMMENT ON COLUMN public.boardgamebuddy_user_chapters.state IS 'kept = in this viewer''s guide. disliked = the inverse: the viewer has turned it down, so it is filtered out of their chapter pool, their pool count and the scoring-template offer, and appears only in the builder''s Disliked section. Per-viewer and one-directional — never shown to the author, never a report, and it changes no count anyone else sees.';
+COMMENT ON COLUMN public.boardgamebuddy_user_chapters.state IS 'kept = in the viewer''s guide; disliked = turned down, and left out of their chapter pool.';
 
 -- ── boardgamebuddy_user_expansions ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_expansions (
@@ -910,7 +874,7 @@ AS $function$
          END
 $function$;
 GRANT EXECUTE ON FUNCTION public.bgb_app_uid() TO boardgamebuddy_role;
-COMMENT ON FUNCTION public.bgb_app_uid() IS 'The UUID the app knows this caller by: the app_uid claim, else a UUID-shaped sub, else NULL. The sign-in blocking function sets app_uid (the uid itself when UUID-shaped, else a uuid5 of it); the shape check makes an unusable id deny rather than raise. See projects/boardgame-buddy/Docs/RUNBOOK_AUTH_ROLE_CLAIM.md.';
+COMMENT ON FUNCTION public.bgb_app_uid() IS 'The UUID the app knows the caller by: the app_uid JWT claim, else a UUID-shaped sub, else NULL.';
 
 
 -- ─────────────────────────────────────────────────────────────────────────────

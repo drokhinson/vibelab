@@ -2688,7 +2688,6 @@ AS $function$
                   WHERE pp.play_id = p.id AND pp.player_user_id = p_viewer)));
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_rank_deferrals_active(p_viewer uuid) FROM PUBLIC, anon, authenticated;
-COMMENT ON FUNCTION public.bgb_rank_deferrals_active(p_viewer uuid) IS 'The game ids p_viewer parked with "Rank after next play" and has not played since, as a JSONB array. Called by GET /api/v1/boardgame_buddy/ranks/queue.';
 
 -- bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer)
 CREATE OR REPLACE FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer)
@@ -2739,7 +2738,6 @@ BEGIN
 END;
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer) FROM PUBLIC, anon, authenticated;
-COMMENT ON FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer) IS 'Insert (or move) a game into a player''s ranking at p_index within p_category/p_tier, keeping positions dense. Returns {category, tier, position} or {error}. Called by PUT /api/v1/boardgame_buddy/ranks/games/{game_id}.';
 
 -- bgb_reject_ghost_claim(p_owner uuid, p_claim_id uuid)
 CREATE OR REPLACE FUNCTION public.bgb_reject_ghost_claim(p_owner uuid, p_claim_id uuid)
@@ -3353,7 +3351,6 @@ BEGIN
 END;
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_unrank_game(p_user uuid, p_game uuid) FROM PUBLIC, anon, authenticated;
-COMMENT ON FUNCTION public.bgb_unrank_game(p_user uuid, p_game uuid) IS 'Remove a game from a player''s ranking, closing the gap in its tier. Returns {removed}. Called by DELETE /api/v1/boardgame_buddy/ranks/games/{game_id}.';
 
 -- bgb_update_session_game(p_host uuid, p_code text, p_game uuid)
 CREATE OR REPLACE FUNCTION public.bgb_update_session_game(p_host uuid, p_code text, p_game uuid)
