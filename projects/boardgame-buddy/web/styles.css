@@ -4547,11 +4547,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card.has-note .play-card__game-overlay {
   bottom: calc(var(--pc-note-h) + 8px);
 }
-/* In the feed the band is a scrim instead of a plate: a dark fade up from the
-   photo's bottom edge with light ink, so no cream strip sits on a dark card.
-   Both colours are --on-scrim / --photo-scrim, theme-independent for the same
-   reason as the plate. */
-.play-session .play-card__note {
+/* In a themed reel (the feed, game detail) the band is a scrim instead of a
+   plate: a dark fade up from the photo's bottom edge with light ink, so no
+   cream strip sits on a dark card. Both colours are --on-scrim /
+   --photo-scrim, theme-independent for the same reason as the plate. The
+   scrim runs to the frame's edges, so it is taller from the bottom edge than
+   the plate, and the box-art badge lifts clear of that height. */
+:is(.play-session, .game-detail__plays-scroll) .play-card { --pc-note-h: 48px; }
+:is(.play-session, .game-detail__plays-scroll) .play-card__note {
   left: 0;
   right: 0;
   bottom: 0;
@@ -4783,11 +4786,15 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   padding: 0.25rem 0 0;
   margin: 0 0 1rem;
   animation: fadeUp 200ms ease both;
+}
 
-  /* Feed polaroids are cut from the ground's raised step, not from cream
-     paper, so a night reads as one surface with its header instead of a row of
-     lit rectangles on espresso. This is the one place a play card follows the
-     theme; every value is a var(), so light keeps white cards on cream. */
+/* ── Play-card reels follow the theme ─────────────────────────────────────
+   The feed's sessions and game detail's Recent plays reel cut their polaroids
+   from the ground's raised step, not from cream paper, so a reel reads as part
+   of the screen instead of a row of lit rectangles on espresso. These are the
+   places a play card follows the theme; every value is a var(), so light keeps
+   white cards on cream. */
+:is(.play-session, .game-detail__plays-scroll) {
   --polaroid-bg:       var(--bg-2);
   --polaroid-bg-soft:  color-mix(in srgb, var(--bg-2) 80%, var(--line-strong));
   --polaroid-ink:      var(--ink);
@@ -4795,13 +4802,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   --polaroid-muted:    var(--ink-muted);
   --polaroid-line:     var(--line);
   --card-border:       var(--line);
-  /* The note band is a scrim over the photo rather than a plate on it, so it
-     runs to the frame's edges; this is its height up from the bottom edge. */
-  --pc-note-h: 48px;
 }
-/* Only what a var() cannot supply (theming.md §7). (0,2,0) via the :root
-   prefix; the play card itself declares none of these. */
-:root[data-bgb="dark"] .play-session {
+/* Only what a var() cannot supply (theming.md §7). The play card itself
+   declares none of these. */
+:root[data-bgb="dark"] :is(.play-session, .game-detail__plays-scroll) {
   --accent-ink:      var(--accent);   /* the paper gold is 2.6:1 on --bg-2 */
   --polaroid-accent: #E87B63;         /* terracotta is 3.4:1 on --bg-2; this is 5.2:1 */
   --ghost-ink:       #C4A987;
