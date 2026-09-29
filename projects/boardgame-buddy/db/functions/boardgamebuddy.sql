@@ -1061,7 +1061,9 @@
 --               another player kept, plays you wrote notes on, whether BGG is
 --               linked, whether the PWA is installed, distinct countries and
 --               distinct continents played in, plays you scored on a custom
---               grid, and the adopter count of your most-kept scoring grid),
+--               grid, the adopter count of your most-kept scoring grid, and
+--               chapters other players saved as their own version of one of
+--               yours, via guide_chapters.derived_from),
 --               inserts a boardgamebuddy_user_achievements row for anything
 --               newly earned, then joins the catalog to those rows and returns
 --               name / tagline / requirement / icon / threshold / progress /

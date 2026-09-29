@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 from typing import Annotated, Any, Literal, Union
+from uuid import UUID
 from pydantic import (
     UUID4,
     AfterValidator,
@@ -1325,6 +1326,12 @@ class ChapterCreate(BaseModel):
     # queue that does not exist, which is a no-op, where a stray URL would
     # write an ungated destination into a row.
     request_review: bool = True
+    # The chapter this one is a copy of, when the author opened someone else's
+    # chapter in the editor and saved their own version. Credits the original's
+    # author (the chapters_inspired achievement metric). An id that no longer
+    # resolves is dropped rather than rejected, so a copy saved after the
+    # original was deleted still saves.
+    derived_from: UUID | None = None
 
     @model_validator(mode="after")
     def _body_matches_layout(self) -> "ChapterCreate":

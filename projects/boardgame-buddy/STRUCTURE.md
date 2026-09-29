@@ -1,7 +1,9 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-09-29 (**the back gesture puts the score pad away**. With the pad up there is no system keyboard for Android to swallow the back press, so it reached the router and walked the Play screen away from under the pad. `widgets/score-keypad.js` now arms a back guard (`ui/back-guard.js`) when the pad opens and releases it when the pad closes; the press that pops it blurs the cell, which closes the pad and ends a Σ Sum keeping its total. Inside the play-detail card the pad's guard sits above the card's, so the first press closes the pad and the second the card. Done and a tap elsewhere unwind the entry as before, so back then leaves the screen as usual.)
+> Last updated: 2026-09-29 (**"You're an Inspiration": a badge for the author of a chapter someone built their own version of**. Saving your own version of someone else's chapter now records where it came from: `POST /games/{id}/chapters` takes an optional `derived_from` and stores it in the new `boardgamebuddy_guide_chapters.derived_from` column (FK, ON DELETE SET NULL; a source id that no longer resolves is stored as NULL so the save still goes through). `bgb_sync_achievements` gains a `chapters_inspired` metric, the number of chapters OTHER players derived from yours, and the `chapter_inspired` achievement (guide group, threshold 1, between Cited Source and Ruled Lines) unlocks on the first. Art: `web/assets/sprites/achievements/bgb-ach-inspiration.svg`. **Deploy order: run `063_chapter_inspiration.sql` before the API**, whose create route writes the new column. SQL covered by `db/tests/chapter_inspiration.sql`, API by `tests/test_chapter_derived_from.py`.)
+>
+> Previously: 2026-09-29 (**the back gesture puts the score pad away**. With the pad up there is no system keyboard for Android to swallow the back press, so it reached the router and walked the Play screen away from under the pad. `widgets/score-keypad.js` now arms a back guard (`ui/back-guard.js`) when the pad opens and releases it when the pad closes; the press that pops it blurs the cell, which closes the pad and ends a Σ Sum keeping its total. Inside the play-detail card the pad's guard sits above the card's, so the first press closes the pad and the second the card. Done and a tap elsewhere unwind the entry as before, so back then leaves the screen as usual.)
 >
 > Previously: 2026-09-29 (**scores can be decimals, and the score pad gets a "." key**. `062_decimal_scores.sql` turns `boardgamebuddy_play_players.score` and `boardgamebuddy_play_session_scores.score` into `NUMERIC` and redefines `bgb_log_play` to read each payload score as `NUMERIC` (body otherwise unchanged). **Run 062 before the API and web deploy**: until it runs a decimal write fails, and live scores are written browser-direct. The API's `Score` type (`models.py`: `int | float` through `tidy_score`) holds a score to two places and returns a whole number as an int, so 12 never reads 12.0; `PlayerEntry`'s round sum goes through it too, so 0.1 + 0.2 stores 0.3. The photo import reads decimal scores; BGA scores stay whole. On the web, `sanitizeRoundScore` keeps one point and two places, `parseRoundScore` reads a half-typed "." or "12." as empty or 12, and the grid totals and `LiveScores.totalFor` round through the new `window.roundScoreSum`. The pad's right column is now ⌫ / (−) / blank / "." (Sum mode: ⌫ / − / + / "."), and in Sum mode the bottom row is Σ Sum beside a solid = where + Round sits. Leaving a cell drops a trailing "." along with a lone "-". The play-detail card uses the pad too: its edit grid's + Round adds a row and moves into it, and the whole-play score boxes (a play with no rounds) are `type="text"` pad fields (`data-score-pad`, walked by Prev / Next inside `[data-score-pad-group]`, Σ Sum lighting the field and the player's name). Pinned by `tools/check-score-keypad.mjs` and `api/tests/test_decimal_scores.py`.)
 >
@@ -709,6 +711,7 @@ browse pool sorted by popularity.
 | moderation_status | TEXT | nullable; `unlisted` \| `pending` \| `approved` \| `denied` on a rulebook link, NULL elsewhere (same CHECK). **Approved** is visible to everyone including signed-out readers; **unlisted** and **pending** to its author and their accepted buddies — identically, the difference being that only `pending` is in the admin queue (migration 053's review switch, `chapter_rulebook.initial_status`); **denied** to its author alone. Nobody's link is born approved, an admin's included. Editing a link's URL re-opens a decided gate and clears `moderated_by`/`moderated_at` — an approval is a decision about a destination, not about a row — while the switch alone moves only a link still waiting. Applied by `chapter_rulebook.filter_visible` on **every** chapter read path, NOT by RLS: this API is service-role and bypasses RLS, and nothing reads chapters browser-direct. |
 | moderated_by / moderated_at | UUID FK / TIMESTAMPTZ | nullable → profiles; who decided and when. Both NULL while unlisted or pending — including on a link an admin wrote themselves, which since 053 is not self-approved on the way in — both NULL on the rows 052 backfilled out of `boardgamebuddy_games.rulebook_url`, and both **cleared** when a changed URL re-opens a decided gate: naming an admin who never looked at a link would be a lie the audit trail could not tell from a real decision. A decision deliberately does **not** touch `updated_at`, which every client cache keys on. |
 | created_at / updated_at | TIMESTAMPTZ | |
+| derived_from | UUID FK | nullable → guide_chapters, ON DELETE SET NULL. The chapter this one was saved as a copy of (Edit on someone else's chapter saves your own version). Counted by the `chapters_inspired` achievement metric |
 
 ### boardgamebuddy_user_chapters
 One row per (user, chapter): this viewer's opinion of that chapter, in either
@@ -771,9 +774,10 @@ The five section headings on the Achievements spoke. Seeded by migration 062;
 | display_order | INT | screen order |
 
 ### boardgamebuddy_achievements (lookup)
-The badge catalog — twenty-three rows, seeded by migration 062 (sixteen), 068
-(the three location badges), 019 (the two scoring-grid badges) and 034 (the two
-team / co-op victory badges). Kept as **data, not a Python dict**, per
+The badge catalog — twenty-four rows, seeded by migration 062 (sixteen), 068
+(the three location badges), 019 (the two scoring-grid badges), 034 (the two
+team / co-op victory badges) and `063_chapter_inspiration.sql` in the current
+generation (You're an Inspiration). Kept as **data, not a Python dict**, per
 `.claude/rules/database-supabase.md`: retuning a tier or rewording a badge is an
 UPDATE, not a deploy.
 | Column | Type | Notes |
@@ -783,7 +787,7 @@ UPDATE, not a deploy.
 | name | TEXT | "Table Regular", "Dynasty", "Cited Source" |
 | tagline | TEXT | one line of flavour, shown under the name |
 | requirement | TEXT | what you have to do, in plain language; shown on locked badges |
-| metric | TEXT | which computed metric drives it — CHECKed against the sixteen `bgb_sync_achievements` computes, so a badge can't name a metric nothing calculates |
+| metric | TEXT | which computed metric drives it — CHECKed against the seventeen `bgb_sync_achievements` computes, so a badge can't name a metric nothing calculates |
 | threshold | INT | the bar the metric has to clear |
 | icon | TEXT | **sprite slug**, never an emoji → `web/assets/sprites/achievements/bgb-ach-<icon>.svg` |
 | display_order | INT | screen order |
