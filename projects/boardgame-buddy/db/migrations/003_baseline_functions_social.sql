@@ -7,8 +7,8 @@
 -- then every later NNN_*.sql in this directory, in number order.
 --
 -- Generated on 2026-09-29 by .claude/skills/squash-migrations/squash.py from
--- the 58 migrations in archive/2026-09-28/ and 059_good_games_received.sql and
--- 060_comments_describe_current_schema.sql: they were replayed into an empty
+-- the 58 migrations in archive/2026-09-28/ and
+-- 061_comments_describe_current_schema.sql: they were replayed into an empty
 -- database and these files were read back out of its catalog. A database built
 -- from them diffs clean against that replay.
 --
@@ -20,7 +20,7 @@
 -- _shared/005_api_sessions.sql, _shared/006_drop_api_sessions.sql.
 --
 -- People and what they see: profiles, the feed, buddies and suggestions,
--- notifications, stats, achievements, account deletion, admin usage. 21
+-- notifications, stats, achievements, account deletion, admin usage. 20
 -- functions, callees first, so the file runs top to bottom. Bodies are
 -- pg_get_functiondef() output: the server's normalized rendering.
 --
@@ -725,27 +725,6 @@ AS $function$
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_feedback_list(viewer_id uuid, want_status text, want_type text, want_topic text, want_id uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.bgb_feedback_list(viewer_id uuid, want_status text, want_type text, want_topic text, want_id uuid) TO boardgamebuddy_role;
-
--- bgb_good_games_received(p_user uuid)
-CREATE OR REPLACE FUNCTION public.bgb_good_games_received(p_user uuid)
- RETURNS integer
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-  WITH mine AS (
-    SELECT p.id FROM boardgamebuddy_plays p WHERE p.user_id = p_user
-    UNION
-    SELECT pp.play_id FROM boardgamebuddy_play_players pp
-     WHERE pp.player_user_id = p_user
-  )
-  SELECT COUNT(DISTINCT r.reaction_group_id)::int
-  FROM mine m
-  JOIN boardgamebuddy_play_reactions r ON r.play_id = m.id
-  WHERE r.user_id <> p_user;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_good_games_received(p_user uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_good_games_received(p_user uuid) TO boardgamebuddy_role;
 
 -- bgb_mark_link_notifications_seen(p_viewer uuid, p_through timestamp with time zone)
 CREATE OR REPLACE FUNCTION public.bgb_mark_link_notifications_seen(p_viewer uuid, p_through timestamp with time zone DEFAULT NULL::timestamp with time zone)

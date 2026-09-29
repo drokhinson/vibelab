@@ -1,15 +1,15 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- boardgamebuddy 060 — database comments only where they clarify
+-- boardgamebuddy 061 — database comments only where they clarify
 --
 -- A COMMENT ON is kept only where an object's name leaves its use unclear: a
 -- misnamed column, a sentinel value, a JSON shape, a visibility rule, a column
--- nothing uses. 34 comments are set to that short text and the other 41
+-- nothing uses. 34 comments are set to that short text and the other 40
 -- are cleared. Then 19 functions are re-issued with CREATE OR REPLACE whose
 -- bodies differ from the live definitions in `--` comments only, which no
 -- longer cite migrations. No signature, body, grant or behaviour changes;
 -- CREATE OR REPLACE keeps each function's ACL.
 --
--- Run after 059_good_games_received.sql. Safe on production and on a fresh
+-- Safe on production and on a fresh
 -- database built from the baseline, which already holds this end state; a
 -- second run changes nothing.
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -91,7 +91,6 @@ COMMENT ON FUNCTION public.bgb_rank_deferrals_active(p_viewer uuid) IS NULL;
 COMMENT ON FUNCTION public.bgb_rank_game(p_user uuid, p_game uuid, p_category text, p_tier text, p_index integer) IS NULL;
 COMMENT ON FUNCTION public.bgb_unrank_game(p_user uuid, p_game uuid) IS NULL;
 COMMENT ON FUNCTION public.bgb_admin_usage_stats(p_exclude_admins boolean) IS NULL;
-COMMENT ON FUNCTION public.bgb_good_games_received(p_user uuid) IS NULL;
 
 -- ── Function bodies: comments only ──────────────────────────────────────────
 

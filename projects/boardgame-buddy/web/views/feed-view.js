@@ -730,22 +730,35 @@
 
     _renderSessionFoot(card) {
       const ids = this._reactableIds(card);
-      // Nothing to react to — an all-mine night — so no footer at all rather
-      // than a dead control.
-      if (!ids.length) return "";
       const { count, mine, faces } = this._sessionReactions(card);
-      const key = sessionKey(card.plays[0]);
-      const nav = `window.feedView._toggleReaction('${escapeAttr(jsStr(key))}')`;
-      // The label is only ever the words on an empty night; once there are any,
-      // it is the mark plus a bare number. That is the whole reason the phrase
-      // is spelled out rather than "GG" — the count never has to pluralise it.
-      const label = count ? String(count) : "Good game";
       const stack = faces.slice(0, 3).map((f) => window.BgbBadge.render({
         avatar: f.avatar || null,
         displayName: window.Buddy.nameFor(f.user_id, f.display_name) || "",
         size: "sm",
         extraClass: "play-session__face",
       })).join("");
+      // An all-mine night has nothing to react to, so the footer is the tally
+      // of good games it received: the same mark and number as the button,
+      // but not a control. With none received there is no footer at all.
+      if (!ids.length) {
+        if (!count) return "";
+        return `
+          <div class="play-session__foot">
+            <span class="play-session__gg play-session__gg--tally"
+                  aria-label="${count} good game${count === 1 ? "" : "s"}">
+              <i data-icon="handshake" class="w-4 h-4"></i><span>${count}</span>
+            </span>
+            ${faces.length ? `<span class="play-session__faces">${stack}</span>` : ""}
+            <span class="play-session__gg-who">${this._reactionSentence(count, mine, faces)}</span>
+          </div>
+        `;
+      }
+      const key = sessionKey(card.plays[0]);
+      const nav = `window.feedView._toggleReaction('${escapeAttr(jsStr(key))}')`;
+      // The label is only ever the words on an empty night; once there are any,
+      // it is the mark plus a bare number. That is the whole reason the phrase
+      // is spelled out rather than "GG" — the count never has to pluralise it.
+      const label = count ? String(count) : "Good game";
       return `
         <div class="play-session__foot">
           <button class="play-session__gg${mine ? " is-mine" : ""}" type="button"

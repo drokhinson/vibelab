@@ -19,7 +19,7 @@ from .models import (
     ProfileSearchResult,
     PublicProfileResponse,
 )
-from .services import account_deletion_service, profile_service, reaction_service
+from .services import account_deletion_service, profile_service
 
 
 @router.get(
@@ -217,7 +217,7 @@ async def get_profile_bundle(
     """
     sb = get_supabase()
     target = target_user_id or viewer.user_id
-    bundle_call = asyncio.to_thread(
+    result = await asyncio.to_thread(
         sb.rpc(
             "bgb_profile_bundle",
             {
@@ -228,18 +228,7 @@ async def get_profile_bundle(
             },
         ).execute
     )
-    if target != viewer.user_id:
-        return (await bundle_call).data or {}
-    # The Good games counter is Profile Self only, and rides beside the RPC
-    # rather than inside it: bgb_profile_bundle is 542 lines and adding a key
-    # means re-emitting all of them.
-    result, good_games = await asyncio.gather(
-        bundle_call,
-        asyncio.to_thread(reaction_service.received_count, sb, target),
-    )
-    payload: dict[str, Any] = dict(result.data or {})
-    payload["good_games_received"] = good_games
-    return payload
+    return result.data or {}
 
 
 @router.delete(

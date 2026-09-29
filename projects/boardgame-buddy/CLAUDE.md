@@ -27,11 +27,7 @@ projects/boardgame-buddy/
 │   ├── object_store.py     Cloudflare R2 uploads and deletes (see below)
 │   ├── identity_admin.py   deletes the Identity Platform credential (see below)
 │   └── tests/
-<<<<<<< HEAD
-├── db/migrations/          generated baseline 001–004, then 059+ (next: 061); _shared/, archive/
-=======
-├── db/migrations/          001–059, plus _shared/ (analytics + api_logs)
->>>>>>> origin/main
+├── db/migrations/          generated baseline 001–004, then 061+ (next: 062); _shared/, archive/
 ├── db/tests/               SQL the api/ suite cannot reach — run by hand, see below
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
 ├── tools/                  generators, operator scripts, and web/'s only tests —
