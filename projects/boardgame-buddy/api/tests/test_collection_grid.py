@@ -1,12 +1,10 @@
 """/collection/grid is one RPC, and the RPC is told everything it needs.
 
-The grid used to read a user's whole shelf on every page turn and filter, sort
-and slice it in Python. Migration 024 moved all four into
+Reading the shelf, filtering, sorting and slicing it all happen in
 `bgb_collection_page`, which leaves the handler with nothing to get wrong
 except the call itself — so that is what this pins:
 
-  1. ONE round trip. Two (or three, on the played shelf) is what the change
-     removed, and an added read would not fail anything else.
+  1. ONE round trip. An added read would not fail anything else.
   2. Every query parameter reaches the RPC under the parameter name the
      function declares. A dropped argument silently falls back to the
      function's DEFAULT — a lost `p_search` returns the unfiltered shelf, and a

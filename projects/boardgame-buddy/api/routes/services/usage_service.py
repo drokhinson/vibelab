@@ -49,12 +49,12 @@ def fetch_usage(
     """Return the whole Usage spoke payload in one call.
 
     `exclude_admins` leaves is_admin accounts out of every per-account figure
-    (055) — admins are the ones doing development work, and on a small user
+    — admins are the ones doing development work, and on a small user
     base their test traffic swamps everyone else's.
 
     Thin by design, exactly like `fetch_stats_detail`: the RPC composes every
     block server-side, so there is nothing to reshape here and no second
-    declaration of its shape to drift. `047_usage_stats.sql` is the contract;
+    declaration of its shape to drift. `bgb_admin_usage_stats` is the contract;
     the frontend carries it as a JSDoc `@typedef` in `web/domain/admin-usage.js`.
     """
     key = _KEY_NO_ADMINS if exclude_admins else _KEY

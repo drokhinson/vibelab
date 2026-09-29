@@ -160,8 +160,9 @@ async def check_bgg(
         await reject_if_push_running(sb, user.user_id)
         # Anchors the catalog-fill counters this check is about to create. The
         # rows land in the same queue an import uses, so without a separate
-        # stamp they would be counted into the last IMPORT's session window —
-        # see migration 006.
+        # stamp they would be counted into the last IMPORT's session window
+        # (bgb_bgg_sync_status rolls kind='catalog' rows up against
+        # profiles.bgg_last_check_started_at).
         started_at = datetime.now(timezone.utc)
         await asyncio.to_thread(_stamp_check_session, sb, user.user_id, started_at)
 

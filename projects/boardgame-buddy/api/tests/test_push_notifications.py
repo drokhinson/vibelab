@@ -206,7 +206,7 @@ def test_the_tier_ladder_is_cumulative_and_none_admits_nothing():
 
 
 def test_an_unset_tier_reads_as_off():
-    """A profile row written before migration 017 has no value at all.
+    """A profile row that never set a tier has no value at all.
 
     It must read as "off" rather than as anything else: push is opt-in, and a
     missing column silently meaning "yes" would notify every such account

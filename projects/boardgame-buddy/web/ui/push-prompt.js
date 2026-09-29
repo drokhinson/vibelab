@@ -1,7 +1,7 @@
 // ui/push-prompt.js — the one time the app suggests turning notifications on.
 //
 // Notifications are OFF by default and stay that way: `push_tier` defaults to
-// 'none' (migration 017) and nothing is ever sent to an account that has not
+// 'none' (boardgamebuddy_profiles) and nothing is ever sent to an account that has not
 // asked for it. This file is the other half of an opt-in that actually works —
 // because an opt-in nobody is told about is not a choice, it is a feature that
 // quietly does not exist. The column does not default on, for the reason this

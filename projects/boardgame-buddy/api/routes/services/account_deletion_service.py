@@ -22,11 +22,11 @@ only the deleter's.
    LOGGED a night would delete the night — and the seat of every other account
    at that table with it. They would lose a play, a win, a "played with" edge
    and achievement progress, for an act they had no part in. So such a play is
-   HANDED OVER instead (migration 051): it passes to the account that was
+   HANDED OVER instead: it passes to the account that was
    seated earliest, and only a play nobody else was at still goes. That is
    `bgb_delete_account_rows`, and the reasoning for the heir, the collisions
    that would otherwise abort the whole delete, and what the heir gains lives
-   in the migration.
+   in its SQL.
 
 ORDER IS THE DESIGN HERE, so read `delete_account` before changing it.
 """
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # The Supabase Storage bucket that holds play photos from before the R2
 # cutover. Those objects are STILL THERE: `Docs/RUNBOOK_R2_CUTOVER.md` §12 says
 # in bold not to delete the Supabase buckets because they are the rollback, and
-# `036` only rewrites the URLs — it copies nothing back and removes nothing. So
+# the cutover's SQL step only rewrites the URLs — it copies nothing back and removes nothing. So
 # a pre-cutover photo exists in both stores, and a deletion that cleared only
 # R2 would leave a public copy of the same image on supabase.co.
 #
@@ -148,7 +148,7 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
     They are equal only for the 23 migrated accounts; see `jwt_auth.py`.
 
     THE ORDER IS PHOTOS, ROWS, CREDENTIAL, and each boundary is a decision.
-    "Rows" is one RPC rather than one DELETE (migration 051), because the
+    "Rows" is one RPC rather than one DELETE, because the
     handover and the profile delete have to be the same transaction:
 
     * **Photos first, and a failure here aborts before anything is
@@ -189,7 +189,7 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
     supabase_count = await asyncio.to_thread(_purge_supabase_photos_sync, app_uid)
 
     sb = get_supabase()
-    # ONE RPC, ONE TRANSACTION (migration 051). It cannot be a direct
+    # ONE RPC, ONE TRANSACTION. It cannot be a direct
     # `.table("boardgamebuddy_profiles").delete()`: the handover
     # decides an heir, clears the photo links, backfills the names the FK is
     # about to null, and deletes the profile — and a failure between any two of

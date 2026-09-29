@@ -27,7 +27,7 @@ projects/boardgame-buddy/
 │   ├── object_store.py     Cloudflare R2 uploads and deletes (see below)
 │   ├── identity_admin.py   deletes the Identity Platform credential (see below)
 │   └── tests/
-├── db/migrations/          001–060, plus _shared/ (analytics + api_logs)
+├── db/migrations/          generated baseline 001–004, then 061+ (next: 062); _shared/, archive/
 ├── db/tests/               SQL the api/ suite cannot reach — run by hand, see below
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
 ├── tools/                  generators, operator scripts, and web/'s only tests —
@@ -100,7 +100,7 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    the `TO authenticated` RLS policies on the live-session tables are not
    evaluated at all, and `app_uid`, **the UUID this codebase knows the user
    by**. A Firebase uid is not a UUID and 35 columns here are, so without that
-   claim a new account 500s on every endpoint (`037_app_uid_claim.sql`).
+   claim a new account 500s on every endpoint (`bgb_app_uid()` reads it).
    Delete this directory and every account created afterwards loses live
    scoring, both Realtime channels, and — once the transitional `sub`
    fallback goes — the ability to load anything at all. Silently, because the
@@ -131,11 +131,11 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    deletion answers 503 and destroys nothing rather than half-succeeding, and
    local dev cannot delete accounts without `GCP_SERVICE_ACCOUNT_JSON`.
 16. **A play can outlive the account that logged it, and `plays.user_id` is
-   therefore not authorship.** Deleting an account used to CASCADE its plays
-   away, taking every other player's seat at those tables with them — other
+   therefore not authorship.** Cascading an account's plays away on deletion
+   would take every other player's seat at those tables with them — other
    people's stats, wins and "played with" edges, destroyed by somebody else's
-   deletion. Since `051` such a play is HANDED OVER to the account seated
-   earliest, and `inherited_at` / `inherited_from_name` mark it. So the heir
+   deletion. Instead such a play is HANDED OVER to the account seated earliest,
+   and `inherited_at` / `inherited_from_name` mark it. So the heir
    holds edit and delete rights over a record they did not write, and two
    logger-only achievement metrics count notes they did not type. Check
    `inherited_at` before treating `user_id` as "who wrote this".
@@ -145,15 +145,15 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    leave plays owned by other people while the account they were taken from is
    still signed in. `tests/test_account_deletion.py` asserts the service never
    reaches for `.table()` here. The SQL itself is covered by
-   `db/tests/051_account_deletion_handover.sql`, which is rollback-wrapped and
+   `db/tests/account_deletion_handover.sql`, which is rollback-wrapped and
    run by hand — there is no Postgres in the api/ suite.
 18. **Adding a `NotificationKind` member is a DEPLOY-ORDER constraint.**
    `Notification.kind` is typed by that enum, so a row carrying a value the
    running backend does not know fails `model_validate` and 500s
    `/notifications` AND the `/bootstrap` gather. Ship the API first, then run
-   the migration that starts emitting it. `051` is the live example:
-   `play_inherited` cannot appear until an account is deleted, but the order
-   still matters.
+   the migration that starts emitting it. `play_inherited` is the case to
+   remember: it cannot appear until an account is deleted, so a wrong order
+   would only surface then.
 19. **`SupabaseUser.sub` is the app_uid; the provider's uid is
    `provider_uid`.** `jwt_auth.py` rewrites `sub` from the `app_uid` claim
    (see 11), so the field named `sub` is NOT the token's subject. Only
@@ -164,14 +164,12 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    catches it.
 
 20. **`boardgamebuddy_games.rulebook_url` is read by nothing and still stays.**
-   It was the one admin-curated rulebook link a game could have. Since `052` a
-   rulebook link is a reference-guide chapter (`layout='rulebook_link'`), that
-   migration backfilled every value into an approved chapter, and the endpoint
-   that wrote the column is gone. The column survives only because ~forty RPCs
-   and bundles select it, and dropping it would be a large risky diff to delete
-   something that costs nothing. Treat it as the pre-052 seed the backfill drew
-   from — do not wire anything new to it, and do not "restore" a rulebook by
-   writing it.
+   A rulebook link is a reference-guide chapter (`layout='rulebook_link'`);
+   every value this column held is also an approved chapter, and nothing
+   writes the column. It survives only because ~forty RPCs and bundles select
+   it, and dropping it would be a large risky diff to delete something that
+   costs nothing. Do not wire anything new to it, and do not "restore" a
+   rulebook by writing it.
 21. **A rulebook link is the one chapter with a gate, and the gate is not RLS.**
    Every other chapter is text this app renders; this one sends a reader to
    somebody else's server, so `moderation_status` decides who may see it —
@@ -183,15 +181,15 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    no RLS policies for it, for the reason in 11 — this API is service-role and
    nothing reads chapters browser-direct. The SQL half (the CHECK that a NULL
    would otherwise pass, the one-link-per-author index, the backfill) is covered
-   by `db/tests/052_rulebook_links.sql` and `db/tests/053_rulebook_review_optional.sql`.
+   by `db/tests/rulebook_links.sql` and `db/tests/rulebook_review_optional.sql`.
 22. **`unlisted` and `pending` reach identical readers — the difference is the
-   QUEUE, not visibility.** Migration 053 split "save this link" from "ask an
-   admin to publish it": the save form carries a review switch, on by default,
+   QUEUE, not visibility.** "Save this link" and "ask an admin to publish it"
+   are separate: the save form carries a review switch, on by default,
    and off means `unlisted` — live for the author's buddies, in nobody's queue,
    counted by no badge. Do not "fix" a read path that treats the two the same;
    the only callers allowed to tell them apart are the admin queue, the
    review-counts badge, and the author's own copy of the row.
-   Since 053 an **admin's own link is not born approved** either — every author
+   An **admin's own link is not born approved** either — every author
    goes through the same gate and an admin approves their own from the queue.
    An admin can *deny* an unlisted link (a malicious link spreading through a
    buddy graph is still theirs to kill) but **cannot approve one**: nobody asked

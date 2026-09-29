@@ -1,5 +1,6 @@
-"""Game ranking: where the viewer's games sit, and moving them (migration 056),
-plus parking an unranked game until its next play (migration 058).
+"""Game ranking: where the viewer's games sit, and moving them
+(boardgamebuddy_game_ranks), plus parking an unranked game until its next play
+(boardgamebuddy_rank_deferrals).
 
 Rows hold (category, tier, position-within-tier). Everything the player sees is
 derived here: "#3 Family" is the game's place in its category with the tiers

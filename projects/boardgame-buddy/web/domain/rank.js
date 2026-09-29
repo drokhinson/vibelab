@@ -1,4 +1,4 @@
-// domain/rank.js — the viewer's game ranking (migration 056).
+// domain/rank.js — the viewer's game ranking.
 //
 // A game is ranked against the other games in ITS category, which the server
 // decides from BoardGameGeek's family lists — the client never picks one. Three
@@ -7,7 +7,7 @@
 //   summary()  every ranked game's place and score, held whole (tens of rows). The
 //              game page pill and the Collection top-5 chips read it.
 //   queue()    played games with no rank yet, A to Z, then the ones parked
-//              with "Rank after next play" (`deferred`, migration 058), A to Z.
+//              with "Rank after next play" (`deferred`), A to Z.
 //              countable() is the part that counts toward "N unranked".
 //   context()  one game's category, current rank, and the list it is ranked
 //              against. localContext() builds the same thing from the cached

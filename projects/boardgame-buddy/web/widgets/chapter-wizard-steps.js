@@ -101,10 +101,9 @@
   // scorepad reads a half-right one as a broken feature, while an author who
   // expects a rough cut reads the same rows as ten seconds saved.
   //
-  // `modeControl` is the add_on / replace question for an EXPANSION's grid
-  // (migration 032), rendered by the editor's own
-  // ScoringTemplateEditor.renderMode and handed in as a string so this stays a
-  // pure function. It appears HERE as well as in the editor on step 3 because
+  // `modeControl` is the add_on / replace question for an EXPANSION's grid,
+  // rendered by the editor's own ScoringTemplateEditor.renderMode and
+  // handed in as a string so this stays a pure function. It appears HERE as well as in the editor on step 3 because
   // it is an INPUT to the draft, not decoration: an add-on wants the two rows
   // the box brings and a replacement wants a whole reprinted sheet, so a
   // drafter that has not been told which writes the wrong document. One

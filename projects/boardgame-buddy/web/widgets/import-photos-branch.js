@@ -356,8 +356,8 @@
       // Seated identity, not seated SPELLING. An account picked off the buddy
       // list carries its display name and the same account found through
       // "search all of BoardgameBuddy" can carry another, so a name-only set
-      // would let one person be seated twice in one play — which migration 023's
-      // unique index refuses outright, and which nobody should be able to
+      // would let one person be seated twice in one play — which
+      // uq_bgb_play_players_play_user refuses outright, and which nobody should be able to
       // ask for in the first place.
       const alreadySeated = new Set(shot.players.map((p) => p.name));
       const seatedAccounts = new Set(shot.players.map((p) => p.userId).filter(Boolean));

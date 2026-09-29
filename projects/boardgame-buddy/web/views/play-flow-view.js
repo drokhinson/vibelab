@@ -77,7 +77,7 @@
       super("play-flow");
       this._ps = null;
       this._buddies = [];
-      // Live buddy requests either way (migration 049) — seatable people the
+      // Live buddy requests either way — seatable people the
       // picker offers alongside the accepted buddies. See _buddyCandidates.
       this._pending = [];
       this._ghosts = [];
@@ -108,8 +108,8 @@
       this._expansionsOpen = false;
       this._expansionQuery = "";
       this._guideWidget = null;
-      // Scoring-grid chapters in the host's guide for this game (migration
-      // 018), handed over by the reference-guide scroll. Never fetched here —
+      // Scoring-grid chapters in the host's guide for this game, handed over
+      // by the reference-guide scroll. Never fetched here —
       // see the guide-chapters-loaded listener in onMount.
       this._templates = [];
       // Which game _templates was loaded for. See onMount.
@@ -449,8 +449,8 @@
       if (this._liveOff) { try { this._liveOff(); } catch (_) {} }
       this._liveOff = null;
       // Fire-and-forget: supabase-js removeChannel awaits an unsubscribe ack
-      // that never arrives if the socket never reached READY (e.g. when the
-      // migration hasn't been applied yet or RLS denies SELECT). Awaiting it
+      // that never arrives if the socket never reached READY (e.g. when RLS
+      // denies SELECT). Awaiting it
       // would freeze the bottom-nav navigation.
       if (this._liveScores) {
         const live = this._liveScores;
@@ -1083,7 +1083,7 @@
           // Account players are matched on user_id first. Names are the only
           // handle a guest has, but for someone with an account they're a
           // weaker key than the id we already hold — and participant_id is
-          // what live scoring is mirrored under (migration 053), so a
+          // what live scoring is mirrored under, so a
           // row that fails to acquire one has its column stop streaming to
           // spectators, not just lose its DELETE affordance.
           const byUserId = new Map(
@@ -1335,14 +1335,15 @@
      * The host's own grid bands its columns into sides
      * (widgets/round-score-grid.js reads `p.team` off the roster it is
      * handed), but every spectator's mirror is built from the lobby's
-     * participants (migration 050) — kept only in this draft, the tags would
+     * participants — kept only in this draft, the tags would
      * leave a team night looking like six identical columns to everyone but
      * the host until the play was saved.
      *
      * Debounced for the same reason the order write is, and best-effort in the
      * same way: losing it costs the spectators a tint, not the host their play.
-     * Unlike the order write it is NOT frozen at the gather→play edge — see
-     * migration 050's header. The case that needs it: the tags are typed on the
+     * Unlike the order write it is NOT frozen at the gather→play edge:
+     * bgb_set_session_teams skips bgb_session_gate's require_gather arm,
+     * because a tag renumbers no column. The case that needs it: the tags are typed on the
      * Gather roster, so naming a side after the first round means rolling the
      * cascade back (_phaseBack), and that phase PATCH is a round trip this
      * debounced write can beat. Gather-gated, it would 409 and be swallowed.
@@ -2156,9 +2157,7 @@
              role="group" aria-label="Reference guide"${off(PLAY_PAGE_GUIDE)}>
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
-          <!-- The rulebook row used to sit here, fed by the session's game
-               snapshot. Migration 052 made it a chapter, so the scroll below
-               draws it. -->
+          <!-- The rulebook is a chapter, so the scroll below draws it. -->
           <div id="play-flow-guide-mount"></div>
         </section>
         </div>
@@ -2745,7 +2744,7 @@
     }
 
     /**
-     * The Settle Up "where" slot (migration 065).
+     * The Settle Up "where" slot.
      *
      * The value is already filled in — domain/geo.js resolved it from the
      * device's timezone when the draft was born — so this is a row to glance
@@ -2977,7 +2976,7 @@
       // Republish the grid under any id the flush above just adopted. It has
       // to happen HERE and not where the id lands: the flush runs while the
       // server is still in 'gather', and the scores table's RLS write policy
-      // only accepts the host while phase='play' (migration 053), so an upsert
+      // only accepts the host while phase='play', so an upsert
       // issued any earlier is refused. Without this a column whose roster row
       // arrived at the last moment would start at whatever round the host next
       // types in, and every round before it would read blank on every
@@ -3005,8 +3004,8 @@
      * May a live-score write go out right now?
      *
      * The scores table is the one table this client writes directly, and its
-     * RLS policy (migration 029, splitting 053's) takes the host only while
-     * the SESSION ROW says phase='play'. Everything else about the phase here
+     * RLS write policies (bgb_session_scores_insert / _update / _delete)
+     * take the host only while the SESSION ROW says phase='play'. Everything else about the phase here
      * is local and optimistic: _advancePhase flips _ps.phase, repaints, and
      * lets a background PATCH catch the server up. So there are three windows
      * where the host's browser holds a grid the database will refuse, and
@@ -3019,7 +3018,7 @@
      *   2. Settle, and anything after it. A queued keystroke, a debounced
      *      write, or a syncGrid from a superseded transition can land after
      *      Wrap up; the policy's phase test is what stops a finalized play
-     *      being rewritten (archive/053), so it refuses them, correctly.
+     *      being rewritten, so it refuses them, correctly.
      *   3. The PATCH round trip itself, in either direction.
      *
      * None of the three is a session that cannot save. Each one is a write
@@ -3281,8 +3280,8 @@
       // account take two seats: the buddy list spells someone by their display
       // name and "search all of BoardgameBuddy" by whatever the search
       // matched, and a seat renamed from the roster (_renameSeat) keeps its
-      // user_id under a name the picker no longer recognises. Migration 023's
-      // unique index refuses a play that seats the same account twice, so a
+      // user_id under a name the picker no longer recognises.
+      // uq_bgb_play_players_play_user refuses a play that seats the same account twice, so a
       // double seat would be a rejected save rather than an odd scoreboard.
       const exists = this._ps.players.some(
         (p) => (user_id && p.user_id === user_id)
@@ -3500,7 +3499,7 @@
       }
       this._autoSelectWinners();
       // Publish the sides so every spectator's mirror bands its grid the way
-      // this one does (migration 050). Debounced — see _pushTeamsToLobby.
+      // this one does. Debounced — see _pushTeamsToLobby.
       this._pushTeamsToLobby();
       // Only the trophy row changed, but it is rendered by the cascade — and
       // only when something actually moved, so typing a tag that settles
@@ -3525,7 +3524,7 @@
       return this._gridColumns().map((c) => c.indexes.join("+")).join("|");
     }
 
-    // ── Scoring templates (migration 018) ───────────────────────────────────
+    // ── Scoring templates ───────────────────────────────────────────────────
 
     /** The scoring-grid chapters this game's guide offers, newest list wins. */
     _onChaptersLoaded(chapters) {
@@ -3573,7 +3572,7 @@
      * Forget everything the scoring bar knows, because the game changed.
      *
      * A scorepad belongs to the game it was written for — the snapshot's rows,
-     * the deselected state, and (migration 032) whether the host picked the
+     * the deselected state, and whether the host picked the
      * scorepad by hand. Carrying any of the three onto a different game
      * puts Everdell's fourteen rows on a game of Wingspan, and puts them there
      * in a state that says the host asked for them.
@@ -3735,7 +3734,7 @@
     }
 
     /**
-     * Turn one offered grid down for good (migration 033), from the table.
+     * Turn one offered grid down for good, from the table.
      *
      * The sheet has already dropped the card and stays open, so this is only
      * the write plus the local bookkeeping behind it. Distinct from
@@ -3954,7 +3953,7 @@
       if (!next) return;
       if (this._sameTemplateRows(cur.rows, next.rows)) {
         // Same table, different name or seams — a renamed expansion, or a
-        // pre-032 snapshot picking up its parts list. Write it through without
+        // snapshot without a parts list picking one up. Write it through without
         // touching a single cell.
         if (cur.title !== next.title) {
           this._writeTemplate(next, { rebuild: false });
@@ -5034,8 +5033,8 @@
           avatar: b.other_avatar || null,
         });
       }
-      // Then anyone with a buddy request waiting, either direction (migration
-      // 049). The accept is a notification on somebody else's phone and the
+      // Then anyone with a buddy request waiting, either direction.
+      // The accept is a notification on somebody else's phone and the
       // play is happening now, so "we are not buddies YET" is not a reason to
       // make the host add them as a guest — which would write a ghost seat
       // beside the account that is about to hold the rest of their history.
@@ -5199,7 +5198,7 @@
       }
       // The same bar the Gather step sets, re-checked here because the seats
       // can be removed after it: a play with nobody at it counts towards
-      // nobody's record, and bgb_log_play refuses it (migration 023). Said
+      // nobody's record, and bgb_log_play refuses it. Said
       // on this screen, where the fix is, rather than as a failed write the
       // outbox parks in `failed` a moment later.
       if (this._ps.players.length === 0) {
@@ -5223,7 +5222,7 @@
       // One key per finished play, minted here and carried by every attempt —
       // the live finalize/create AND any later outbox flush. Without it, a POST
       // that landed but lost its response would be re-sent by the queue as a
-      // second play. bgb_log_play (migration 048) short-circuits a key it has
+      // second play. bgb_log_play short-circuits a key it has
       // already stored, and bgb_finalize_session calls it, so both write paths
       // inherit the guard.
       payload.client_key = window.Outbox.newClientKey();

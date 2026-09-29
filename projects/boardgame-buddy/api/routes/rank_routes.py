@@ -1,4 +1,4 @@
-"""Rank your games (migration 056).
+"""Rank your games.
 
 The game page's rank pill, the Collection card's count and the rank queue all
 read from here. A category is never chosen by the client: it is decided in

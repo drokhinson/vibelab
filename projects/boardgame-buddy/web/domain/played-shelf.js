@@ -3,8 +3,8 @@
 // viewer has played, from any shelf, most plays first. Pure: no fetch, no DOM.
 //
 // It is built from the three flat shelves the Collection already holds. Each
-// shelf row carries `play_count` and `played_before` (the played mark,
-// migration 057), and a game is on exactly one of them (a played-but-unowned
+// shelf row carries `play_count` and `played_before` (the played mark),
+// and a game is on exactly one of them (a played-but-unowned
 // game is on Played only; a sold one stays on Owned), so the union needs no
 // request of its own. A marked game with no logged play counts as played, as
 // it does everywhere else, and sorts after every logged one.

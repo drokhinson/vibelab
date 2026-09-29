@@ -1,6 +1,6 @@
 """A rulebook link is a chapter that is gated, and the gate is per reader.
 
-A game's rulebook is a `layout='rulebook_link'` chapter (migration 052), not an
+A game's rulebook is a `layout='rulebook_link'` chapter, not an
 admin-curated column on the games row. That buys open authoring, and open
 authoring on an OUTBOUND LINK is only safe with a gate: `moderation_status` on
 the row, and one function deciding who may see a row in which state.
@@ -17,7 +17,7 @@ because every other read path in the API just calls
   * the BUDDY LOOKUP IS NOT PAID FOR unless a row actually needs it. The chapter
     pool is fetched on every guide mount, and most guides hold no rulebook link
     at all.
-  * ASKING FOR REVIEW IS THE AUTHOR'S DECISION (migration 053), and it is the
+  * ASKING FOR REVIEW IS THE AUTHOR'S DECISION, and it is the
     only thing that separates `unlisted` from `pending` — the two reach exactly
     the same readers, and only one of them is queue work. NOBODY'S LINK IS BORN
     APPROVED, an admin's included.
@@ -168,7 +168,7 @@ def _edges_sb(pairs):
     # ...and nobody else, signed in or not.
     (RulebookStatus.PENDING, STRANGER, set(), False),
     (RulebookStatus.PENDING, None, set(), False),
-    # Unlisted reaches EXACTLY the same four answers (migration 053). Not
+    # Unlisted reaches EXACTLY the same four answers. Not
     # sharing a link with the world is a statement about the queue, not about
     # the buddies it was added for — and a row of its own here because the
     # temptation when adding a "private" state is to close it further than
@@ -354,7 +354,7 @@ def test_the_layout_and_the_type_must_agree_in_both_directions():
 def test_the_gate_a_new_link_opens_at_is_the_authors_answer():
     """Two states, and the author picks between them with the save form's
     review switch. Neither is approved: an admin approves their own link from
-    the queue like anybody else's (migration 053), which is one tap and leaves
+    the queue like anybody else's, which is one tap and leaves
     an audit trail a self-approval would not."""
     assert R.initial_status(True) is RulebookStatus.PENDING
     assert R.initial_status(False) is RulebookStatus.UNLISTED
@@ -429,7 +429,7 @@ def test_a_submitted_link_is_stored_pending_with_a_derived_title_and_mirror():
 
 
 def test_a_link_nobody_was_asked_about_is_stored_unlisted():
-    """The switch off (migration 053): live for the author and their buddies,
+    """The switch off: live for the author and their buddies,
     and in nobody's queue."""
     sb = _create_sb()
     C._create_chapter_sync(sb, "game-1", _body(request_review=False), _user())
@@ -439,8 +439,8 @@ def test_a_link_nobody_was_asked_about_is_stored_unlisted():
 
 
 def test_a_client_that_sends_no_answer_submits():
-    """A pre-053 client's Save meant "submit this", and it goes on meaning
-    that — the field defaults to True rather than to the quieter state."""
+    """A client without the review switch means "submit this" by Save, so
+    the field defaults to True rather than to the quieter state."""
     body = ChapterCreate(
         chapter_type="rulebook",
         layout=ChapterLayout.RULEBOOK_LINK,
@@ -564,7 +564,7 @@ def test_saving_the_same_url_again_leaves_an_approval_alone():
 
 
 def test_an_admin_editing_a_link_re_opens_the_gate_like_anybody_else():
-    """An admin's edit is not its own approval (migration 053). Same reasoning as
+    """An admin's edit is not its own approval. Same reasoning as
     the create path — the queue is one tap away and a self-approval leaves an
     audit trail that cannot be told apart from a real decision."""
     sb = _update_sb("https://example.com/old.pdf")
@@ -582,8 +582,7 @@ def test_an_admin_editing_a_link_re_opens_the_gate_like_anybody_else():
 def test_re_opening_the_gate_clears_the_last_decisions_author():
     """`moderated_by` names who decided THIS row. Leaving the last admin on a
     link they have not seen is a lie the audit trail cannot tell apart from a
-    real decision — the same argument migration 052 makes for the backfilled
-    rows carrying NULL."""
+    real decision."""
     sb = _update_sb("https://example.com/old.pdf", status=RulebookStatus.APPROVED)
     C._update_chapter_sync(
         sb, "chapter-1",
@@ -595,7 +594,7 @@ def test_re_opening_the_gate_clears_the_last_decisions_author():
     assert row["moderated_at"] is None
 
 
-# ── The review switch on the edit path (migration 053) ───────────────────────
+# ── The review switch on the edit path ───────────────────────────────────────
 
 def test_withdrawing_a_submission_unlists_it_without_touching_the_url():
     """The author turning the switch off on a link still in the queue: it
@@ -672,7 +671,7 @@ def test_a_changed_url_re_opens_the_gate_at_whichever_side_the_switch_is_on():
 
 def test_a_client_that_sends_no_switch_leaves_the_gate_where_it_was():
     """`request_review` is tri-state on the edit shape: None means "not
-    supplied", so a pre-053 client — or any caller editing something else —
+    supplied", so a client without the switch — or any caller editing something else —
     cannot withdraw a submission by omission."""
     sb = _update_sb("https://example.com/rules.pdf", status=RulebookStatus.UNLISTED)
     C._update_chapter_sync(
@@ -731,7 +730,7 @@ def test_a_decision_does_not_touch_the_chapters_edit_clock():
 
 def test_an_unlisted_link_cannot_be_approved_by_an_admin_who_found_it():
     """An approval is the answer to a question somebody asked. An unlisted link
-    is one its author deliberately did not submit (migration 053), and
+    is one its author deliberately did not submit, and
     publishing it on an admin's initiative would make the review switch a
     suggestion rather than a choice."""
     sb = _moderate_sb(status=RulebookStatus.UNLISTED)

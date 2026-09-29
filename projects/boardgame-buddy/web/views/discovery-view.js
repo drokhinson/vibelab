@@ -324,7 +324,7 @@
 
     /**
      * A trending row as a rail entry. The meta line carries the rank and,
-     * when the snapshot knows it (migration 039), the move since the run a
+     * when the snapshot knows it, the move since the run a
      * day earlier: "#3 on BGG · ▲2", "· ▼1", "· NEW". Text on the existing
      * meta line rather than a new chip — the tile is 112px wide.
      */

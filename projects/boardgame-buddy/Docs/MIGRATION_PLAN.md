@@ -1205,7 +1205,7 @@ rclone copy supabase:boardgamebuddy-games r2:bgb-games --progress
 ```
 
 Then rewrite the stored URLs — three columns, one migration, which is written
-and lives at `db/migrations/036_r2_photo_urls.sql`. **Edit the four prefixes at
+and lives at `db/migrations/archive/2026-09-28/036_r2_photo_urls.sql`. **Edit the four prefixes at
 the top before running it**; it refuses to run while a placeholder is still in
 place, and the refusal survives a global find/replace (the guard looks for a
 double underscore, not for the placeholder text, precisely so editing it the

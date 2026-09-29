@@ -66,14 +66,14 @@
       // must not be left unsure whether it happened.
       this._deleting = false;
 
-      // Past imports (migration 007), for the Past imports row's count line.
+      // Past imports, for the Past imports row's count line.
       // THREE states, not two: null is "not loaded, or the fetch failed", and
       // reads as generic copy with no number in it; [] is a confirmed zero and
       // says so. Collapsing them is how a row tells somebody with twelve
       // imports that they have never imported anything.
       this._imports = null;
 
-      // Push notifications (migration 017). null = not read yet, so the card
+      // Push notifications. null = not read yet, so the card
       // renders "Checking…" rather than flashing "your browser can't do this"
       // at somebody whose browser can — state() has to ask the service worker
       // and the server, so it cannot answer synchronously on the first paint.
@@ -325,7 +325,7 @@
       this.render();
     }
 
-    // ── Notifications (migration 017) ─────────────────────────────────────────
+    // ── Notifications ─────────────────────────────────────────────────────────
     // The same three-way segmented control as Theme above, and for the same
     // reason: the choice is a LADDER (off → the things that need you →
     // everything), and a two-position switch cannot express a middle. Two
@@ -503,7 +503,7 @@
           title: "Chapter reports",
           sub: "Moderate community-reported reference-guide chapters.",
         },
-        // The rulebook queue (migration 052). Its own row rather than a tab on
+        // The rulebook queue. Its own row rather than a tab on
         // Chapter reports above: a report is a reader objecting to prose after
         // publication, a rulebook link is an outbound destination reviewed on
         // the way in, and one row could only carry one badge for the two.

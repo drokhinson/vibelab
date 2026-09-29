@@ -64,7 +64,7 @@ async def update_profile(
     and can't be changed here. Passing avatar=null clears the customization and
     reverts to the BGB default rendered client-side.
 
-    push_tier (migration 017) rides this endpoint rather than a /push route of
+    push_tier rides this endpoint rather than a /push route of
     its own because it is an account preference like the other two, and this is
     already the one path the FE knows how to save a profile through and
     reconcile from — window.store.user updates and every subscriber re-renders,
@@ -209,7 +209,7 @@ async def get_profile_bundle(
     currently destructures from /users/{id}/stats + /collection/grid (×3) +
     /plays + /collection + /buddies + /buddies/requests.
 
-    Visibility (migration 064): a viewer who is neither the target nor an
+    Visibility: a viewer who is neither the target nor an
     accepted buddy gets `recent_plays`, `together` and `top_games` as null.
     They still get the collection shelves and the stats block — the four
     headline numbers a public profile shows — plus

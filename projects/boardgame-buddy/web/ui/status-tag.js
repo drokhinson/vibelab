@@ -61,7 +61,7 @@
   // distinction.
   const CHOICES = ["owned", "prev_owned", "wishlist"];
   // Below the shelves, one switch for the played mark: "played it, somewhere I
-  // didn't log it" (migration 057). It is not a shelf — it rides on any of
+  // didn't log it" (collections.played_before_at). It is not a shelf — it rides on any of
   // them, and it is the same mark the Stats Shelf of Shame flips, so either
   // place shows the other's change. On a game on no shelf it is what puts the
   // game on the Played shelf, with status "played".

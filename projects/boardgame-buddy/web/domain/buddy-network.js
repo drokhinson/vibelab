@@ -1,8 +1,8 @@
 // domain/buddy-network.js — the second hop, indexed for instant promotion.
 //
 // GET /buddies/suggested/onboarding ships a `network` array beside its
-// suggestions: for each candidate it offers, who that person knows (migration
-// 072). This turns that into a lookup the Add-buddies grid can consult
+// suggestions: for each candidate it offers, who that person knows.
+// This turns that into a lookup the Add-buddies grid can consult
 // synchronously, so ticking Priya puts the people Priya knows on screen in the
 // same frame — no request, no spinner, nothing to wait for.
 //
@@ -85,7 +85,7 @@
   const BuddyNetwork = {
     /**
      * Build an index from an onboarding-suggestions response. Tolerates a
-     * response with no `network` key (a backend without migration 072) and returns
+     * response with no `network` key (an older backend) and returns
      * an index that simply never promotes anything — first-run must survive a
      * backend that has not caught up.
      *

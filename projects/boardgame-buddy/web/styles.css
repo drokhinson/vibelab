@@ -900,7 +900,7 @@ html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
    a band of padding between the roll and the body. */
 .scroll-paper--nosearch:not(.scroll-paper--rolled) .scroll-panel__peek { display: none; }
 
-/* "Custom scoring grids are available — tap to add" (migration 018).
+/* "Custom scoring grids are available — tap to add".
    Two placements, one renderer: first in the always-visible peek (so it shows
    with the scroll ROLLED UP, which is how the Play screen opens it) and again
    inside the empty state, which renders no peek at all and is exactly the case
@@ -960,7 +960,7 @@ html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
    dismiss — so it pays back the room that X was holding on the right. */
 .scroll-panel__notice--create { padding-right: var(--s-3); }
 
-/* ── The Rulebook section (migration 051) ─────────────────────────────────────
+/* ── The Rulebook section ─────────────────────────────────────────────────────
    The link to the actual rules, first in the scroll, and the one section that
    renders when it has nothing to show — "No rulebook link available" is
    information, where a missing section is indistinguishable from one that
@@ -2030,14 +2030,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* The rulebook URL reuses the title field's box (one text input on this screen,
    one look) but not its display face: a URL is read character by character to
    decide whether to trust it, and a display serif at 1.05rem is the wrong tool
-   for telling boardgamegeek.com from boardgarnegeek.com. Migration 051. */
+   for telling boardgamegeek.com from boardgarnegeek.com. */
 .chapter-edit__titlefield--url {
   font-family: var(--font-sans);
   font-weight: 500;
   font-size: 0.95rem;
 }
 .chapter-edit__titlefield::placeholder { color: oklch(var(--bc) / 0.4); }
-/* The review switch's row (migration 053). Sits between the URL field and the
+/* The review switch's row. Sits between the URL field and the
    sentence that explains it, and does not shrink: it is inside the same flex
    column as the type scroller and the title row, which is the one that squeezes
    its children (see .chapter-edit__typescroll's note below). */
@@ -2445,7 +2445,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   outline-offset: 2px;
 }
 
-/* ── Expansion grid mode (migration 032) ─────────────────────────────────────
+/* ── Expansion grid mode ─────────────────────────────────────────────────────
    The one question an EXPANSION's scoring grid asks: do these rows join the
    base game's score sheet, or replace it? Two stacked cards rather than a
    segmented pill — each option needs a sentence to be answerable, and a pill
@@ -2490,7 +2490,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   outline-offset: 2px;
 }
 
-/* ── Scoring-grid rows (migration 018) ───────────────────────────────────────
+/* ── Scoring-grid rows ───────────────────────────────────────────────────────
    The body of a layout='scoring_grid' chapter, in place of the markdown
    toolbar + textarea. One card per row: the label, its position controls, and
    a swatch strip.
@@ -3262,7 +3262,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .admin-reports__actions { display: inline-flex; gap: 0.4rem; }
 
-/* ── The rulebook queue (migration 051) ──────────────────────────────────────
+/* ── The rulebook queue ──────────────────────────────────────────────────────
    views/admin-rulebooks-view.js reuses the .admin-reports__* family above —
    same spoke chrome, same row, same footer — and adds only the two things a
    URL decision needs that a prose report does not. A second row family would
@@ -6427,7 +6427,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border-radius: 0.45rem;
 }
 .play-detail__player.is-winner { border-color: var(--accent); }
-/* One side of a team play (migration 048). The 3px rule down the left edge is
+/* One side of a team play. The 3px rule down the left edge is
    what identifies the band — the wash behind the label is deliberately too
    subtle to carry it on its own — and both mix into the surface's own ground
    rather than a literal, so the section works unchanged wherever the popup is
@@ -6554,8 +6554,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      as --accent, 8.7:1 as the surface's accent ink. */
   color: var(--accent-ink);
 }
-/* The side a seat is on, in the spectator's read-only lobby list (migration
-   050). The same fact the scoring grid's column headers carry, on the screen
+/* The side a seat is on, in the spectator's read-only lobby list.
+   The same fact the scoring grid's column headers carry, on the screen
    the spectator is looking at BEFORE the grid exists — the host types the
    sides during Gather, and a spectator who only learns them when the first
    round is scored has spent the whole lobby not knowing who is with whom.
@@ -8229,7 +8229,7 @@ html.bgb-ptr-armed body {
   background: color-mix(in srgb, var(--rust) 16%, transparent);
   color: var(--rust);
 }
-/* Box art in the mark once it is known (BGG search thumbnails, migration 054).
+/* Box art in the mark once it is known (BGG search thumbnails).
    The soft ground stays behind it, so a letterboxed cover or a broken image
    (the <img> removes itself) still reads as the same square. */
 .bgg-import-row__mark--art { position: relative; }
@@ -8990,7 +8990,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .expansion-list__row .status-tag { margin-left: auto; }
 
 /* ── Prev. owned: the sold/gifted/donated tile ────────────────────────────
-   A prev_owned game (migration 069) stays on the Owned shelf in its
+   A prev_owned game stays on the Owned shelf in its
    alphabetical place, so the tile itself has to carry the state — the corner
    chip cannot, by design: it is one neutral glyph whatever the status (see
    the .status-tag--corner block above). Two marks, because either alone is
@@ -9387,7 +9387,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   max-width: 5.5rem;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* A column belonging to a side (migration 048). Background plus a rule on the
+/* A column belonging to a side. Background plus a rule on the
    BOTTOM edge, never the left: the first player column abuts
    .scoring-head-corner, which is sticky-left and opaque, so a left rule would
    read as that corner's border rather than as this column's. The bottom edge is
@@ -9609,7 +9609,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .score-keypad__round[hidden] { display: none; }
 
 /* The strip above the grid: which scorepad the table is built on, and which
-   expansions are appending rows to it (migrations 018 / 032). Absent entirely
+   expansions are appending rows to it. Absent entirely
    when the game has no grid adopted, so the scoring card is untouched for every
    game that doesn't use one. Paper tokens, because it sits inside the scorepad
    card.
@@ -9647,7 +9647,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 /* ── The scorepad pills ──────────────────────────────────────────────────────
    Which grid the table is built on: the base game, then each replace-mode
-   expansion in play (migration 032). A button group in normal flow, not a
+   expansion in play. A button group in normal flow, not a
    sheet — two or three options that change the table right below them, so the
    pick and its effect want to be visible at once. Toggle buttons rather than
    radios, because tapping the lit one turns the template off and a radio
@@ -9909,7 +9909,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   outline-offset: -3px;
 }
 /* The card's two answers about ITSELF, side by side: take this grid, or stop
-   being offered it (migration 033). "Continue without" stays at the foot of
+   being offered it. "Continue without" stays at the foot of
    the sheet, because it is an answer about the whole question rather than
    about one card. */
 .tmpl-offer__answers { display: flex; align-items: stretch; gap: 0.5rem; }
@@ -9963,7 +9963,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   text-align: center;
 }
 /* What an expansion's grid DOES — adds rows to the base game's, or stands in
-   for them (migration 032). A tag rather than another meta line: it is the one
+   for them. A tag rather than another meta line: it is the one
    fact on a grid that changes what adopting it does to the table. Shared by
    the offer sheet, the guide scroll and the browse pool, which is why it is
    not in any of their class families
@@ -10043,7 +10043,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-round-label {
   display: flex; align-items: center; gap: 0.3rem; min-width: 0;
 }
-/* ── Scoring-template rows (migration 018) ──────────────────────────────────
+/* ── Scoring-template rows ──────────────────────────────────────────────────
    A row of a custom scoring grid — Everdell's "Prosperity", an Arboretum
    species — instead of a bare R1..Rn. The chapter stores a palette SLUG, never
    a hex: this grid lands on the scorepad, which is PAPER and therefore light in
@@ -10071,7 +10071,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   --row-purple: #7A5293;
 }
 
-/* ── Team colours (migration 048) ─────────────────────────────────────────────
+/* ── Team colours ─────────────────────────────────────────────────────────────
    Six slots, assigned by order of first appearance in the RANKED roster
    (ui/team-colors.js), so the play detail's banded player list and the scoring
    grid's column headers cannot disagree about which side is which.
@@ -10138,7 +10138,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   background: color-mix(in srgb, var(--row-accent) 14%, var(--polaroid-bg));
   box-shadow: inset 3px 0 0 var(--row-accent);
 }
-/* A row an ADD-ON EXPANSION contributed (migration 032) gets a SECOND rule, on
+/* A row an ADD-ON EXPANSION contributed gets a SECOND rule, on
    the cell's other edge: the left one stays the row's own palette colour, the
    right one is the expansion's.
 
@@ -10458,7 +10458,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   .buddies-skel__bar { animation-duration: 3.2s; }
 }
 
-/* ── Ghost account claims (migration 070) ─────────────────────────────────────
+/* ── Ghost account claims ─────────────────────────────────────────────────────
    Three sections on the Buddies screen — "Is this you?", "Link requests" and
    "Link requests sent" — all built out of .buddies-row so they read as the same
    screen rather than a transplant. Only the differences live here.
@@ -10667,13 +10667,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
      the gold-accented project actions. */
   background: #ff5100;
 }
-/* --rulebook and --add went with migration 051: the game page no longer draws
-   a rulebook button (the reference guide on the same screen does) and there is
-   no admin-only "set the URL" slot left to invite a tap. */
 /* Greyed + crossed-out variant rendered when the underlying link (`bgg_id`) is
    unavailable. Keeps the button slot in the row so the action layout stays
-   consistent across games. It served the rulebook button too until migration
-   051 moved that into the reference guide. */
+   consistent across games. */
 .game-detail__link-btn--disabled {
   position: relative;
   background: oklch(var(--b3));
@@ -10946,8 +10942,8 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 .game-detail__meta-pill i { color: var(--accent); }
 
-/* Edition facts — "Published 2019", "Publisher Stonemaier Games" (migration
-   040). A <dl>, not more meta pills: a pill is a self-describing attribute
+/* Edition facts — "Published 2019", "Publisher Stonemaier Games".
+   A <dl>, not more meta pills: a pill is a self-describing attribute
    ("3-5P", "60m") and these two need their label to mean anything. Rows wrap
    and each row keeps its label and value together, so a long publisher name
    moves to the next line instead of pushing the year off the right edge.
@@ -20300,7 +20296,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 /* ══════════════════════════════════════════════════════════════════════════
    Play card — the run variant (.play-card--stack)
    ══════════════════════════════════════════════════════════════════════════
-   One card standing for N identical imported plays (migration 005). It is the
+   One card standing for N identical imported plays. It is the
    same .play-card box — same widths, same flip, same place in the session rail
    — with two paper edges peeking out behind it so the tile reads as a stack
    before a single word is parsed, and the count where the photograph would be.
@@ -22158,7 +22154,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   .feat-strip__row { animation: none; }
 }
 
-/* ── Rank your games (migration 056) ──────────────────────────────────────
+/* ── Rank your games ──────────────────────────────────────────────────────
    Four surfaces, one family of questions:
      .game-detail__rank-btn   the third pill beside Log a play and BGG (ground)
      .rank-sheet              the sheet it opens (body-level, re-pointed above)

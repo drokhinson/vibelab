@@ -2,7 +2,7 @@
 //
 // Reached from the Profile hub's "Your stats" card. Everything on this screen
 // comes from ONE call, GET /users/me/stats/detail, backed by the
-// bgb_user_stats_detail RPC (migration 058) — podium, per-game breakdown,
+// bgb_user_stats_detail RPC — podium, per-game breakdown,
 // nemesis, play rhythm, unplayed shelf, table size, taste, comebacks, co-op
 // record and personal bests. Nothing here fetches per card.
 //

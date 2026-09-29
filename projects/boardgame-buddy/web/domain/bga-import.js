@@ -24,7 +24,7 @@
 //   • DEDUPE IS THE TABLE ID, NOT THE client_key. Every draft play still
 //     carries a client_key (its own local id), the same as every other source.
 //     But the key that makes "import any new plays" mean anything is
-//     `bga_table_id`, unique per user in the database (migration 043): the
+//     `bga_table_id`, unique per user in the database (idx_bgb_plays_user_bga_table): the
 //     server answers a table you already imported with {duplicate: true}
 //     whatever client_key it arrives under, so re-running this after any kind
 //     of interruption is free.
@@ -417,8 +417,8 @@
      *
      * The collapse is not hypothetical here: one person can hold two BGA
      * accounts, and a user who points both at the same buddy would otherwise
-     * send a play seating that account twice, which migration 023's unique
-     * index refuses outright.
+     * send a play seating that account twice, which
+     * uq_bgb_play_players_play_user refuses outright.
      * @param {DraftTable} table
      */
     seats(table) {
@@ -452,7 +452,7 @@
 
     /**
      * Tables that will actually be written — live, with a resolved game, and
-     * with somebody at the table (migration 023's invariant, met here as a
+     * with somebody at the table (bgb_log_play's invariant, met here as a
      * count the user can act on rather than as a play the server refuses).
      */
     importable() {
@@ -749,7 +749,7 @@
         client_key: table.id,
         import_group_id: (groups && groups.get(table.id)) || null,
         import_batch_id: batchId || null,
-        // Migration 040. THE key that makes a re-import safe: the server
+        // THE key that makes a re-import safe: the server
         // answers a table already imported with {duplicate: true} whatever
         // client_key it arrives under.
         bga_table_id: table.bgaTableId,

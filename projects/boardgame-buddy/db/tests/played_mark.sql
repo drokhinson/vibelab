@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 057_played_mark.sql — the played mark, on the Played shelf and beyond
+-- played_mark.sql — the played mark, on the Played shelf and beyond
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY THIS FILE EXISTS. api/tests/test_played_mark.py pins what the API
@@ -19,9 +19,10 @@
 -- SAFE TO RUN ANYWHERE: one transaction ending in ROLLBACK, touching only rows
 -- it inserted under uuids it invented.
 --
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/057_played_mark.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/played_mark.sql
 --
--- Needs migration 057 applied. Silence plus "ALL 057 CHECKS PASSED" is a pass.
+-- Needs boardgamebuddy_collections.played_before_at and the 'played' status.
+-- Silence plus "ALL PLAYED-MARK CHECKS PASSED" is a pass.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
@@ -134,7 +135,7 @@ BEGIN
   EXCEPTION WHEN check_violation THEN NULL;
   END;
 
-  RAISE NOTICE 'ALL 057 CHECKS PASSED';
+  RAISE NOTICE 'ALL PLAYED-MARK CHECKS PASSED';
 END $$;
 
 ROLLBACK;

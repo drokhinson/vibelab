@@ -21,13 +21,13 @@
 //    — and two games that happen to share a name cannot collide.
 //
 // 2. EVERY PLAY CARRIES ITS bgg_play_id INTO THE PAYLOAD. That is the second
-//    idempotency key (migration 044), beside the client_key every source sends.
+//    idempotency key (idx_bgb_plays_user_bgg_play), beside the client_key every source sends.
 //    The client_key makes re-running THIS draft free; the BGG id makes
 //    re-running from a different draft or another device free as well, and it
 //    is the only key that sees plays already on file with no client_key.
 //
 // 3. A PLAY WITH NO ROSTER IS SEATED WITH THE VIEWER. Most BGG plays do not
-//    record a `<players>` element, and migration 023 refuses a play with nobody
+//    record a `<players>` element, and bgb_log_play refuses a play with nobody
 //    at the table, so without this the wizard would silently import far
 //    fewer plays than BGG holds. It is not an invention either: the play is on the user's own BGG
 //    account, and boardgamebuddy_plays.user_id already says whose play it is.
@@ -184,7 +184,7 @@
      * Give a play BoardGameGeek recorded no roster for ONE seat: the account it
      * was imported from.
      *
-     * Most BGG plays carry no `<players>` at all, and migration 023 refuses a
+     * Most BGG plays carry no `<players>` at all, and bgb_log_play refuses a
      * play with nobody at the table — so without this the wizard would import
      * dramatically fewer plays than BGG holds, and say nothing about
      * it beyond a "nobody at the table" notice the user cannot act on. It is
@@ -418,7 +418,7 @@
 
     /**
      * Merge seats that are the same person, whatever they were called — the
-     * collapse point for migration 023's uq_bgb_play_players_play_user. The
+     * collapse point for uq_bgb_play_players_play_user. The
      * winner flag ORs and the first non-null score wins.
      * @param {any[]} seats
      */
@@ -771,12 +771,12 @@
         // The draft's own idempotency key, so re-sending a chunk whose response
         // was lost returns duplicates rather than a second set of plays.
         client_key: play.id,
-        // Migration 044. The OTHER idempotency key, and the one that spans
+        // The OTHER idempotency key, and the one that spans
         // drafts and devices — plays already on file with this and no
         // client_key are visible to nothing else.
         bgg_play_id: play.bggPlayId,
         import_group_id: (groups && groups.get(play.id)) || null,
-        // Migration 007. Every play in THIS import shares one, so a BGG import
+        // Every play in THIS import shares one, so a BGG import
         // shows up in the imports spoke (/settings/imports) and can be read
         // back and undone there.
         import_batch_id: batchId || null,

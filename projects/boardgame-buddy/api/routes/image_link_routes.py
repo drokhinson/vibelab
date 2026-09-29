@@ -1,4 +1,4 @@
-"""Admin: record BoardGameGeek's own image URLs for games imported before 054.
+"""Admin: record BoardGameGeek's own image URLs for games whose rows lack them.
 
 Import, the image refresh and the single-game hydrate all write
 bgg_image_url / bgg_thumbnail_url from the /thing response they already read

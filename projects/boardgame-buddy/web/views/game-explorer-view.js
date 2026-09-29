@@ -251,7 +251,7 @@
      */
     _sortedShelf(shelf) {
       if (this._sortedSrc === shelf) return this._sorted;
-      // The owned shelf carries prev_owned rows (migration 069) and this scope
+      // The owned shelf carries prev_owned rows and this scope
       // does not want them: "My games" here is a shortlist to pick tonight's
       // game from, and a game you sold is not one you can put on the table.
       // The Collection spoke is where a sold game still belongs, dimmed.

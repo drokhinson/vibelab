@@ -3,8 +3,8 @@
 //
 // A team play's sides are picked on Gather from six colour circles, or typed as
 // a custom name (up to six characters, because it has to fit a scoring column).
-// Either way the seat stores a WORD — "Blue", or "Owls" — and migration 048
-// persists it on each seat. This file is the single answer to "which of the six
+// Either way the seat stores a WORD — "Blue", or "Owls" — and
+// boardgamebuddy_play_players.team persists it on each seat. This file is the single answer to "which of the six
 // colour slots does this tag get", so the Gather discs, the play-detail popup's
 // banded player list and the scoring grid's tinted column headers cannot
 // disagree about which side is which.

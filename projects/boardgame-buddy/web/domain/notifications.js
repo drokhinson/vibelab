@@ -75,7 +75,7 @@
     // BGG data is one row, not three: descriptions, stats and publishers are
     // overlapping queues, so separate rows would count a game short of both its
     // blurb and its year twice and the gear's dot would over-report.
-    // The rulebook queue (migration 051). It passes the transience test the
+    // The rulebook queue. It passes the transience test the
     // header comment sets for the same reason the reports one does — an admin
     // approves or denies and it is gone — but it is the one admin signal where
     // the number is not work outstanding so much as exposure: every pending

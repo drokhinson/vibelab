@@ -3,7 +3,7 @@
 Four signals share one feed, one cursor and one read watermark: somebody
 seated you in a play they logged, somebody asked to be your buddy, somebody
 accepted the request you sent, and a play passed to you because the account
-that logged it was deleted (migration 051).
+that logged it was deleted.
 
 The list is DERIVED, not stored. `bgb_notifications` reads plays where the
 viewer is a player and somebody else is the logger, plus the viewer's own rows
@@ -24,7 +24,7 @@ What cannot be derived is four facts, and they are the only stored state:
 `play_players.linked_at` (when a seat happened — NOT the play's created_at,
 because linking a ghost to an account retroactively re-seats plays that are
 years old), `profiles.link_notifications_seen_at` (how far the viewer has read,
-named for plays but covering all three kinds since migration 009), and
+named for plays but covering every kind), and
 `buddy_edges.accepted_by` (who said yes, which a QR-scanned edge makes
 underivable), and `plays.inherited_from_name` (what the deleted account was
 called — there is no profile row left to join to).
@@ -120,8 +120,8 @@ def mark_seen(
 ) -> NotificationsSeenResponse:
     """Advance the watermark to `through` (default now), monotonically.
 
-    Still the RPC 008 shipped: it writes the watermark and never knew which
-    kinds it covered, so covering three needed no change. The RPC does the
+    bgb_mark_link_notifications_seen writes the watermark without knowing
+    which kinds it covers. The RPC does the
     GREATEST, so a retry with a stale value cannot walk the watermark backwards
     and re-light the bell over notifications already read.
     """

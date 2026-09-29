@@ -1,4 +1,4 @@
-"""The admin's rulebook-link queue (migrations 052, 053).
+"""The admin's rulebook-link queue.
 
 A SEPARATE queue from the chapter reports in chapter_routes.py, and
 deliberately not folded into them. Reports are reactive — something is
@@ -88,7 +88,7 @@ _REVIEW_SELECT = (
 def _list_rulebook_links_sync(sb: Client, status: str) -> list[RulebookLinkReviewItem]:
     # One equality on moderation_status, off idx_bgb_chapters_rulebook_status.
     # `unlisted` is a legal value here and the UI never asks for it: those are
-    # links nobody submitted (migration 053), so they are not queue work, and a
+    # links nobody submitted, so they are not queue work, and a
     # tab listing them would be a list of what people chose not to publish.
     # The filter accepts it so an admin chasing a specific link by state can,
     # and the default below stays where the work is.
@@ -122,8 +122,8 @@ def _list_rulebook_links_sync(sb: Client, status: str) -> list[RulebookLinkRevie
             link_host=_link_host(url),
             moderation_status=r.get("moderation_status") or RulebookStatus.PENDING,
             created_by=r.get("created_by"),
-            # None for the links migration 052 backfilled out of the catalog
-            # column — nobody authored those as chapters, and the queue says so
+            # None for the links carried over from
+            # boardgamebuddy_games.rulebook_url — nobody authored those as chapters, and the queue says so
             # rather than inventing a name.
             created_by_name=profile.get("display_name"),
             buddy_reach=reach.get(r.get("created_by") or "", 0),
@@ -147,7 +147,7 @@ async def list_rulebook_links(
 ) -> list[RulebookLinkReviewItem]:
     """Admin-only: the rulebook-link queue.
 
-    `pending` is the work — links whose author ASKED (migration 053). `approved`
+    `pending` is the work — links whose author ASKED. `approved`
     and `denied` are there so a decision can be found again and reversed, which
     is what makes a denial undoable rather than a one-way door. `unlisted` is
     reachable and is not a queue: those authors asked for nothing, and the admin
@@ -181,7 +181,7 @@ def _moderate_rulebook_link_sync(
         and row.get("moderation_status") == RulebookStatus.UNLISTED
     ):
         # AN APPROVAL IS THE ANSWER TO A QUESTION SOMEBODY ASKED. An unlisted
-        # link is one its author deliberately did not submit (migration 053) —
+        # link is one its author deliberately did not submit —
         # the PDF their own table reads from, kept between them and their
         # buddies — and publishing it to everyone on an admin's initiative
         # would make the review toggle a suggestion rather than a choice.
@@ -231,7 +231,7 @@ async def approve_rulebook_link(
 
     Takes a link in any SUBMITTED or decided state, so this is also how a
     denial is undone. Refuses an `unlisted` link with a 409: its author never
-    asked for it to be published (migration 053), and an approval is the answer
+    asked for it to be published, and an approval is the answer
     to a question somebody asked.
     """
     sb = get_supabase()

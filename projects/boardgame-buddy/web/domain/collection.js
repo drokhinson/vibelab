@@ -30,7 +30,7 @@
   // truncated and the caller falls back to the paginated grid.
   const SHELF_LIMIT = 1000;
 
-  // Local answers to "is this a played mark?" (a 'played' row, migration 057)
+  // Local answers to "is this a played mark?" (played_before_at)
   // for games the viewer just marked or unmarked, until the next status-map
   // read carries the server's own list. Every write busts that read, so
   // without these the sheet would forget a mark in the gap before it lands.
@@ -154,7 +154,7 @@
     }
 
     /**
-     * The played mark: "played it, somewhere I didn't log it" (migration 057).
+     * The played mark: "played it, somewhere I didn't log it".
      * One mark on any game, whatever its shelf status, behind both switches —
      * the collection sheet's and the Stats Shelf of Shame's. Never a play.
      *

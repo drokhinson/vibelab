@@ -158,7 +158,7 @@ async def generate_chapter(
                 "POST to chapters/generate-grid instead."
             ),
         )
-    # And a rulebook link's body is a URL somebody already has (migration 052).
+    # And a rulebook link's body is a URL somebody already has.
     # There is no drafter for it and there must not be: a model asked for a
     # rulebook's address invents a plausible one, which on the single chapter
     # kind that sends a reader off this origin is the worst possible output.
@@ -217,7 +217,7 @@ async def generate_scoring_grid(
     # read rather than against what the client believes: a mode on a base game's
     # grid is dropped, and an expansion that named none drafts as an add-on —
     # which is exactly what a save would store, so the rows cannot be drafted
-    # for one shape and filed under the other (migration 032).
+    # for one shape and filed under the other.
     mode = chapter_grid.resolve_mode(body.mode, bool(row.get("is_expansion")))
 
     try:

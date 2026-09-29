@@ -35,7 +35,7 @@
   // Where a play sits in a list of play rows, or -1.
   //
   // A run row is deliberately never matched: it stands for a whole group of
-  // identical imported plays (migration 005), swapping it for the one play
+  // identical imported plays, swapping it for the one play
   // that was edited would drop the other 57, and removing it would drop them
   // all. It is not openable from any list either, so a mutation cannot have
   // come from one.
@@ -71,7 +71,7 @@
   /**
    * A play projected out of a cached /plays page, or null.
    *
-   * `bgb_plays_page` (migration 018) returns the whole PlayResponse per row —
+   * `bgb_plays_page` returns the whole PlayResponse per row —
    * the full roster with round_scores, and the scoring_template — so a page the
    * client already holds can seed the detail popup just as a feed card does.
    *
@@ -81,7 +81,7 @@
    *    the same rule keeps applyToCachedLists from swapping one for 58.
    * 2. The row must actually carry `scoring_template` AND a roster. This is why
    *    the fallback lives here rather than at the call sites: plays-view falls
-   *    back to the profile bundle's `recent_plays` (003_rpcs.sql), whose players
+   *    back to the profile bundle's `recent_plays` (bgb_profile_bundle), whose players
    *    carry no round_scores and which has no template at all, and preview-card
    *    renders from the same rows. Seeding off those would paint a popup with
    *    no grid and no template — from a second source.
@@ -152,7 +152,7 @@
      *
      * The three payloads a play can arrive in disagree about row order, and two
      * of them have no order at all: the feed RPC sorts
-     * (is_winner DESC, score DESC NULLS LAST, migration 031), while
+     * (is_winner DESC, score DESC NULLS LAST), while
      * `bgb_plays_page` and the REST `_fetch_players` both hand back whatever
      * Postgres felt like. A sort keyed only on `score` is *stable*, so it
      * preserves whichever arrival order it was given — which means the same
@@ -190,7 +190,7 @@
       });
     }
 
-    // ── Seeds from the feed (migration 015) ────────────────────────────────
+    // ── Seeds from the feed ────────────────────────────────────────────────
     //
     // The feed card carries the whole play — the full roster with scores
     // and round_scores, the expansions, the country. That is everything the
@@ -241,12 +241,12 @@
         logged_by_name: logger ? logger.display_name : null,
         is_own: !!(me && me.id && logger && logger.id === me.id),
         group_count: card.group_count || 1,
-        // Migration 031. The popup gates its Rounds section on
+        // The popup gates its Rounds section on
         // hasRoundGrid(players, key, template), which needs only ONE round when
         // a template exists and two without one — so a seed missing this would
         // render no grid at all on a single-round play and generic R1..Rn
         // labels on a multi-round one, and the confirming fetch would then
-        // repaint the whole card. `undefined` (a card from a pre-031 payload) is left
+        // repaint the whole card. `undefined` (a card from an older payload) is left
         // as undefined rather than nulled; seedFromFeedCard reads that
         // distinction.
         scoring_template: card.scoring_template,
@@ -258,21 +258,21 @@
      * canonical play-card render, so every surface that draws a card seeds by
      * construction and no view has to remember to.
      *
-     * An empty `players` means the RPC predates 015 — the seed is skipped and
+     * An empty `players` means a payload without the roster — the seed is skipped and
      * every consumer falls back to fetching.
      */
     static seedFromFeedCard(card) {
       if (!card || !card.play_id) return null;
       if (!Array.isArray(card.players) || card.players.length === 0) return null;
       const play = Play.fromFeedCard(card);
-      // Never let a card that predates 031 downgrade a seed that has the
+      // Never let a card with no template key downgrade a seed that has the
       // template. The feed cache holds a 24h stale window, so a card from an
       // older payload can arrive with no such key at all — and the seed this
       // would overwrite may have come from a /plays page or from the row a PUT
       // echoed back, both of which carry it.
       //
       // The test is `undefined`, not falsiness: undefined means UNKNOWN (a
-      // pre-031 payload) and keeps whatever is already held; null means this
+      // older payload) and keeps whatever is already held; null means this
       // play genuinely has no template and must be taken, or a play whose
       // template was removed would keep painting the old labels.
       if (play.scoring_template === undefined) {
@@ -301,7 +301,7 @@
      * Falls back to a cached /plays page, so the surfaces that do NOT draw feed
      * cards — the plays log, the profile preview, notifications, the session
      * viewer — open on content rather than a spinner. Those pages carry the
-     * full row, scoring_template included (migration 018).
+     * full row, scoring_template included.
      */
     static seeded(id) {
       if (!id) return null;
@@ -379,7 +379,7 @@
       // payloads, not a place to hide a field we know the new value of.
       card.scoring_template = play.scoring_template == null ? null : play.scoring_template;
       // group_count is deliberately NOT written. One card can stand for a whole
-      // run of identical imported plays (migration 005), and PlayResponse
+      // run of identical imported plays, and PlayResponse
       // always says 1 — so copying it across would collapse a run of 58 into a
       // single play. Editing a play cannot change how many plays are in a run.
       return card;
@@ -390,7 +390,7 @@
      *
      * Order is load-bearing. The play-card patch re-renders the card, and
      * rendering a card re-seeds `_seeds` from its PROJECTION. That projection
-     * carries the scoring_template (migration 031), and seedFromFeedCard holds the
+     * carries the scoring_template, and seedFromFeedCard holds the
      * previous one when a stale card has no such key — but the full row still
      * goes into the seed last, because it is the authoritative copy and the
      * card is a lossy view of it.
@@ -484,7 +484,7 @@
       return true;
     }
 
-    // ── Reactions ("Good game", migration 016) ─────────────────────────────
+    // ── Reactions ("Good game") ────────────────────────────────────────────
     //
     // Both take the whole night's play ids, because the surface is the session
     // footer: one tap covers every play in that session. The server drops any
@@ -593,7 +593,7 @@
     // one of these caches stale.
     static invalidateDeps() { _invalidatePlayDeps(); }
 
-    // ── Imported plays (migrations 005/007) ─────────────────────────────────
+    // ── Imported plays ──────────────────────────────────────────────────────
     // Two units, because they answer two different regrets: one run of
     // identical plays read wrong, versus a whole paste that should never have
     // happened. Both are owner-scoped server-side and report what they removed.

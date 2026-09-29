@@ -246,10 +246,10 @@ def _latest_snapshot(sb: Client) -> list[dict]:
 async def fetch_trending(sb: Client) -> tuple[list[DiscoverTrendingEntry], bool]:
     """The newest hot-list snapshot with catalog rows attached; (entries, bgg_failed).
 
-    Snapshot first (migration 039): it survives worker restarts and carries
-    yesterday's ranks, which is what "climbing" is. Only when no run has ever
-    been written — first deploy, cron not yet wired — does this fall back to
-    BGG live, exactly as before 039.
+    Snapshot first (boardgamebuddy_bgg_hot_snapshots): it survives worker
+    restarts and carries yesterday's ranks, which is what "climbing" is. Only
+    when no run has ever been written — first deploy, cron not yet wired — does
+    this fall back to BGG live.
     """
     items = await asyncio.to_thread(_latest_snapshot, sb)
     if not items:

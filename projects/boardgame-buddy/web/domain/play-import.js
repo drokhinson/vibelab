@@ -506,7 +506,7 @@
      * the spelling. The WRITE has to honour it too: one seat per name would
      * import a note that said "Jas" on one line and "Jasmine" on the next as a
      * two-player game with Jasmine in it twice — once winning, once not.
-     * Migration 023's unique index refuses that outright; this is what stops
+     * uq_bgb_play_players_play_user refuses that outright; this is what stops
      * the user ever meeting the refusal.
      *
      * Merging a seat into one already taken keeps the fuller answer: winning on
@@ -542,7 +542,7 @@
     /**
      * Merge seats that are the same person, whatever they were called.
      *
-     * The collapse point for migration 023's uq_bgb_play_players_play_user:
+     * The collapse point for uq_bgb_play_players_play_user:
      * the Players step exists to say that "Jas" and "Jasmine" are one person,
      * and the write has to honour that or the server refuses the play. Seats
      * added by hand in the review go through the same merge, so picking
@@ -633,7 +633,7 @@
      * Plays that will actually be written — live, with a resolved game, and
      * with somebody at the table.
      *
-     * The roster clause is migration 023's invariant, checked here so the user
+     * The roster clause is bgb_log_play's invariant, checked here so the user
      * meets it as a row the Import step counts out rather than as a play the
      * server refuses. A note the model read a game and a date off but no names
      * at all — a bare tally, a line it couldn't parse — would otherwise import
@@ -1049,17 +1049,17 @@
         notes: play.notes || null,
         // Resolved and collapsed — see seats(). One account cannot be seated
         // twice here, which is both what the Players step promised and what
-        // migration 023's unique index enforces at the other end.
+        // uq_bgb_play_players_play_user enforces at the other end.
         players: this.seats(play),
         // The idempotency key. Stable across attempts by construction — it is
         // the draft play's own id — so a chunk re-sent after a lost response
         // comes back as duplicates rather than a second set of plays.
         client_key: play.id,
-        // Migration 005. Present only for a play that is one of several
+        // Present only for a play that is one of several
         // indistinguishable ones; the feed and the plays log then show the
         // whole run as a single card.
         import_group_id: (groups && groups.get(play.id)) || null,
-        // Migration 007. Every play in THIS import shares one, so the whole
+        // Every play in THIS import shares one, so the whole
         // paste can be undone from Settings later — including the one-offs,
         // which carry no group id and could never be found any other way.
         import_batch_id: batchId || null,

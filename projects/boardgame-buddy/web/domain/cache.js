@@ -21,7 +21,7 @@
 
 (function () {
   // Current shape: game payloads carry image_url on collection shelves,
-  // profile pages and expansion lists (migration 055), and game bundles carry
+  // profile pages and expansion lists, and game bundles carry
   // `description`. An entry cached under an older version lacks them, and
   // would keep painting low-res art and a blank blurb until natural expiry.
   const SCHEMA_VERSION = 3;

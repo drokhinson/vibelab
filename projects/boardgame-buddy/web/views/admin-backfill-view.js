@@ -146,7 +146,7 @@
         refreshOne: (id) => window.Game.adminRefreshOneMetadata(id),
       },
       {
-        // Migration 054. Here the list IS the queue: a recorded row has
+        // BGG image links. Here the list IS the queue: a recorded row has
         // nothing left to do, so this one does drain to empty.
         key: "image-links",
         runTool: "bgg-image-links",

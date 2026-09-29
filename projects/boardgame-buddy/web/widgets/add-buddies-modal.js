@@ -90,7 +90,7 @@
    *   button is just backing out, so that caller passes "Cancel".
    * @param {string} [opts.dismissAriaLabel="Skip for now"]  the ×'s name.
    * @param {Object} [opts.network]  the preloaded second hop from
-   *   GET /buddies/suggested/onboarding (migration 072). Ticking someone
+   *   GET /buddies/suggested/onboarding. Ticking someone
    *   appends the people THEY know to the bottom of the grid, in the same
    *   frame, with no request. Omitted by the Buddies-screen caller, which has
    *   no such payload — the card then never promotes anyone.
@@ -294,7 +294,7 @@
       }
 
       /**
-       * Ticking someone introduces the people they know (migration 072).
+       * Ticking someone introduces the people they know.
        *
        * APPENDS. It never re-renders the grid and never touches a tile that
        * is already there: `insertAdjacentHTML("beforeend", …)` adds nodes

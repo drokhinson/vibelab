@@ -399,7 +399,7 @@ async def fetch_owner_counts(bgg_ids: list[int]) -> dict[int, int]:
 
 # ── /thing statistics ─────────────────────────────────────────────────────────
 # Everything the Discover tab wants off a `stats=1` /thing response, keyed the
-# way boardgamebuddy_games spells it (migration 038). One parser for the
+# way boardgamebuddy_games spells it. One parser for the
 # import path, the per-game refresh and the batched backfill, so the three
 # cannot disagree about which <rank> is "the" rank.
 
@@ -453,7 +453,7 @@ def thing_item_stats(item: ET.Element) -> dict:
     <average>: the raw mean is dominated by ten-vote games. rank = the
     <rank type="subtype" name="boardgame"> row, never a family rank
     (strategygames, familygames, …) — those have their own numbering. The
-    family ranks feed bgg_family instead (migration 056), which is what game
+    family ranks feed bgg_family instead, which is what game
     ranking groups by. A missing <statistics> block yields all Nones, which the
     backfill still stamps as synced so the row leaves its queue.
     """
@@ -479,7 +479,7 @@ def thing_item_stats(item: ET.Element) -> dict:
 
 
 # ── /thing publishers ─────────────────────────────────────────────────────────
-# The game page names who published a game (migration 040). These are plain
+# The game page names who published a game. These are plain
 # <link type="boardgamepublisher"> rows, present with stats=0, so the import,
 # the per-game refresh and the batched backfill all read them through here.
 

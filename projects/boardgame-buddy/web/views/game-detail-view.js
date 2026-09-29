@@ -1,8 +1,7 @@
 // views/game-detail-view.js — game detail w/ collection toggle.
 //
-// The rulebook used to be an action button here, writing one admin-curated URL
-// onto the game row. Since migration 052 it is a reference-guide chapter and
-// the guide mounted further down this screen is the surface that shows it.
+// The rulebook is a reference-guide chapter, and the guide mounted further
+// down this screen is the surface that shows it.
 // + expansions list (base game → expansions, expansion → base game)
 // + the viewer's own record with the game, above the plays it summarises.
 
@@ -126,14 +125,14 @@
         this._status = bundle.viewer_status || null;
         this._plays = bundle.recent_plays || [];
         this._expansions = Array.isArray(bundle.expansions) ? bundle.expansions : [];
-        // Migration 030. Absent from a bundle cached before that shipped, and
-        // null for a game the viewer has never played — the same "no section"
+        // Absent from an older cached bundle, and null for a game the viewer
+        // has never played — the same "no section"
         // either way, so no version check is needed here.
         this._viewerStats = bundle.viewer_stats || null;
-        // Defence in depth: pre-migration-023 the bundle's viewer_status was
-        // null for games the viewer had only played (no collection row).
-        // Derive 'played' from the recent_plays block so the hero banner
-        // paints the purple Played pill even before that migration runs.
+        // Defence in depth: viewer_status is null for a game with no
+        // collection row. Derive 'played' from the recent_plays block so the
+        // hero banner paints the purple Played pill for a game the viewer has
+        // only played.
         if (!this._status && this._plays.length > 0) {
           this._status = "played";
         }
@@ -324,8 +323,8 @@
                 <i data-icon="external-link" class="w-4 h-4"></i><span>BGG</span>
               </button>`}
               <span id="game-detail-rank" class="game-detail__rank-host">${this._renderRankPill()}</span>
-              <!-- No Rulebook button here since migration 052. The link is a
-                   reference-guide chapter now, and the guide is mounted on this
+              <!-- No Rulebook button here. The link is a
+                   reference-guide chapter, and the guide is mounted on this
                    same screen a few rows down — where it also says "No rulebook
                    link available" when there is none, and offers to add one.
                    Two buttons on one screen opening the same URL is the
@@ -387,8 +386,8 @@
     // a flourish. "Published 2019" under a label reads as a fact, which is
     // what someone comparing two editions is looking for.
     //
-    // `publishers` is BGG's list in BGG's order, capped at 4 by the import
-    // (migration 040). Only the first is shown — after the original, the rest
+    // `publishers` is BGG's list in BGG's order, capped at 4 by the import.
+    // Only the first is shown — after the original, the rest
     // are localized reissues, and four company names is a paragraph in a row
     // meant to be scanned — but the whole list rides in the title attribute
     // rather than being dropped on the floor.
@@ -468,7 +467,7 @@
     //
     // The panel is ui/game-stats-panel.js, the same renderer the Stats spoke's
     // By game card uses, fed by the same row computed under the same rules
-    // (migration 030) — a win rate that reads one way here and another way one
+    // — a win rate that reads one way here and another way one
     // tap into the profile would be worse than not showing one at all.
     //
     // Nothing is drawn for a game the viewer has never played: an empty ring
@@ -746,16 +745,6 @@
       }
       this._guide.mount(host);
     }
-
-    // RETIRED with migration 052: _renderRulebookButton, _promptAddRulebook,
-    // _promptDeleteRulebook and the long-press pair that armed them.
-    //
-    // They were the whole rulebook UI — an admin-only prompt writing
-    // boardgamebuddy_games.rulebook_url, a link for everybody else, and a
-    // greyed-out button for a game nobody had curated. A rulebook link is a
-    // reference-guide chapter now: anyone can write one, an admin approves it,
-    // and the guide mounted on this screen draws it (and says so when there is
-    // none). The admin endpoint they called is gone with them.
 
     async _reload() {
       // Bust the cached detail bundle and re-render so the new state shows.

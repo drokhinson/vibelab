@@ -12,11 +12,11 @@ fetching the list endpoints would be worse still — those return full
 GameSummary rows (hundreds of them, mid-backfill) to arrive at an integer.
 
 Four counts. The description, stats and publisher gaps share one metadata
-queue (migration 045), which saves round trips and keeps the count honest — a
+queue (`bgg_meta_synced_at IS NULL`), which saves round trips and keeps the count honest — a
 game missing both its blurb and its year counts once, so the gear's dot never
 reports more work than exists.
 
-The rulebook-link queue (migration 052) is worth reading differently from the other three: the catalog backfills are work
+The rulebook-link queue is worth reading differently from the other three: the catalog backfills are work
 that can wait, where a pending rulebook link is an unreviewed outbound link that
 readers can already follow.
 """
@@ -58,7 +58,7 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
         .limit(1)
         .execute()
     )
-    # Short of anything one /thing?stats=1 read would give (migration 045).
+    # Short of anything one /thing?stats=1 read would give.
     # NULL publishers, not '{}': a game BGG credits to nobody has been answered
     # and has nothing left for an admin to do.
     #
@@ -83,7 +83,7 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
         .execute()
     )
 
-    # Rulebook links still waiting on a decision (migration 052). Unlike the
+    # Rulebook links still waiting on a decision. Unlike the
     # three above, this queue is not tidy-up: a pending link is already live for
     # its author's accepted buddies, so the number here is readers following an
     # unreviewed outbound link. Off the partial index
@@ -92,7 +92,7 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
     # status filter alone would quietly start counting prose the day that
     # changes.
     #
-    # PENDING only, which is narrower than "unreviewed" (migration 053):
+    # PENDING only, which is narrower than "unreviewed":
     # an `unlisted` link is equally unreviewed and equally live for its
     # author's buddies, and is nobody's work — its author asked for nothing.
     # Counting those would put a number on this badge that no amount of

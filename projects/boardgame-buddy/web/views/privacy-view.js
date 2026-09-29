@@ -17,7 +17,7 @@
 //                                         on an unguessable uuid4 path
 //   "we do not yet delete the file"       delete_play / delete_profile remove
 //                                         rows only; no storage remove() exists
-//   "usage counts are not linked to you"  _shared/001_analytics.sql has no user
+//   "usage counts are not linked to you"  the analytics_events table has no user
 //                                         column, and api.js sends no id
 //
 // KEEP THE LAST TWO HONEST. If storage cleanup lands, simplify §7; do not

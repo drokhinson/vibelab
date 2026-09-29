@@ -32,7 +32,7 @@
    * The collection statuses a shelf mode actually contains. "owned" is a SET,
    * not a single value: a prev_owned game (sold, gifted or donated) stays on
    * the Owned shelf in its alphabetical place, dimmed and stamped, and the
-   * server widens the same way (bgb_collection_shelf, migration 069). Every
+   * server widens the same way (bgb_collection_shelf). Every
    * other mode is its own single-element set.
    *
    * It is NOT a set for counting: `parted` below is what the view subtracts so

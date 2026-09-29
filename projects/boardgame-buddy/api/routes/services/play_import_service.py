@@ -11,7 +11,7 @@ and the plays table:
   • list_imports / import_detail — the reading side. The first is the imports
     spoke's index (and the count on Settings' row); the second is one import
     and what it wrote, collapsed to runs.
-  • delete_import_group / delete_import_batch — the undo side (migration 007).
+  • delete_import_group / delete_import_batch — the undo side.
     A run is deletable from its own feed card and from the imports spoke; a
     whole import from the spoke's detail screen. Both RPCs are owner-scoped in
     their WHERE clause, so an id belonging to somebody else deletes nothing and

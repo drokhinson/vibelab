@@ -837,8 +837,9 @@
    *
    * Deduped by NAME rather than id, because the roster is a mix of accounts
    * and ghosts and a name is the only handle every seat has — and because
-   * play_players carries a unique index on it (migration 023), so a second
-   * seat under the same name is a save the backend refuses.
+   * play_players carries a unique index per account
+   * (uq_bgb_play_players_play_user), so a second seat for the same person is
+   * a save the backend refuses.
    *
    * @param {{name?: string, user_id?: string|null, avatar?: any}} c
    * @returns {boolean} Whether a seat was actually added.

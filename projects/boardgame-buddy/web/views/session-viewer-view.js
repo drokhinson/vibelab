@@ -8,7 +8,7 @@
 // polaroid popup announcing the wrap-up.
 //
 // Nothing on this screen is editable. The host is the only person who
-// scores (RLS enforces it — migration 053), which is what lets this view be
+// scores (RLS on boardgamebuddy_play_session_scores enforces it), which is what lets this view be
 // a plain mirror —
 // no per-column edit mode, no caret to preserve across a repaint, no write
 // path at all.
@@ -207,7 +207,7 @@
      * POST /sessions/{code}/watch returns exactly what GET /sessions/{code}
      * returns, so this costs the same one round trip a plain read does — it
      * just also leaves a viewer row behind, which is what makes the live-score
-     * table and its Realtime channel readable (migration 027). Without it a
+     * table and its Realtime channel readable. Without it a
      * spectator spends the whole game on the bundle's baked-in grid and a 4s
      * poll, while a seated player next to them watches the same numbers land
      * instantly.
@@ -263,9 +263,9 @@
         // poll-only.
         //
         // Unless this screen is on the seeded path: it never got a viewer row
-        // (migration 027 — an API older than this client, or a watch POST that
-        // failed), so RLS hides the scores table from it and Realtime is
-        // silent by construction. The poll IS its live scoring, and standing
+        // (an API older than this client, or a watch POST that failed), so
+        // RLS hides the scores table from it and Realtime is silent by
+        // construction. The poll IS its live scoring, and standing
         // it down would leave the grid frozen. Every other tick (4s) — still
         // half the Gather cadence.
         //
@@ -500,7 +500,7 @@
       }
     }
 
-    // Hand the bundle's `scores` array (migration 054) to the live-scores
+    // Hand the bundle's `scores` array to the live-scores
     // overlay. No-op for a spectator whose own table read works — LiveScores
     // ignores the seed from its first successful read onward.
     _seedLiveScores(session) {
@@ -776,7 +776,7 @@
     _renderGather(s) {
       const participants = s.participants || [];
       const hostId = s.host_user_id;
-      // tag → colour slot, or null when no seat carries a side (migration 050).
+      // tag → colour slot, or null when no seat carries a side.
       // Built from the roster in the order it arrived, which is the order the
       // host's own list is in, so the lobby's Red and the scoring grid's Red
       // are the same Red — ui/team-colors.js is the one place either answer
@@ -880,7 +880,7 @@
              role="group" aria-label="Reference guide"${off(PLAY_PAGE_GUIDE)}>
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
-          <!-- Migration 052: the rulebook is a chapter and the scroll below
+          <!-- The rulebook is a chapter and the scroll below
                draws it, for a signed-out spectator too — the pool endpoint
                hands an anonymous caller the approved links. -->
           <div id="session-viewer-guide-mount" class="session-viewer__guide-mount"></div>
@@ -984,7 +984,7 @@
     // same score font, same round labels, same Total row, just without the
     // input chrome and the host's add/remove/winner controls. Guests are in
     // here on equal terms: live scores are keyed by participant rather than
-    // by account (migration 053), so a guest's column streams like anyone's.
+    // by account, so a guest's column streams like anyone's.
     _renderViewerScoring(s) {
       const participants = s.participants || [];
       if (participants.length === 0) {
@@ -995,7 +995,7 @@
       // host writes a null placeholder row on _addRound (play-flow-view.js)
       // so an empty new round still grows maxRound() here.
       const maxRound = this._liveScores ? this._liveScores.maxRound() : -1;
-      // The template's own row count is a third floor (migration 018). The
+      // The template's own row count is a third floor. The
       // host's null placeholder normally grows maxRound() for us, but the
       // template lands on the session row a beat before that write does, and
       // without this the mirror flashes a grid shorter than its own labels.
@@ -1011,7 +1011,7 @@
       const players = this._gridPlayers(s);
       const grid = window.renderRoundGrid(players, "sessionViewerView", {
         editable: false,
-        // How the host is scoring this table (migration 050). It is what
+        // How the host is scoring this table. It is what
         // merges a side's seats into ONE column, so without it the mirror
         // would draw a team night as separate columns while the host's own
         // screen drew it as sides — the two grids are meant to be the same
@@ -1041,7 +1041,7 @@
      * patchers walk can never be computed from a different roster than the
      * one on screen.
      *
-     * `team` is the side this seat is on (migration 050). The widget bands its
+     * `team` is the side this seat is on. The widget bands its
      * column headers off this field and MERGES a side's seats into one column
      * from it — ui/team-colors.js assigns the colour slots by order of first
      * appearance in the roster it is handed, and both screens are handed the

@@ -325,7 +325,7 @@
      * differ in: the buddy list spells someone by their display name and the
      * search-everyone results by whatever the search matched, so re-opening
      * the sheet and picking the same person from the other list would seat
-     * them twice. Migration 023's unique index refuses that outright; this is
+     * them twice. uq_bgb_play_players_play_user refuses that outright; this is
      * what stops the user ever meeting the refusal. Ghost rows collapse on the
      * name, case-insensitively, for the same reason and by the same rule the
      * notes importer uses.
@@ -378,7 +378,7 @@
     /**
      * A shot is importable once it names a game AND seats somebody.
      *
-     * The roster half is migration 023's invariant: a play with nobody at it
+     * The roster half is bgb_log_play's invariant: a play with nobody at it
      * would be an empty scoreboard on the card, a play counting towards
      * nobody's record, and no ghost for anyone to claim later. The photo is right there and the seats
      * are two taps, so this is a thing to go and fix rather than a thing to
@@ -588,12 +588,12 @@
         notes: shot.notes || null,
         photo_url: shot.photoUrl || null,
         // Collapsed — see seats(). One account cannot be seated twice here,
-        // which is what migration 023's unique index enforces at the far end.
+        // which is what uq_bgb_play_players_play_user enforces at the far end.
         players: this.seats(shot),
         country_code: shot.countryCode || null,
         // The idempotency key, stable across attempts by construction.
         client_key: shot.id,
-        // Migration 007 — one id for the whole run, so Settings can undo the
+        // One id for the whole run, so Settings can undo the
         // batch in one tap. No import_group_id: every shot here is one photo
         // of one table, so no two of them are the indistinguishable repeats
         // that field exists to collapse.

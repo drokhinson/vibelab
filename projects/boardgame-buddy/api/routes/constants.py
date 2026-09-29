@@ -47,11 +47,11 @@ class CollectionStatus(StrEnum):
     OWNED = "owned"
     # The Played shelf: every game with a play the user can see, derived from
     # boardgamebuddy_plays, plus the games on no shelf that carry the played
-    # mark (migration 057). A 'played' collection row exists only to hold that
+    # mark (played_before_at). A 'played' collection row exists only to hold that
     # mark; it is not a status anyone sets, and the mark is never a play.
     PLAYED = "played"
     WISHLIST = "wishlist"
-    # A game the user sold, gifted or donated (migration 069). Persisted, and
+    # A game the user sold, gifted or donated. Persisted, and
     # deliberately asymmetric: it is a SUBSET OF OWNED for display — the Owned
     # shelf lists it alongside owned games, dimmed and stamped — and NOT OWNED
     # for counting, so every owned total (the Owned tab count, the profile
@@ -63,7 +63,7 @@ class CollectionStatus(StrEnum):
 # The statuses a request for the "owned" shelf actually matches. Only the
 # surfaces that BUILD the Owned grid use this; every plain `status = 'owned'`
 # filter elsewhere is correct as it stands, because prev_owned must not be
-# counted as owned. See constants above and migration 069.
+# counted as owned. See PREV_OWNED above.
 OWNED_SHELF_STATUSES: tuple[str, ...] = (
     CollectionStatus.OWNED.value,
     CollectionStatus.PREV_OWNED.value,
@@ -79,7 +79,7 @@ class BuddyEdgeStatus(StrEnum):
 
 
 class GhostClaimStatus(StrEnum):
-    """Lifecycle of a ghost account claim (boardgamebuddy_ghost_claims, 070).
+    """Lifecycle of a ghost account claim (boardgamebuddy_ghost_claims).
 
     Unlike BuddyEdgeStatus this never deletes: the (owner, ghost_name_key,
     claimant) triple is unique, so status mutates in place and reject_count
@@ -98,7 +98,7 @@ class GhostClaimStatus(StrEnum):
 
 
 class BuddySuggestionSource(StrEnum):
-    """Why a buddy suggestion is in the list (migration 063).
+    """Why a buddy suggestion is in the list.
 
     The onboarding "Add buddies" step ranks two tiers of candidate, and the
     tile's reason line can't be derived from the counts alone: an ACTIVE
@@ -112,8 +112,8 @@ class BuddySuggestionSource(StrEnum):
     # step uses this tier, because a brand-new account has no earned signal
     # to rank on and an empty discovery screen is the failure case there.
     ACTIVE = "active"
-    # A candidate promoted client-side out of the preloaded second hop
-    # (migration 072): a buddy of someone the user has just ticked. Never
+    # A candidate promoted client-side out of the preloaded second hop:
+    # a buddy of someone the user has just ticked. Never
     # returned in the top-level `suggestions` list — the server sets it on the
     # rows inside `network`, and the deck renders them when that tick happens.
     NETWORK = "network"
@@ -136,8 +136,8 @@ class PlaySessionStatus(StrEnum):
 
 
 class SessionPhase(StrEnum):
-    """Host-driven cursor through the Gather → Play → Settle Up flow
-    (migration 026). Joiners watch this via Supabase Realtime and auto-
+    """Host-driven cursor through the Gather → Play → Settle Up flow.
+    Joiners watch this via Supabase Realtime and auto-
     advance their read-only mirror when the host moves forward."""
 
     GATHER = "gather"
@@ -177,7 +177,7 @@ class NotificationKind(StrEnum):
     """What one row on the notifications feed is about.
 
     The feed is a UNION of four derived sources rather than a table — see
-    bgb_notifications, migrations 009 and 051 — and each member names both its
+    bgb_notifications — and each member names both its
     source and the timestamp it is ordered by: PLAY_LINK from
     play_players.linked_at, BUDDY_REQUEST from buddy_edges.created_at,
     BUDDY_ACCEPTED from buddy_edges.accepted_at, PLAY_INHERITED from
@@ -197,8 +197,8 @@ class NotificationKind(StrEnum):
     PLAY_LINK = "play_link"
     BUDDY_REQUEST = "buddy_request"
     BUDDY_ACCEPTED = "buddy_accepted"
-    # A play passed to you because the account that logged it was deleted
-    # (migration 051). The one kind with NO actor id: the actor is the deleted
+    # A play passed to you because the account that logged it was deleted.
+    # The one kind with NO actor id: the actor is the deleted
     # person, so there is no profile left to link to — `actor_display_name`
     # carries the name off plays.inherited_from_name and `actor_id`,
     # `actor_username` and `actor_avatar` are all None. It reuses the PLAY_LINK
@@ -206,7 +206,7 @@ class NotificationKind(StrEnum):
     PLAY_INHERITED = "play_inherited"
 
 
-# ── Web Push (migration 017) ─────────────────────────────────────────────────
+# ── Web Push ─────────────────────────────────────────────────────────────────
 # VAPID identifies THIS server to the push services, which is what lets a
 # browser's subscription be bound to us and to nobody else. Three values, all
 # unset in local dev by default — push_service.enabled() reads that as "the
@@ -261,7 +261,7 @@ class PushTier(StrEnum):
     independent switches make them reason about four combinations.
 
     Values are the DB values — boardgamebuddy_profiles.push_tier carries a CHECK
-    on exactly these three strings (migration 017).
+    on exactly these three strings.
     """
 
     NONE = "none"
@@ -353,7 +353,7 @@ class CollectionSort(StrEnum):
 class DiscoverReasonKind(StrEnum):
     """Why a game is on the Discover tab's "Picked for you" rail.
 
-    Mirrors the reason_kind text bgb_discover_recommendations (migration 038)
+    Mirrors the reason_kind text bgb_discover_recommendations
     returns; services/discovery_service.format_reason turns each into the one
     line the tile shows. The order here is the RPC's precedence order.
     """
@@ -553,7 +553,7 @@ class AdminRunTool(StrEnum):
     call plus two downloads and two uploads per game, which is why its pass is
     a tenth the size.
 
-    BGG_IMAGE_LINKS only RECORDS BoardGameGeek's own image URLs (migration 054)
+    BGG_IMAGE_LINKS only RECORDS BoardGameGeek's own image URLs
     for games whose rows do not hold them yet — one /thing per 20
     games, no downloads — so it is not folded into BGG_IMAGES either.
     """
@@ -650,7 +650,7 @@ BGG_MECHANIC_TO_MODE: list[tuple[str, PlayMode]] = [
 
 
 class RankTier(StrEnum):
-    """The gut-check tier a ranked game sits in (migration 056).
+    """The gut-check tier a ranked game sits in.
 
     Declared best first: a category's ranking stacks the tiers in this order,
     so a game in LOVE always outranks one in GOOD however the questions went.
@@ -758,7 +758,7 @@ MAX_IMPORT_NAME_CHARS = 80
 # the person it names can never see. Mirrors MAX_IMPORT_NAME_CHARS' reasoning.
 MAX_BUDDY_ALIAS_CHARS = 60
 
-# Longest team tag on a play seat (migration 048). SIXTEEN, not the six the
+# Longest team tag on a play seat. SIXTEEN, not the six the
 # Gather input enforces: that six is there because the tag has to fit a
 # --rg-col-min grid column, which is a layout fact about one screen and not a
 # fact about the data. An importer, or a wider field later, would hit a six-char
@@ -826,7 +826,7 @@ DB_PAGE_MAX_ROWS = 200_000
 EXPORT_IN_CHUNK = 100
 
 
-# ── Scoring templates (migration 018) ────────────────────────────────────────
+# ── Scoring templates ────────────────────────────────────────────────────────
 
 
 class ChapterLayout(StrEnum):
@@ -845,14 +845,14 @@ class ChapterLayout(StrEnum):
 
     TEXT = "text"                  # Markdown, rendered by web/ui/markdown.js
     SCORING_GRID = "scoring_grid"  # Labelled rows the play screen fills in
-    # An outbound link to the game's rules, in `link_url` (migration 052). The
+    # An outbound link to the game's rules, in `link_url`. The
     # one chapter body that is not this app's own words, which is why it — and
     # only it — carries a moderation gate; see RulebookStatus below.
     RULEBOOK_LINK = "rulebook_link"
 
 
 class RulebookStatus(StrEnum):
-    """The moderation gate on a layout='rulebook_link' chapter (migration 052).
+    """The moderation gate on a layout='rulebook_link' chapter.
 
     Mirrors the values bgb_chapters_link_shape pins, and NULL on every other
     layout — a chapter whose body this app wrote has nothing to gate.
@@ -869,7 +869,7 @@ class RulebookStatus(StrEnum):
     """
 
     # Written, live for the author and their buddies, and NOT submitted to
-    # anyone (migration 053). The state of a link whose author wants the PDF
+    # anyone. The state of a link whose author wants the PDF
     # their own table reads from and never asked for it to be published — and
     # the one status the admin queue does not list, because nobody owes it an
     # answer.
@@ -877,7 +877,7 @@ class RulebookStatus(StrEnum):
     # Submitted, waiting for a decision. Visible to exactly who UNLISTED is
     # visible to — its author and their ACCEPTED buddies — and in the queue.
     # Reached by the author turning review on, whoever they are: an admin's
-    # own link is not born approved either (migration 053).
+    # own link is not born approved either.
     PENDING = "pending"
     # An admin put their name to it. Visible to everyone, signed in or not.
     APPROVED = "approved"
@@ -943,7 +943,7 @@ class ScoringGridMode(StrEnum):
     the base game's).
 
     The DB stores this INSIDE the `grid` JSONB rather than in a column of its
-    own (migration 032): it is part of the grid document, versioned by the same
+    own: it is part of the grid document, versioned by the same
     `v`, and nothing queries or sorts by it.
     """
 
@@ -983,7 +983,7 @@ class ReleaseNoticeStatus(StrEnum):
     """The admin list's filter, and only that.
 
     Deliberately NOT a row state: `published_at IS NULL` is the one draft flag
-    (migration 042). A status column beside the timestamp would be two sources
+    (boardgamebuddy_release_notices). A status column beside the timestamp would be two sources
     of truth for one fact, written by three routes and correct only if all
     three remember.
     """
@@ -1018,7 +1018,7 @@ MAX_RELEASE_NOTICE_LINK_LABEL_CHARS = 40
 MAX_RELEASE_NOTICE_LINK_ROUTE_CHARS = 64
 
 
-# ── Affiliate partners (migration 046) ───────────────────────────────────────
+# ── Affiliate partners ───────────────────────────────────────────────────────
 
 class AffiliateSurface(StrEnum):
     """Where a partner pill was tapped. Mirrors the CHECK on

@@ -276,7 +276,7 @@ rclone copy sb:boardgamebuddy-games r2:bgb-games --progress --no-check-bucket
 ```
 
 Re-run step 7's verifier. Then open
-`projects/boardgame-buddy/db/migrations/036_r2_photo_urls.sql`, **edit the four
+`projects/boardgame-buddy/db/migrations/archive/2026-09-28/036_r2_photo_urls.sql`, **edit the four
 prefixes at the top**:
 
 ```sql

@@ -20,8 +20,8 @@ Flow:
 
 THE PLAYS HALF IS A COUNT, NOT A WRITE. This module does not insert BGG plays:
 plays come in through the play importer (POST /bgg/plays/pending → the wizard →
-POST /plays/import), reviewed, with the migration-023 roster rules enforced by
-bgb_log_play. What lives here is the read: the sync counts what BgB is missing so its done
+POST /plays/import), reviewed, with the roster rules (at least one seat, no account seated twice)
+enforced by bgb_log_play. What lives here is the read: the sync counts what BgB is missing so its done
 screen can offer "Import N plays", and parks the read it took
 (services/bgg_plays_cache.py) so the importer does not repeat it.
 
@@ -36,7 +36,7 @@ Two consequences worth knowing:
     BGG /thing call on a game whose plays they never bring over.
 
 Idempotent: collection rows upsert on (user_id, game_id); plays dedup on
-(user_id, bgg_play_id), enforced inside bgb_log_play (migration 044).
+(user_id, bgg_play_id), enforced inside bgb_log_play.
 Re-running sync is always safe.
 """
 
@@ -105,7 +105,7 @@ def _existing_game_map(sb: Client, bgg_ids: list[int]) -> dict[int, dict]:
     """Bulk-resolve {bgg_id → game row} for games already in our catalog.
 
     Returns the full denormalization payload set (covers both collection and
-    play denorm fields from migration 020) plus `id` so callers can pass the
+    play denorm fields) plus `id` so callers can pass the
     row straight into _upsert_collection_row / _materialize_play without a
     second round trip per (bgg_id) during sync.
     """
@@ -163,7 +163,7 @@ def _upsert_collection_row(
     """Upsert one collection row using the existing (user_id, game_id) UNIQUE.
 
     `game` is the full row returned by _existing_game_map or import_game_from_bgg;
-    its denormalized fields (migration 020) are written inline so the new
+    its denormalized fields are written inline so the new
     collection row doesn't need a sync trigger.
 
     `private` is the dict of private fields parsed from BGG's <privateinfo>
@@ -304,10 +304,9 @@ def _player_rows(
 ) -> list[dict]:
     """play_players rows for one play. Never empty, never one person twice.
 
-    Writes through the migration-009 columns so we don't touch the dropped
-    buddy_id (migration 013).
+    Writes player_user_id / player_display_name directly.
 
-    TWO NORMALIZATIONS, both of migration 023's invariants (the other two
+    TWO NORMALIZATIONS, both roster invariants (the other two
     importers get them from bgb_log_play, which this path does not go
     through — it writes the tables directly, in bulk):
 
@@ -321,8 +320,7 @@ def _player_rows(
 
       • BGG allows the same name on two seats of one play, and those arrive
         here as two ghosts. Deduped case-insensitively, winning on any of them
-        winning — the same fold migration 023 applied to the rows already
-        stored.
+        winning.
     """
     out: list[dict] = []
     seen: dict[str, dict] = {}
@@ -423,7 +421,7 @@ def _queue_pending_rows(sb: Client, user_id: str, items: list[tuple]) -> int:
 def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
     """Bulk-insert plays + their players. `items` is [(game_row, play_payload)].
 
-    DRAIN-ONLY (MIGRATION 044). Nothing queues a kind='play' row —
+    DRAIN-ONLY. Nothing queues a kind='play' row —
     BoardGameGeek plays come in through the importer, reviewed, via
     POST /plays/import. This runs because _process_pending_imports has to
     drain the legacy kind='play' rows still in the queue, and a queued play the
@@ -436,7 +434,7 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
     reaches zero across the fleet, this and its three helpers can go.
 
     Dedup is one batched SELECT against the partial UNIQUE on
-    (user_id, bgg_play_id) (001_baseline.sql:169-171) instead of a probe per
+    (user_id, bgg_play_id) (idx_bgb_plays_user_bgg_play) instead of a probe per
     play — shared with the importer's preview as
     bgg_plays_read.existing_bgg_play_ids, so the two cannot disagree about what
     "already here" means. Rows the account already has are skipped without
@@ -847,7 +845,7 @@ async def get_sync_status(
     """Return linked username, auth_state, and pending/errored counts for FE polling."""
     sb = get_supabase()
 
-    # Single RPC (migration 039) — this endpoint is POLLED by the FE for the
+    # Single RPC (bgb_bgg_sync_status) — this endpoint is POLLED by the FE for the
     # whole duration of an import, so the profile, two counts, last-done,
     # session roll-up and name resolution are one round trip per poll.
     # Per-bgg_id precedence: pending wins over error wins over done.

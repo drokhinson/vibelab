@@ -72,7 +72,7 @@
      * The viewer as a SEAT, for a flow that starts every play with them at the
      * table (the photo importer: every photo in a camera roll is a game the
      * person holding the phone played, and a play with nobody at it cannot
-     * be written at all — migration 023).
+     * be written at all — bgb_log_play refuses it).
      *
      * Deliberately built from viewerRow() so the seeded seat and the picker
      * row that would duplicate it can never disagree about how the viewer is

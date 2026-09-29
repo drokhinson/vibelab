@@ -7,7 +7,7 @@
 // widget ships no CSS of its own.
 //
 // Two panels, not four: descriptions, stats and publishers are three views of
-// one BoardGameGeek read, so they share one queue (migration 045).
+// one BoardGameGeek read, so they share one queue.
 //
 // The host view owns the repaint: every state change calls opts.render(), and
 // the panel's html() is re-read from the host's own render pass. Inline

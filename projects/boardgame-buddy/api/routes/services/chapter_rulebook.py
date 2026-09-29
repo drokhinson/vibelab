@@ -1,4 +1,4 @@
-"""Rulebook-link chapter helpers (migrations 052, 053).
+"""Rulebook-link chapter helpers.
 
 A rulebook link is a `layout='rulebook_link'` chapter whose URL lives in the
 typed `link_url` column. `content` is NOT where the URL is stored — it carries a
@@ -25,7 +25,7 @@ stranger get different answers for the same row) and PostgREST cannot express
 "or the author is one of my accepted buddies" without a round trip of its own,
 which is `buddy_ids` here.
 
-HOW A LINK ENTERS THE QUEUE (migration 053), which is separate from who may
+HOW A LINK ENTERS THE QUEUE, which is separate from who may
 read it. Asking for review is the author's own decision (`initial_status`), an
 unreviewed link that nobody was asked about is `unlisted` rather than
 `pending`, and an admin's own link is not born approved. The two unreviewed
@@ -41,8 +41,8 @@ from supabase import Client
 
 from ..constants import ChapterLayout, RulebookStatus
 
-# The chapter type a rulebook link must be filed under, seeded by migration 052
-# at display_order 6. The type and the layout are 1:1 and each holds half the
+# The chapter type a rulebook link must be filed under, seeded in
+# boardgamebuddy_chapter_types at display_order 6. The type and the layout are 1:1 and each holds half the
 # truth — the type says the chapter IS the rulebook, the layout says its body is
 # a URL in `link_url` rather than markdown in `content` — which is what the
 # cross-check below exists to keep from drifting. Same pairing rule, and the
@@ -152,8 +152,8 @@ def url_to_content(url: str) -> str:
 def initial_status(review_requested: bool) -> RulebookStatus:
     """The gate a newly-written link opens at — the AUTHOR's answer, not their role.
 
-    Two states, and the choice between them is the save form's review toggle
-    (migration 053). Both are visible to the author and their accepted buddies
+    Two states, and the choice between them is the save form's review toggle.
+    Both are visible to the author and their accepted buddies
     the moment they save; they differ in whether an admin has been asked to
     publish the link to everyone else.
 
@@ -242,7 +242,7 @@ def is_visible_to(
 
       * approved → everyone, including anonymous readers. An admin's name is on
         it.
-      * unlisted → its author and their accepted buddies (migration 053). The
+      * unlisted → its author and their accepted buddies. The
         author never asked for this one to be published, which is a statement
         about the QUEUE and not about who may read it: the buddies at the table
         that added it are exactly who it was added for.

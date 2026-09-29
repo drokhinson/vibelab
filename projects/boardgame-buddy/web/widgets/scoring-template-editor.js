@@ -1,7 +1,7 @@
 // @ts-check
 // widgets/scoring-template-editor.js — the body of a scoring-grid chapter.
 //
-// A scoring grid is a `layout: "scoring_grid"` chapter (migration 018): instead
+// A scoring grid is a `layout: "scoring_grid"` chapter: instead
 // of markdown it holds an ordered list of labelled, colour-tagged rows, and the
 // play screen opens with those rows already on the grid. This module renders
 // the editor for that list, and the read-only preview the browse pool and the
@@ -64,7 +64,7 @@
   }
 
   // Mirrors ScoringGridMode in the backend's constants.py and the
-  // bgb_chapters_grid_mode CHECK (migration 032). Only an EXPANSION's grid has
+  // bgb_chapters_grid_mode CHECK. Only an EXPANSION's grid has
   // one; see domain/scoring-template.js for what each does at the table.
   const MODE_ADD_ON = "add_on";
   const MODE_REPLACE = "replace";

@@ -173,7 +173,7 @@ console.log("\nthe roster is the source of truth, not the aggregate:");
   eq("a stale winner name is not reported over an uncrowned roster",
      text(caption(cleared)), "No winner recorded");
 
-  // A payload with no roster at all (pre-015, or an adapter that omits it)
+  // A payload with no roster at all (an older feed RPC, or an adapter that omits it)
   // still has to work off the aggregate — that is the whole fallback.
   const legacy = { play_mode: "competitive", winner_display_name: "Ana",
                    participant_count: 3, user: { id: "u-x" } };

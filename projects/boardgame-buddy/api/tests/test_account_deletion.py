@@ -10,12 +10,12 @@ deletion did not take, and both would be right.
 
 A third failure runs in the other direction: CASCADEing `plays.user_id` would
 mean deleting the person who LOGGED a game night deletes the night and every
-other account's seat on it. Such a play is handed over (migration 051). **The handover itself is SQL and is not
+other account's seat on it. Such a play is handed over. **The handover itself is SQL and is not
 exercised here** — these tests drive the service with a fake PostgREST and
 there is no Postgres in this suite — so what they pin at this layer is that
 the service calls `bgb_delete_account_rows` and never a direct table delete,
 which is what keeps the handover and the profile delete in one transaction.
-`db/tests/051_account_deletion_handover.sql` is the behavioural half.
+`db/tests/account_deletion_handover.sql` is the behavioural half.
 
 Four properties carry this, and each one is a way it could silently regress:
 
@@ -173,7 +173,7 @@ class _FakeSupabase:
         raise AssertionError(
             "account deletion must go through bgb_delete_account_rows, not a "
             f"direct table write ({name}). The handover and the profile delete "
-            "have to be one transaction — see migration 051."
+            "have to be one transaction."
         )
 
 
@@ -337,7 +337,7 @@ def test_a_row_failure_never_reaches_the_credential(wired, monkeypatch):
 
 def test_both_photo_stores_are_purged(wired):
     """After the R2 cutover a pre-migration photo exists in BOTH places —
-    `036` rewrote URLs and the runbook says in bold not to delete the Supabase
+    the cutover rewrote URLs and the runbook says in bold not to delete the Supabase
     buckets. Clearing only R2 leaves a public copy on supabase.co."""
     result = _run()
     assert ("r2-delete", object_store.PLAYS, f"{APP_UID}/") in wired.log

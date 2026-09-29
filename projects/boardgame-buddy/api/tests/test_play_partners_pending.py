@@ -1,10 +1,10 @@
 """The player picker's bundle carries unanswered buddy requests.
 
-Migration 049 adds a fourth list to `bgb_play_partners`: `pending`, one row per
+`bgb_play_partners` carries a fourth list: `pending`, one row per
 live buddy request the viewer is a party to, either direction. It exists
 because the other three cannot hold that person. `accounts` is accepted edges
-only; `ghosts` is free text from past plays; and `recent` — which HAS carried
-pending flags since 047/061 — is built from shared plays, so it only ever
+only; `ghosts` is free text from past plays; and `recent` — which DOES carry
+pending flags — is built from shared plays, so it only ever
 describes someone the viewer has already logged a game with. The person you
 added across the table ninety seconds ago is in none of them, which is exactly
 when you need to seat them.

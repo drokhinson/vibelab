@@ -26,7 +26,7 @@ a notice nobody sees looks identical to a release nobody cared about.
 The new-account rule ("a fresh signup does not see the backlog") is NOT pinned
 here, because it is not expressible at this layer: it lives entirely in the
 column default `release_notices_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()`
-from migration 042. What is pinned is the shape that makes the default
+on boardgamebuddy_profiles. What is pinned is the shape that makes the default
 sufficient — the watermark is read in SQL, so no Python caller can bypass it.
 """
 

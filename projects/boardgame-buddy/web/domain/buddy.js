@@ -80,8 +80,8 @@
     // button for a request that's already sent.
     static suggested() { return window.api.get("/buddies/suggested"); }
 
-    // "Stop suggesting this person" (migration
-    // `014_buddy_suggestion_dismissals`). Per-viewer and silent —
+    // "Stop suggesting this person"
+    // (boardgamebuddy_buddy_suggestion_dismissals). Per-viewer and silent —
     // it is not a block, the person is never told, and /profiles/search still
     // finds them, which is what makes a mis-tapped × recoverable. Sending them
     // a request later clears the dismissal server-side.
@@ -96,7 +96,7 @@
     // The onboarding "Add buddies" step's list. A separate endpoint, not
     // suggested() with a bigger limit: that one only returns people the
     // viewer already shares a play or a buddy with, which is empty for the
-    // account that was created ninety seconds ago — see migration 063. Each
+    // account that was created ninety seconds ago. Each
     // candidate carries a `source` saying which tier it came from.
     static onboardingSuggestions(limit) {
       return window.api.get("/buddies/suggested/onboarding", limit ? { limit } : {});
@@ -300,7 +300,7 @@
           Buddy.rememberAliases(accounts);
           return {
             accounts,
-            // Migration 049: live buddy requests either way. Only `accounts`
+            // Live buddy requests either way. Only `accounts`
             // is fed to rememberAliases — a pending edge cannot hold an alias
             // (the endpoint 409s unless it is accepted), and seeding an edge
             // id for one would put the alias pencil on a row whose save 404s.
@@ -349,7 +349,7 @@
       const bundle = window.bgbCache ? window.bgbCache.peek(CACHE_NS, ALL_KEY) : null;
       return {
         accounts: (bundle && bundle.accounts) || [],
-        // Absent from a bundle cached by a build without migration 049, which is
+        // Absent from a bundle cached by an older build, which is
         // why every read of it is `|| []` rather than a destructure: that copy
         // stays fresh for a day and is corrected by the next refresh, and one
         // missing section beats a picker that throws.
@@ -417,7 +417,7 @@
         });
       }
 
-      // People with a buddy request nobody has answered yet (migration 049),
+      // People with a buddy request nobody has answered yet,
       // ABOVE the played-with rows and below the buddies themselves. A request
       // is a stronger signal than a shared play for the question this list
       // answers: you added them because you are playing with them, and the

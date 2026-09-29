@@ -84,8 +84,8 @@ def list_feedback(
     """The board: filtered, like-counted, and ordered by that count.
 
     Goes through the bgb_feedback_list RPC rather than PostgREST because the
-    sort key is an aggregate over a second table — see the function's header in
-    migration 040. Empty filter strings are normalised to NULL here rather than
+    sort key is an aggregate over a second table (boardgamebuddy_feedback_likes).
+    Empty filter strings are normalised to NULL here rather than
     in SQL, so a client that sends `?type=` gets "no filter" instead of a search
     for a type whose id is the empty string.
 

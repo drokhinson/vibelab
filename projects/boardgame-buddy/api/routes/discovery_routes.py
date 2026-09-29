@@ -2,7 +2,7 @@
 games worth looking at.
 
 Thin adapter over services/discovery_service.py. One bundle, four rails:
-  - personal picks (bgb_discover_recommendations, migration 038)
+  - personal picks (bgb_discover_recommendations)
   - BGG's hot list, with catalog rows attached where we have them
   - this year's releases, by BGG rank
   - the viewer's own dormant shelf (bgb_dormant_collection)
@@ -53,7 +53,7 @@ async def get_discover(
 async def refresh_trending(
     _caller: CurrentUser | None = Depends(get_admin_or_service_key),
 ) -> HotRefreshResult:
-    """Write one run of the hot list (migration 039); the daily cron and the Settings admin row both call this.
+    """Write one run of the hot list; the daily cron and the Settings admin row both call this.
 
     The ledger is opened BEFORE any work, and failed in both except arms, so a
     run that dies leaves a log saying where — the same shape `check_bgg` uses.

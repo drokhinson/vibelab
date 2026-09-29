@@ -4,7 +4,9 @@ The UI puts one button under a whole game night; the rows are per PLAY. That is
 not a compromise, it is the only thing available: a feed session is grouped
 client-side off `played_at | participants`, and `participants` is filtered per
 viewer by bgb_feed_plays, so two people looking at the same night compute
-different keys. There is no session identity to key on — see migration 016.
+different keys. There is no session identity to key on either: a
+boardgamebuddy_play_sessions row is one game, not a night, and /log-play and
+BGG import create no session at all.
 
 So one tap covers N plays, and the two things that follow live here:
 
@@ -15,9 +17,8 @@ So one tap covers N plays, and the two things that follow live here:
     ride, and a session can legitimately contain plays logged by several people
     because the grouping keys on participants rather than on the logger.
 
-NOTHING CONSUMES reaction_group_id TODAY, and 016's note that a notification arm
-would is out of date. That arm was built and then deliberately dropped: a like
-is the lightest thing that happens in this app, so it belongs on the feed card
+NOTHING CONSUMES reaction_group_id TODAY, and deliberately no notification arm
+does: a like is the lightest thing that happens in this app, so it belongs on the feed card
 that earned it and gets neither a bell row nor a push. The column stays because
 it is the only record of which rows were one act — reconstructable from nothing
 else afterwards, and what any future consumer would have to start from.

@@ -1,7 +1,7 @@
-"""Game ranking (migration 056): categories, ordering, the writes and the queue.
+"""Game ranking: categories, ordering, the writes and the queue.
 
 The RPCs' own position arithmetic is SQL and lives in
-db/tests/056_game_ranks.sql; the fake here reproduces it just closely enough
+db/tests/game_ranks.sql; the fake here reproduces it just closely enough
 that the service can be driven end to end. What is pinned in Python is
 everything the service decides on its own:
 
@@ -10,9 +10,9 @@ everything the service decides on its own:
   * "#N" stacks the tiers love → good → not, whatever the stored positions;
   * the queue is played (a play, or the played-before mark), minus ranked,
     minus expansions, A to Z — the shelf of shame is not offered;
-  * a deferred game ("Rank after next play", migration 058) stays in the
+  * a deferred game ("Rank after next play") stays in the
     queue, flagged and after the rest, and ranking it drops the deferral. When
-    a deferral lapses is SQL, in db/tests/058_rank_deferrals.sql.
+    a deferral lapses is SQL, in db/tests/rank_deferrals.sql.
 """
 
 import asyncio
@@ -102,8 +102,9 @@ class _Delete:
 
 
 class _SB:
-    """Tables as lists of dicts; the two rank RPCs mirror 056's SQL. `lapsed`
-    names the deferred games played since, which 058's RPC leaves out."""
+    """Tables as lists of dicts; the two rank RPCs mirror bgb_rank_game and
+    bgb_unrank_game. `lapsed` names the deferred games played since, which
+    bgb_rank_deferrals_active leaves out."""
 
     def __init__(self, games, collections=(), plays=(), ranks=(), deferrals=(), lapsed=()):
         self.tables = {

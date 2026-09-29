@@ -35,7 +35,7 @@
   // backend pairs it with — the two are 1:1, which is why _pickType derives one
   // from the other rather than asking twice.
   const GRID_TYPE = "scoring_grid";
-  // The rulebook link's chapter type and its layout (migration 052). Two
+  // The rulebook link's chapter type and its layout. Two
   // constants because, unlike the grid, the two strings differ: the type says
   // the chapter IS the rulebook, the layout says its body is a URL in
   // `link_url`. The API cross-checks the pair in both directions
@@ -47,9 +47,9 @@
   // in `content` — `content` holds a generated bullet mirror of them, which is
   // what keeps the pool's search and the moderation preview working — so show
   // the real grid instead of the mirror. Falls through to markdown whenever the
-  // rows aren't there, which covers a cached row from before migration 018.
+  // rows aren't there, which covers a cached row with a layout but no grid.
   //
-  // An EXPANSION's grid is badged with its mode (migration 032) — the pool is
+  // An EXPANSION's grid is badged with its mode — the pool is
   // where someone decides whether to adopt one, and "adds two rows to Everdell"
   // and "is the whole score sheet instead" are not the same offer.
   function chapterBodyHtml(c, baseGameId) {
@@ -142,7 +142,7 @@ components above.
       // collection tile and a guide of its own, so the route lands on one
       // directly too — and there nothing about the route's shape says so.
       // Authoritative, from the games row (`is_expansion`), because a scoring
-      // grid's mode hangs off it (migration 032) and guessing from the route
+      // grid's mode hangs off it and guessing from the route
       // makes the question disappear on exactly that screen.
       this._gameIsExpansion = false;
       // That game's name with its base game's stripped off ("Everdell:
@@ -218,18 +218,18 @@ components above.
       this._formTitle = "";
       this._formContent = "";
       this._formType = "";
-      // Migration 018. Which BODY this chapter has: "text" (markdown) or
+      // Which BODY this chapter has: "text" (markdown) or
       // "scoring_grid" (labelled rows the play screen fills in).
       // Only the `scoring` type offers the choice; every other type is text.
       this._formLayout = "text";
       this._formRows = [];           // [{label, color, note}] — scoring_grid only
-      // The URL of a rulebook_link chapter (migration 052). Its own field
+      // The URL of a rulebook_link chapter. Its own field
       // rather than reusing _formContent: `content` is a mirror this view
       // GENERATES from the URL, the same way it generates one from the grid's
       // rows, and the two must not be one buffer or an edit to the mirror would
       // read as an edit to the link.
       this._formLinkUrl = "";
-      // The review switch (migration 053) — whether to ask an admin to publish
+      // The review switch — whether to ask an admin to publish
       // this link to everyone, or keep it between the author and their
       // buddies. ON by default: sharing is what most authors mean.
       this._formLinkReview = true;
@@ -241,7 +241,7 @@ components above.
       // at all (a decided link is not asked again — see _renderLinkStep) and
       // never travels back to the server, which recomputes the gate itself.
       this._formLinkStatus = null;
-      // How an EXPANSION's grid meets the base game's (migration 032):
+      // How an EXPANSION's grid meets the base game's:
       // "add_on" appends its rows to the base template, "replace" stands in
       // for it. Only asked when the save target IS an expansion — see
       // _gridExpansionName — and ignored by the backend otherwise, which
@@ -342,7 +342,7 @@ components above.
       // Pre-set the browse tab's type filter. The reference-guide scroll's
       // "scoring templates available" notice arrives with filter=scoring so the
       // pool opens on the rows the notice was about, rather than on everything
-      // and a hunt (migration 018). Set AFTER _resetFormState, which cleared it.
+      // and a hunt. Set AFTER _resetFormState, which cleared it.
       if (p.filter) this._typeFilter = p.filter;
       this._expansionMeta = this._gameId
         ? { [this._gameId]: { name: this._gameName, color: null, thumb: null } }
@@ -453,7 +453,7 @@ components above.
         this._arrivedByRoute = true;
       } else if (p.mode === "create" && p.layout === LINK_LAYOUT) {
         // External create entry: the reference guide's Rulebook section, from
-        // either "No rulebook link available" or "Add another" (migration 052).
+        // either "No rulebook link available" or "Add another".
         //
         // Straight to the URL field. Step 0 asks for a chapter type the caller
         // has already named, and step 1 offers an AI head start on a body no
@@ -852,7 +852,7 @@ components above.
       return this._formLayout === "scoring_grid";
     }
 
-    /** True when it is authoring a rulebook link (migration 052). */
+    /** True when it is authoring a rulebook link. */
     _isLinkLayout() {
       return this._formLayout === LINK_LAYOUT;
     }
@@ -1318,8 +1318,8 @@ components above.
     // points go through here — the in-view "Edit" on an expanded pool row, and
     // the mode=edit route the reference-guide scroll takes — so the two
     // cannot drift apart, and a scoring grid gives them two more fields to
-    // drift on. `grid` is read defensively: a stale localStorage row cached
-    // before migration 018 can carry a layout with no rows, and that has to
+    // drift on. `grid` is read defensively: a stale localStorage row can
+    // carry a layout with no rows, and that has to
     // open as text rather than as a broken grid editor.
     _loadChapterIntoForm(c) {
       this._editingChapterId = c.id;
@@ -1337,8 +1337,8 @@ components above.
       this._formLinkUrl = c.link_url || "";
       // Any gate but `unlisted` means somebody has been asked — pending is
       // waiting on them, approved and denied are their answer — so the switch
-      // opens ON for all three, and for a row with no status at all (a cached
-      // pre-052 shape), which is the same reading the API's own default takes.
+      // opens ON for all three, and for a row with no status at all (an older
+      // cached shape), which is the same reading the API's own default takes.
       this._formLinkStatus = c.moderation_status || null;
       this._formLinkReview = c.moderation_status !== "unlisted";
       // The URL as it was LOADED, kept beside the editable buffer so the save
@@ -1359,8 +1359,7 @@ components above.
       this._tmplColorOpen = null;
       this._tmplNoteOpen = null;
       this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
-      // A grid written before migration 032 stores no mode at all, and an
-      // expansion's grid that stored none behaves as an add-on —
+      // An expansion's grid that stores no mode behaves as an add-on —
       // so that is what the control opens on, matching the backend's own
       // default rather than presenting the author with an empty question.
       this._formGridMode = (c.grid && c.grid.mode === window.ScoringTemplateEditor.MODE_REPLACE)
@@ -1514,7 +1513,7 @@ components above.
           // the copy from "draft this chapter" to "rough out the rows", and
           // says out loud that the grid drafter is a small model.
           grid: this._isGridLayout(),
-          // The expansion mode question (migration 032), from the editor's own
+          // The expansion mode question, from the editor's own
           // renderer so there is one of it. On this step it is an input to the
           // draft rather than a property of the document: an add-on's rows are
           // the two the box brings, a replacement's are a whole reprinted
@@ -1691,7 +1690,7 @@ components above.
      * (services/chapter_rulebook.rulebook_title) and `content` is a generated
      * mirror of the URL, so there is exactly one thing here to type.
      *
-     * THE REVIEW SWITCH (migration 053). Saving a rulebook link and asking an
+     * THE REVIEW SWITCH. Saving a rulebook link and asking an
      * admin to publish it are separate questions: an author who just wants the
      * PDF their own table reads from — the printing they own, a fan
      * translation — must not submit a queue item they never wanted, nor hand
@@ -2098,7 +2097,7 @@ components above.
       this.render();
     }
 
-    // ── Scoring-grid rows (migration 018) ───────────────────────────────────
+    // ── Scoring-grid rows ───────────────────────────────────────────────────
     //
     // Each of these repaints ONLY #tmpl-rows-host, never the editor: a full
     // render would destroy the label input the user is typing into along with
@@ -2123,7 +2122,7 @@ components above.
     }
 
     /**
-     * Pick the mode an EXPANSION's grid acts in (migration 032). A full render
+     * Pick the mode an EXPANSION's grid acts in. A full render
      * rather than the `#tmpl-rows-host` patch the row handlers use: the control
      * is above the row list, not inside it.
      *
@@ -2741,7 +2740,7 @@ components above.
      * stranger cannot see it.
      *
      * Reads the SWITCH, not the author's role. Nobody's link is born approved
-     * (migration 053) — an admin's own goes through the queue like everyone
+     * — an admin's own goes through the queue like everyone
      * else's — so there is no role branch here, only the question the author
      * just answered.
      *
@@ -2883,7 +2882,7 @@ components above.
       // other layout, which is the mirror of the grid rule above and is what
       // keeps a stale client from writing a link onto a prose chapter.
       //
-      // `request_review` rides with it (migration 053). Sent on the edit path
+      // `request_review` rides with it. Sent on the edit path
       // too, and sent EXPLICITLY rather than left out when it has not moved:
       // the field is tri-state on ChapterUpdate and omitting it means "leave
       // the gate alone", which is the right default for some other client and

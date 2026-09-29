@@ -1,4 +1,4 @@
-"""Scoring-grid chapter helpers (migration 018).
+"""Scoring-grid chapter helpers.
 
 A scoring grid is a `layout='scoring_grid'` chapter whose rows live in the typed
 `grid` JSONB column. `content` is NOT where the rows are stored — it carries a
@@ -26,8 +26,8 @@ from fastapi import HTTPException
 from ..constants import ChapterLayout, ScoringGridMode
 from ..models import ScoringGrid
 
-# The chapter type a scoring grid must be filed under, seeded by migration 021
-# at display_order 5 so it sorts above every other type in both the authoring
+# The chapter type a scoring grid must be filed under, seeded in
+# boardgamebuddy_chapter_types at display_order 5 so it sorts above every other type in both the authoring
 # picker and the guide scroll. The type and the layout are 1:1 and each holds
 # half the truth — the type says the chapter is a scoring grid, the layout says
 # its body is stored in `grid` rather than `content` — which is what the

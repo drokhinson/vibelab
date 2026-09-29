@@ -1,8 +1,8 @@
 """A seat keeps the side it played on, across the write and back out again.
 
-Migration 048 gives ``boardgamebuddy_play_players`` a ``team`` column. Before
-it, the tag typed on the Play screen settled which seats shared a win flag and
-was then dropped at save, so a team night persisted as N seats and no sides.
+``boardgamebuddy_play_players.team`` keeps the tag typed on the Play screen,
+which settles which seats share a win flag; without it a team night would
+persist as N seats and no sides.
 
 Three things are pinned here, and the middle one is why this file exists:
 

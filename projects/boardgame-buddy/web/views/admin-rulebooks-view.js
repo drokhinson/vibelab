@@ -1,4 +1,4 @@
-// views/admin-rulebooks-view.js — the rulebook-link approval spoke (052).
+// views/admin-rulebooks-view.js — the rulebook-link approval spoke.
 //
 // A sibling of admin-reports-view.js, and deliberately not a tab on it. A
 // report is somebody objecting to prose AFTER it was published; a rulebook link
@@ -91,7 +91,7 @@
       const busy = this._busy.has(l.chapter_id);
       const pending = l.moderation_status === "pending";
       const author = l.created_by_name
-        // A backfilled link (see migration 052) has no author at all, and the
+        // A backfilled link has no author at all, and the
         // queue says so rather than inventing one.
         ? `Submitted by ${escapeHtml(l.created_by_name)}`
         : "Curated — no submitter";
@@ -152,7 +152,7 @@
      *
      * Both directions are available on an already-decided link, which is what
      * makes a denial undoable: the row stays in the table (a denial is not a
-     * delete — see migration 052) and the Denied tab is where it is found
+     * delete) and the Denied tab is where it is found
      * again.
      *
      * A denial gets the project's one confirm surface, an approval does not:

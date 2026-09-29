@@ -62,7 +62,7 @@ _FOCUS_LIMIT = 500
 _TARGET_ROWS = 10
 
 # An ADD-ON expansion's grid is not a scorepad, it is the handful of categories
-# one box brings to somebody else's (migration 032). Asking for ten there is
+# one box brings to somebody else's. Asking for ten there is
 # asking the model to pad — Pearlbrook adds two rows, not ten — and padding an
 # add-on is worse than padding a sheet, because every invented row lands
 # underneath the base game's real ones where a scorer reads them as the game's.
@@ -93,7 +93,7 @@ def _build_prompt(
     what to build, the shape a row has to have, the player's own steer, and the
     reply format.
 
-    `mode` is what section 1 is ABOUT (migration 032), and it is not a nuance —
+    `mode` is what section 1 is ABOUT, and it is not a nuance —
     the three cases ask for three different documents. A base game's grid is the
     whole score sheet. An EXPANSION's is either the two or three rows that box
     adds to the base game's sheet (add_on — and the app appends them itself, so

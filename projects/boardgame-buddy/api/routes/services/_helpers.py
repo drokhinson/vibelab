@@ -92,7 +92,7 @@ async def reject_if_push_running(sb: Client, user_id: str) -> None:
         )
 
 
-# The JSONB-returning RPCs (migrations 036/037/042/046) signal gate failures
+# The JSONB-returning RPCs signal gate failures
 # with {"error": "<code>"} instead of raising, so a caller gets one round trip
 # either way. This maps those codes onto the HTTP statuses the routes return.
 RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
@@ -102,14 +102,14 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "code_allocation_failed": (503, "Could not allocate session code"),
     "forbidden": (403, "Only the host can finalize"),
     "game_not_found": (404, "Game not found"),
-    # Migration 023's roster gate. Both are 400 rather than 422: the request
+    # bgb_log_play's roster gate. Both are 400 rather than 422: the request
     # parsed fine, it is the play inside it that isn't one. bgb_import_plays
     # reports either per play in `results` and lands the rest of the chunk, so
     # these statuses are what a SINGLE write (POST /plays, a lobby finalize)
     # sees — the importers filter both cases out before they send.
     "no_players": (400, "A play needs at least one player"),
     "duplicate_player": (400, "That play seats the same person twice"),
-    # Migration 046's host writes. `host_only` is separate from `forbidden`
+    # The session host writes. `host_only` is separate from `forbidden`
     # rather than a reuse: forbidden's detail is finalize-specific, and
     # widening it would change bgb_finalize_session's message for no reason.
     "host_only": (403, "Only the host can update the session"),
@@ -117,12 +117,12 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "participant_not_found": (404, "Participant not found"),
     "cannot_remove_host": (400, "Cannot remove the host"),
     "display_name_required": (400, "display_name is required"),
-    # Migration 050. Unreachable through PUT /sessions/{code}/teams — the body
+    # bgb_set_session_teams. Unreachable through PUT /sessions/{code}/teams — the body
     # model guarantees an object — so this is here for the direct RPC caller,
     # and it is a 400 rather than the unmapped default so a malformed argument
     # never presents as a server fault.
     "invalid_teams": (400, "teams must be a {participant_id: tag} object"),
-    # Ghost account claims (migration 070). None of these reuse `not_found`
+    # Ghost account claims. None of these reuse `not_found`
     # above — its detail is session-specific ("Session not found") and
     # widening it would change bgb_finalize_session's message for no reason.
     "claim_not_found": (404, "Claim not found"),
@@ -133,7 +133,7 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "declined_twice": (409, "They've already declined that link"),
     "ghost_gone": (410, "That ghost is no longer on their plays"),
     "not_visible": (403, "You can't see that play"),
-    # Game ranking (migration 056). Unreachable through PUT /ranks/games/{id} —
+    # Game ranking. Unreachable through PUT /ranks/games/{id} —
     # RankWrite's enum rejects a bad tier first — so this is for a direct caller.
     "invalid_tier": (400, "tier must be love, good or not"),
     # `invalid_transition` is deliberately absent: its detail is dynamic

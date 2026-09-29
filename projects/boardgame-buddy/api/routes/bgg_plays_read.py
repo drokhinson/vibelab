@@ -163,7 +163,7 @@ def existing_bgg_play_ids(sb: Client, user_id: str, bgg_play_ids) -> set[int]:
     """Which of these BGG play ids this account already holds a play for.
 
     One batched SELECT per chunk against the partial UNIQUE on
-    (user_id, bgg_play_id) (001_baseline.sql), rather than a probe per play.
+    (user_id, bgg_play_id) (idx_bgb_plays_user_bgg_play), rather than a probe per play.
 
     This is the single definition of "already here", and it answers for every
     writer at once: legacy sync-written plays, the pending-imports worker

@@ -78,7 +78,7 @@ class MessageResponse(BaseModel):
 def _normalize_country(value: str) -> str:
     """Upper-case an ISO 3166-1 alpha-2 code, or reject it.
 
-    The DB CHECK (migration 065) is `^[A-Z]{2}$`, so a lowercase "de" from a
+    The DB CHECK on country_code is `^[A-Z]{2}$`, so a lowercase "de" from a
     client that read `navigator.language` verbatim would be a 500 at insert
     time rather than a 422. Normalizing here means the API's contract is
     case-insensitive while the column stays one canonical case — which is what
@@ -132,7 +132,7 @@ class AdminReviewCounts(BaseModel):
     chapter_reports: int = 0
     missing_images: int = 0
     # Catalog games short of anything one /thing?stats=1 read would give them —
-    # a description, BGG stats, publisher credits, or a year (migration 046).
+    # a description, BGG stats, publisher credits, or a year.
     #
     # ONE field, not one per gap: separate counts of overlapping queues would
     # count a game missing both its blurb and its year twice and over-report
@@ -142,7 +142,7 @@ class AdminReviewCounts(BaseModel):
     # is not expected to reach zero. The queue that has to terminate is
     # `bgg_meta_synced_at IS NULL`, and it lives in the endpoint.
     missing_metadata: int = 0
-    # Rulebook links waiting on a decision (migration 052). The one queue here
+    # Rulebook links waiting on a decision. The one queue here
     # that is not merely tidy-up: until an admin looks, the link is live for its
     # author's buddies, so a number sitting here is readers already following an
     # unreviewed outbound link.
@@ -159,7 +159,7 @@ class AdminReviewCounts(BaseModel):
         )
 
 
-# ── Scoring grids (migration 018) ─────────────────────────────────────────────
+# ── Scoring grids ─────────────────────────────────────────────────────────────
 # Defined up here rather than with the chapters that author them, because a
 # play and a live session each carry a snapshot of one and both are declared
 # further up the file than the chapter block.
@@ -181,7 +181,7 @@ class ScoringGrid(BaseModel):
 
     `v` is here from the start so the document is migratable later (a subtotal
     row kind, a per-row cap): free to add now, impossible to retrofit. `mode`
-    (migration 032) is that extension point in use.
+    is that extension point in use.
     """
 
     v: int = 1
@@ -198,7 +198,7 @@ class ScoringGrid(BaseModel):
 
 
 class ScoringSnapshotRow(ScoringRow):
-    """A row as it lands on a COMPOSED scorepad (migration 032).
+    """A row as it lands on a COMPOSED scorepad.
 
     `source_color` is the `boardgamebuddy_games.expansion_color` of the
     expansion whose grid contributed the row, and None for a row from whichever
@@ -227,7 +227,7 @@ class ScoringSnapshotRow(ScoringRow):
 
 
 class ScoringTemplatePart(BaseModel):
-    """One chapter that contributed rows to a COMPOSED template (migration 032).
+    """One chapter that contributed rows to a COMPOSED template.
 
     A play with expansions can be scored on rows drawn from several grids at
     once — the base game's, plus every add-on expansion's. `rows` above is the
@@ -292,7 +292,7 @@ class PlayScoringTemplate(ScoringGrid):
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 class Avatar(BaseModel):
-    """Customizable badge config (migration 029).
+    """Customizable badge config.
 
     `icon` is either "initials" or a key from the client-side icon library
     (meeple, die, sword, ...). `iconColor` and `bgColor` are hex strings.
@@ -308,7 +308,7 @@ class ProfileCreate(BaseModel):
     # independently.
     display_name: str | None = None
     avatar: Avatar | None = None
-    # How much this account wants pushed to its devices (migration 017). Saved
+    # How much this account wants pushed to its devices. Saved
     # through this endpoint rather than a /push route of its own because it is
     # an account preference like the two above, and this is already the app's
     # one profile-save path — the FE merges the response onto window.store.user
@@ -320,16 +320,16 @@ class ProfileCreate(BaseModel):
 class ProfileResponse(BaseModel):
     id: str
     display_name: str
-    # Stable handle (migration 017). Readonly in the FE; search matches it.
+    # Stable handle. Readonly in the FE; search matches it.
     username: str
     avatar: Avatar | None = None
     is_admin: bool = False
     # TRUE for brand-new accounts that have not yet completed the
-    # "Create your profile" modal (migration 030). Cleared by the first
+    # "Create your profile" modal. Cleared by the first
     # successful POST /profile.
     needs_setup: bool = False
     # Defaulted rather than required: a profile row read by an older cached
-    # client, or written before migration 017, has no value and must read as
+    # client has no value and must read as
     # "off" rather than 500 the whole profile fetch.
     push_tier: PushTier = PushTier.NONE
     created_at: datetime
@@ -413,7 +413,7 @@ class BggSyncStatus(BaseModel):
     # previously-unknown game has been fetched from BGG.
     session_game_names: list[str] = []
     # The catalog fill a POST /bgg/check kicked off, anchored separately on
-    # profiles.bgg_last_check_started_at (migration 006). A check queues
+    # profiles.bgg_last_check_started_at. A check queues
     # kind='catalog' rows into the same table an import uses, so without their
     # own window they would count as part of the last import — making a
     # finished import read as unfinished, and this poll exit instantly for
@@ -671,8 +671,8 @@ class GameSummary(BaseModel):
     rulebook_url: str | None = None
     play_mode: PlayMode = PlayMode.COMPETITIVE
     # BGG geek rating (1..10) and overall rank, backfilled into the catalog by
-    # POST /games/admin/backfill-metadata (migration 038, 045). Optional on purpose:
-    # NULL means "not synced yet", and a client holding a pre-038 cached row
+    # POST /games/admin/backfill-metadata. Optional on purpose:
+    # NULL means "not synced yet", and a client holding a cached row without them
     # simply reads None — no cache SCHEMA_VERSION bump needed.
     bgg_rating: float | None = None
     bgg_rank: int | None = None
@@ -691,8 +691,8 @@ class GameSummary(BaseModel):
 def _null_list_to_empty(v: Any) -> Any:
     """NULL → [] for a nullable array column.
 
-    `publishers` is nullable with no DB default (migration 040) so that NULL
-    can mean "never synced" to the backfill's queue. A reader has no use for
+    `publishers` is nullable with no DB default, and a NULL (not synced yet)
+    and '{}' (BGG credits nobody) both reach readers. A reader has no use for
     that distinction and Pydantic would reject the None outright, so it lands
     here as the empty list every consumer already handles.
     """
@@ -703,8 +703,8 @@ class GameDetail(GameSummary):
     description: str | None = None
     categories: list[str] = []
     mechanics: list[str] = []
-    # BGG's publisher credits in BGG's order, capped at 4 by the import
-    # (migration 040). The game page names the first; the rest are there for
+    # BGG's publisher credits in BGG's order, capped at 4 by the import.
+    # The game page names the first; the rest are there for
     # any later edition list. On GameDetail and not GameSummary on purpose —
     # no rail or search tile shows a publisher, so it stays out of
     # game_select_clause() and off every list payload.
@@ -712,7 +712,7 @@ class GameDetail(GameSummary):
     # Defaults to [], which flattens the column's two absences (NULL = never
     # synced, '{}' = synced and BGG credits nobody) into one. That is the right
     # shape for a reader: both mean "no publisher to show", and a client
-    # holding a row cached before 040 reads the same empty list.
+    # holding a cached row without the field reads the same empty list.
     publishers: Annotated[list[str], BeforeValidator(_null_list_to_empty)] = []
     created_at: datetime
     # Populated on expansion rows so the FE can render a "Back to <base>" link
@@ -826,7 +826,7 @@ class BggSearchResult(BaseModel):
     is_expansion: bool = False
     already_in_db: bool = False
     # Ours when the game is in the library, else BGG's from the thumb cache
-    # (migration 054). None = not known yet — GET /search/bgg-thumbnails.
+    # None = not known yet — GET /search/bgg-thumbnails.
     thumbnail_url: str | None = None
 
     @computed_field  # type: ignore[misc]
@@ -883,7 +883,7 @@ class CollectionUpdate(BaseModel):
 class CollectionPlayedBefore(BaseModel):
     """Set or clear the played mark: "played it, somewhere I didn't log it".
 
-    One mark on any game, whatever its shelf status (migration 057). On an
+    One mark on any game, whatever its shelf status (played_before_at). On an
     owned game it clears the Shelf of Shame; on a game on no shelf it puts the
     game on the Played shelf. Never a play.
     """
@@ -898,7 +898,7 @@ class CollectionItem(BaseModel):
     added_at: datetime
     last_played_at: date | None = None
     play_count: int = 0
-    # The played mark (migration 057): played somewhere it was not logged.
+    # The played mark: played somewhere it was not logged.
     played_before: bool = False
     game: GameSummary
     # No nested expansions: the web client asks for the flat shelf with
@@ -910,7 +910,7 @@ class CollectionItem(BaseModel):
 class CollectionPageResponse(BaseModel):
     items: list[CollectionItem]
     total: int
-    # How many of `total` are prev_owned (migration 069). The owned shelf
+    # How many of `total` are prev_owned. The owned shelf
     # returns games you sold alongside games you have, so the caller needs this
     # to show a count that means "games you own". Always 0 on other shelves.
     parted_total: int = 0
@@ -931,7 +931,7 @@ class CollectionStatusMapResponse(BaseModel):
     # owns. prev_owned expansions are NOT counted — one you sold is no longer
     # clutter on the base game's shelf.
     expansion_counts: dict[str, int] = Field(default_factory=dict)
-    # Every game carrying the played mark (migration 057), whatever its
+    # Every game carrying the played mark, whatever its
     # status. status_map alone cannot say: it reads "played" for a mark and for
     # logged plays alike, and a shelf status for a marked owned game.
     played_marks: list[str] = Field(default_factory=list)
@@ -951,7 +951,7 @@ class CollectionShelfResponse(BaseModel):
     # Counts every row in `items`' source set, prev_owned included, because
     # `truncated` below is about the rows on offer.
     total: int
-    # How many of `total` are prev_owned (migration 069). The owned shelf
+    # How many of `total` are prev_owned. The owned shelf
     # returns games you sold alongside games you have, so the caller subtracts
     # this to show a count that means "games you own". Always 0 elsewhere.
     parted_total: int = 0
@@ -971,15 +971,15 @@ class PlayerEntry(BaseModel):
     score: int | None = None
     # Real-account player id. Populated when the FE picks this player from
     # the user's accepted-buddy list; None for free-text ghost players.
-    # Backend uses it to populate play_players.player_user_id (migration 009)
+    # Backend uses it to populate play_players.player_user_id
     # so the feed RPC can resolve the winner's display name.
     user_id: str | None = None
-    # Per-round score breakdown (migration 028). Only sent when more than
+    # Per-round score breakdown. Only sent when more than
     # one round was tracked — the FE drops it for ≤1-round plays so the
     # column stays NULL for the simple-score path.
     round_scores: list[int | None] | None = None
-    # The side this seat played on, free text as the host typed it
-    # (migration 048). None for every competitive and co-op play. The client
+    # The side this seat played on, free text as the host typed it.
+    # None for every competitive and co-op play. The client
     # caps its own input at 6 characters for column width; this cap is about
     # the data, not that column — see MAX_PLAY_TEAM_CHARS.
     team: str | None = Field(None, max_length=MAX_PLAY_TEAM_CHARS)
@@ -1036,23 +1036,23 @@ class PlayCreate(BaseModel):
     notes: str | None = None
     photo_url: str | None = None
     expansion_ids: list[str] = []
-    # Optional per-play scoring style override (migration 007). When None,
+    # Optional per-play scoring style override. When None,
     # the play inherits the game's stored play_mode at insert time.
     play_mode: PlayMode | None = None
-    # Idempotency key for offline-queued plays (migration 048). The web app's
+    # Idempotency key for offline-queued plays. The web app's
     # outbox stamps one UUID per queued play and re-sends it on every flush
     # attempt, so a retry after a lost response returns the original play
     # instead of writing a duplicate. Omitted by live writes, where two
     # identical POSTs legitimately mean two plays.
     client_key: UUID4 | None = None
-    # Where the play happened, ISO 3166-1 alpha-2 (migration 065). Country
+    # Where the play happened, ISO 3166-1 alpha-2. Country
     # granularity is the whole design: it answers "what gets played in
     # Germany" without a location permission and without being able to say
     # where anybody lives. The client resolves it from the device timezone and
     # the host can correct it in Settle Up; None whenever it can't be resolved,
     # which is a legitimate row and never an error.
     country_code: CountryCode | None = None
-    # Migration 005. Shared by every play in one run of identical imported
+    # Shared by every play in one run of identical imported
     # plays — same game, same date, same players, same winner, and the same
     # note and scores as each other, if any. Indistinguishable, which is not
     # the same as featureless: a run whose entry carried "league night" is
@@ -1062,22 +1062,22 @@ class PlayCreate(BaseModel):
     # individual rows. Set ONLY by the Settings importer: a live log is one
     # play and stands for itself.
     import_group_id: UUID4 | None = None
-    # Migration 007. One id per IMPORT, where the group above is one per RUN.
+    # One id per IMPORT, where the group above is one per RUN.
     # It is what makes "undo that whole paste" expressible — a series of run
     # deletions could never say it, because an import also writes one-offs that
     # carry no group at all. imported_at is stamped server-side from this.
     import_batch_id: UUID4 | None = None
-    # Migration 018. Snapshot of the scoring-grid chapter this play was scored
+    # Snapshot of the scoring-grid chapter this play was scored
     # on, or None for the plain R1..Rn grid. A snapshot rather than a chapter
     # id because the chapter is community-owned and may later be edited or
     # deleted; see the COMMENT ON boardgamebuddy_plays.scoring_template.
     scoring_template: PlayScoringTemplate | None = None
-    # Migration 040. The Board Game Arena table this play was imported from,
+    # The Board Game Arena table this play was imported from,
     # and the key a re-import dedupes on — unique per user, so BGA history can
     # be imported repeatedly and only ever offer what is new. Set ONLY by the
     # wizard's BGA branch; every other origin leaves it None.
     bga_table_id: int | None = None
-    # Migration 044. The BoardGameGeek play this row came from, set ONLY by the
+    # The BoardGameGeek play this row came from, set ONLY by the
     # importer's BoardGameGeek source. It is a second idempotency key beside
     # client_key, and the only one that can recognise a play written by
     # POST /bgg/sync's legacy write path — those rows carry a
@@ -1092,7 +1092,7 @@ class PlayCreate(BaseModel):
 
 
 def validated_roster(players: list[PlayerEntry]) -> list[PlayerEntry]:
-    """The seats of a play, checked against migration 023's two invariants.
+    """The seats of a play, checked against the roster's two invariants.
 
     A SEAT NAMES SOMEBODY. `player_display_name` is a plain TEXT column and ""
     is not NULL, so a blank seat clears the identity CHECK and lands an
@@ -1104,7 +1104,7 @@ def validated_roster(players: list[PlayerEntry]) -> list[PlayerEntry]:
     ONE ACCOUNT, ONE SEAT. Two spellings of one buddy is the thing the notes
     importer's Players step exists to resolve; if it resolves them to the same
     account they are one seat, not two — never a play seating Jasmine twice,
-    once winning. The unique index from 023 is the backstop; this is the
+    once winning. uq_bgb_play_players_play_user is the backstop; this is the
     readable error.
 
     Ghost seats are deliberately not deduped: two Daves at one table is a real
@@ -1139,11 +1139,11 @@ class PlayUpdate(BaseModel):
     photo_url: str | None = None
     expansion_ids: list[str] = []
     play_mode: PlayMode | None = None
-    # Migration 060. Like play_mode, only written when the request carries one:
+    # Like play_mode, only written when the request carries one:
     # an edit form that doesn't offer the field must not silently wipe the
     # country the play was logged with.
     country_code: CountryCode | None = None
-    # Migration 018, and only written when supplied, for exactly the reason
+    # Only written when supplied, for exactly the reason
     # above: the play-detail popup's edit mode round-trips the snapshot it was
     # given and never offers a way to change it (editing row labels is a
     # chapter edit — this play's copy is deliberately frozen). The one thing
@@ -1153,7 +1153,7 @@ class PlayUpdate(BaseModel):
 
     @model_validator(mode="after")
     def _check_roster(self) -> "PlayUpdate":
-        """Migration 023's roster gate, on the one write path that isn't an RPC.
+        """The roster gate, on the one write path that isn't an RPC.
 
         PUT /plays/{id} is a full replacement done in Python — it deletes every
         seat and re-inserts the body's — so bgb_log_play never sees it. Raising
@@ -1187,18 +1187,18 @@ class PlayPhotoAttach(BaseModel):
 class PlayPlayerResponse(BaseModel):
     user_id: str | None = None
     name: str
-    # Linked-account avatar config (migration 029). NULL for ghost players
+    # Linked-account avatar config. NULL for ghost players
     # (player_user_id IS NULL) and for accounts that haven't customized
     # their badge — the FE renders the BGB default in both cases.
     avatar: Avatar | None = None
     is_winner: bool
     score: int | None = None
-    # Per-round score breakdown (migration 028). NULL for legacy plays
+    # Per-round score breakdown. NULL for older plays
     # and for any play with ≤1 rounds — the FE only persists the array
     # when there were multiple rounds.
     round_scores: list[int | None] | None = None
-    # The side this seat played on (migration 048). NULL for every play logged
-    # before it, every competitive and co-op play, and a team play whose sides
+    # The side this seat played on. NULL for older plays,
+    # every competitive and co-op play, and a team play whose sides
     # were never named. Defaulted rather than required because the roster RPCs
     # this model validates are not all re-emitted — one that omits the key must
     # still parse.
@@ -1219,21 +1219,21 @@ class PlayResponse(BaseModel):
     # Resolved scoring style for this play. Set from PlayCreate.play_mode if
     # provided, else inherited from the game at insert time. Always populated.
     play_mode: PlayMode = PlayMode.COMPETITIVE
-    # ISO 3166-1 alpha-2 where the play happened (migration 065). None for
-    # every play logged before 060 and for any client that couldn't resolve
+    # ISO 3166-1 alpha-2 where the play happened. None for
+    # older plays and for any client that couldn't resolve
     # one, so every reader has to handle its absence.
     country_code: str | None = None
-    # The scoring grid this play was scored on (migration 018), or None for the
-    # plain R1..Rn grid. Defaulting to None matters: bgb_feed_plays is not
-    # re-emitted by 018, so rows it feeds validate unchanged and simply arrive
-    # without labels until the popup revalidates through GET /plays/{id}.
+    # The scoring grid this play was scored on, or None for the
+    # plain R1..Rn grid. Defaulted so a row without the key still validates and
+    # simply arrives without labels until the popup revalidates through
+    # GET /plays/{id}.
     scoring_template: PlayScoringTemplate | None = None
     # Logger metadata — lets the FE distinguish own logs from shared plays
     # (where the current user appears via a linked buddy).
     logged_by_id: str
     logged_by_name: str
     is_own: bool = True
-    # How many plays this row stands for (migration 005). 1 for everything the
+    # How many plays this row stands for. 1 for everything the
     # app logs live; the run's size when this row represents a group of
     # identical imported plays. The plays log renders one row per group and
     # reads this for its "58 plays" line.
@@ -1288,19 +1288,19 @@ class ChapterCreate(BaseModel):
     # bgb_chapters_grid_shape CHECK so a mismatched pair is a 422 here rather
     # than a constraint violation from Postgres.
     grid: ScoringGrid | None = None
-    # Required for (and only for) layout='rulebook_link' (migration 052), and
+    # Required for (and only for) layout='rulebook_link', and
     # mirroring bgb_chapters_link_shape the same way. The SCHEME is not checked
     # here but in services/chapter_rulebook.clean_url, which turns a bad one
     # into a 400 naming the problem — a 422 listing a regex is not an error an
     # author can act on.
     link_url: str | None = None
-    # Whether to put this rulebook link in the admin queue (migration 053).
+    # Whether to put this rulebook link in the admin queue.
     # True means pending, False means unlisted, and BOTH are visible to the
     # author and their accepted buddies the moment they save — this field
     # decides who is asked to publish the link to everyone else, not who can
     # read it.
     #
-    # Defaults to True, which is what a client that predates 053 sends by
+    # Defaults to True, which is what an older client sends by
     # sending nothing: that client's Save button meant "submit this", and it
     # goes on meaning that. Ignored on every other layout rather than rejected,
     # unlike `link_url` above — a stray True on a prose chapter asks for a
@@ -1363,7 +1363,7 @@ class ChapterGridGenerateRequest(BaseModel):
     # above: an oversized body is a 422 rather than a token bill, and the
     # service truncates again defensively.
     prompt: str | None = Field(None, max_length=500)
-    # The mode the author has picked for an EXPANSION's grid (migration 032),
+    # The mode the author has picked for an EXPANSION's grid,
     # and the one field here that changes what gets drafted rather than merely
     # steering it: an add-on wants the two or three rows the expansion BRINGS,
     # a replacement wants the whole reprinted sheet. Resolved against the game
@@ -1403,8 +1403,8 @@ class ChapterUpdate(BaseModel):
     # — the point of the gate is that an admin approved THIS link, not whatever
     # the author points it at next.
     link_url: str | None = None
-    # The review toggle (migration 053), and here it is TRI-STATE on purpose:
-    # None means "not supplied", so a client that predates 053 — or any caller
+    # The review toggle, and here it is TRI-STATE on purpose:
+    # None means "not supplied", so an older client — or any caller
     # editing something other than the gate — cannot withdraw a submission by
     # omission. True submits, False withdraws, None leaves the gate where the
     # URL comparison puts it.
@@ -1424,7 +1424,7 @@ class ChapterResponse(BaseModel):
     # Present only for layout='scoring_grid'. Inherited by ChapterPoolItem and
     # MyGuideChapterResponse, which is every surface that renders a chapter.
     grid: ScoringGrid | None = None
-    # Present only for layout='rulebook_link' (migration 052). A row that
+    # Present only for layout='rulebook_link'. A row that
     # reaches a client at all is one that viewer is allowed to see — the gate is
     # applied server-side on every read path
     # (services/chapter_rulebook.filter_visible), never by the client hiding a
@@ -1450,7 +1450,7 @@ class ChapterResponse(BaseModel):
     source_color: str | None = None
     # The source game's BoardGameGeek id, populated alongside the rest of the
     # source tagging. It is the ORDERING key when several add-on expansions
-    # contribute rows to one scorepad (migration 032): BGG ids ascend roughly
+    # contribute rows to one scorepad: BGG ids ascend roughly
     # with publication, every client sorts the same way, and the alternative —
     # whatever order the guide's merged response happened to arrive in — would
     # give two people at the same table different scorepads. None for a game
@@ -1466,7 +1466,7 @@ class ChapterPoolItem(ChapterResponse):
     # Frontend hides rows where this is true. Anon callers always see
     # `in_my_guide=false`.
     in_my_guide: bool = False
-    # Whether the calling user has turned this chapter down (migration 033).
+    # Whether the calling user has turned this chapter down.
     # Mutually exclusive with in_my_guide — one row in
     # boardgamebuddy_user_chapters carries one state, so both can never be
     # true. Anon callers always see `disliked=false`.
@@ -1484,7 +1484,7 @@ class ChapterPoolCountResponse(BaseModel):
     # button; pulling /chapter-pool for it would carry every chapter's full
     # markdown body to render one integer.
     #
-    # Viewer-scoped (migration 033): the caller's own disliked chapters
+    # Viewer-scoped: the caller's own disliked chapters
     # are subtracted, because a chapter they have turned down is not one their
     # guide is missing. An anonymous caller gets the unfiltered total.
     total: int = 0
@@ -1503,7 +1503,7 @@ class ChapterReportCreate(BaseModel):
 
 
 class RulebookLinkReviewItem(BaseModel):
-    """One row of the admin's rulebook queue (migration 052).
+    """One row of the admin's rulebook queue.
 
     A flatter shape than ChapterResponse on purpose: an admin triaging links is
     deciding about a URL and who submitted it, and the fields that matter are
@@ -1596,7 +1596,7 @@ class ExpansionToggleRequest(BaseModel):
 
 
 
-# ── Mutual buddy graph (migration 008) ────────────────────────────────────────
+# ── Mutual buddy graph ────────────────────────────────────────────────────────
 
 class BuddyEdgeResponse(BaseModel):
     """An accepted buddy edge from the current user's perspective."""
@@ -1780,7 +1780,7 @@ class PlayPartnersResponse(BaseModel):
     """
 
     accounts: list[BuddyEdgeResponse] = []
-    # Migration 049. Its own list rather than more `accounts` rows: every
+    # Its own list rather than more `accounts` rows: every
     # surface that reads this bundle paints `accounts` as "your buddies", and
     # these people are not buddies yet.
     pending: list[PendingBuddyEdge] = []
@@ -1833,7 +1833,7 @@ class GhostRenameResponse(BaseModel):
     rows_updated: int
 
 
-# ── Ghost account claims (migration 070) ─────────────────────────────────────
+# ── Ghost account claims ─────────────────────────────────────────────────────
 #
 # The mirror image of GhostLinkRequest above. That one is the ghost's OWNER
 # saying "this nickname is Julia"; these are the claimant saying "that ghost is
@@ -1950,7 +1950,7 @@ class Notification(BaseModel):
 
     PLAY_INHERITED IS THE ONE KIND WITH NO `actor_id`, and it cannot have one:
     the actor is an account that no longer exists. `actor_display_name` is the
-    name captured at deletion (plays.inherited_from_name, migration 052) and
+    name captured at deletion (plays.inherited_from_name) and
     `actor_id` / `actor_username` / `actor_avatar` are all None — so any reader
     that routes to a profile on `actor_id` already does nothing here, which is
     the correct behaviour rather than a lucky one. It reuses the PLAY_LINK
@@ -2109,10 +2109,10 @@ class SessionParticipantResponse(BaseModel):
     display_name: str
     joined_at: datetime
     avatar: Avatar | None = None
-    # The side this seat is on, free text as the host typed it (migration 050).
-    # None on every competitive and co-op lobby, and on a team lobby whose sides
-    # were never named — which is also every row written before that migration,
-    # so the default is what keeps an old session valid. This is the only way a
+    # The side this seat is on, free text as the host typed it.
+    # None on every competitive and co-op lobby, on a team lobby whose sides
+    # were never named, and on older rows, so the default is what keeps an old
+    # session valid. This is the only way a
     # spectator learns the pairings: their mirror holds no local draft, and
     # without it a team night looks like six identical columns to everyone
     # but the host.
@@ -2120,7 +2120,7 @@ class SessionParticipantResponse(BaseModel):
 
 
 class SessionScoreRow(BaseModel):
-    """One cell of the live grid, keyed by roster row (migration 053)."""
+    """One cell of the live grid, keyed by roster row."""
 
     participant_id: str
     round_index: int
@@ -2131,15 +2131,15 @@ class SessionResponse(BaseModel):
     id: str
     code: str
     status: PlaySessionStatus
-    # Host-driven cursor through the Gather → Play → Settle Up flow
-    # (migration 026). Defaults to gather for legacy rows that pre-date
+    # Host-driven cursor through the Gather → Play → Settle Up flow.
+    # Defaults to gather for legacy rows that pre-date
     # the column.
     phase: SessionPhase = SessionPhase.GATHER
     host_user_id: str
     game_id: str | None = None
     game: GameSummary | None = None
     participants: list[SessionParticipantResponse] = []
-    # Live grid snapshot, populated only while phase='play' (migration 054).
+    # Live grid snapshot, populated only while phase='play'.
     # A spectator who joined after Gather has no participant row, so the
     # scores table's RLS SELECT policy returns them nothing and Realtime is
     # silent for them; this is how their mirror gets the host's scores. Empty
@@ -2148,13 +2148,12 @@ class SessionResponse(BaseModel):
     created_at: datetime
     expires_at: datetime
     finalized_play_id: str | None = None
-    # The scoring grid the host applied to this lobby (migration 018). This is
+    # The scoring grid the host applied to this lobby. This is
     # the only way the labels reach a spectator: their mirror holds no local
     # draft and sizes itself from `scores` above.
     scoring_template: PlayScoringTemplate | None = None
-    # How the host is scoring this table (migration 050). None = never said,
-    # which every session written before that migration is, and which both ends
-    # read as competitive. Not cosmetic: it is the gate on whether a side's
+    # How the host is scoring this table. None = never said (older sessions
+    # among them), which both ends read as competitive. Not cosmetic: it is the gate on whether a side's
     # seats merge into ONE grid column, so a mirror without it would draw a
     # team night as separate columns while the host's screen drew it as sides.
     play_mode: PlayMode | None = None
@@ -2354,7 +2353,7 @@ class FeedPlayParticipant(BaseModel):
 
 
 class FeedReactor(BaseModel):
-    """One person who said good game to a play (migration 016)."""
+    """One person who said good game to a play."""
 
     user_id: str
     display_name: str | None = None
@@ -2378,24 +2377,23 @@ class FeedPlayCard(BaseModel):
     # Drives the session grouping key on the FE and the clickable names in
     # the session header. Sorted by display_name in the RPC.
     participants: list[FeedPlayParticipant] = []
-    # How many plays this card stands for (migration 005). 1 for every play the
+    # How many plays this card stands for. 1 for every play the
     # app logs live, so the ordinary card is unaffected; the run's size when
     # the card represents a group of identical imported plays, which
     # ui/play-card.js renders as a stack rather than a polaroid.
     group_count: int = 1
-    # The run's id (migration 007), so the card can act on what it represents —
+    # The run's id, so the card can act on what it represents —
     # the run sheet deletes by this. None for every ordinary play; the count
     # without it would let the feed say "58 plays" and do nothing about them.
     import_group_id: str | None = None
-    # The paste this play came from (migration 007, on the feed payload since
-    # 022), or None for a live log. The feed groups imported plays by
+    # The paste this play came from, or None for a live log. The feed groups imported plays by
     # (played_at, LOGGER) rather than by roster, so one afternoon's import is
     # one section instead of one per permutation of who was at the table — and
     # `import_group_id` cannot answer "was this imported", because the importer
     # sets it only on plays it found indistinguishable from another in the same
     # paste. Every one-off in a paste carries a batch id and no group id.
     import_batch_id: str | None = None
-    # ── Migration 015 — the whole play, so the card's other two faces are free.
+    # ── The whole play, so the card's other two faces are free.
     #
     # The front paints from the fields above; the back and the detail popup
     # paint from these rather than calling GET /plays/{id} on open, which would
@@ -2414,7 +2412,7 @@ class FeedPlayCard(BaseModel):
     players: list[PlayPlayerResponse] = []
     expansions: list[PlayExpansionRef] = []
     country_code: str | None = None
-    # ── Migration 031 — the play's frozen copy of the chapter's scoring grid.
+    # ── The play's frozen copy of the chapter's scoring grid.
     #
     # Same field as PlayResponse.scoring_template, and here for the same reason
     # the roster is: the detail popup paints synchronously from a seed projected
@@ -2423,10 +2421,10 @@ class FeedPlayCard(BaseModel):
     # R1..Rn labels on a multi-round one — so the confirming render after
     # GET /plays/{id} would have to repaint the whole card.
     #
-    # Defaults to None so a database still on the pre-031 RPC serves cards
-    # without it rather than erroring.
+    # Defaults to None so a card row without the key parses rather than
+    # erroring.
     scoring_template: PlayScoringTemplate | None = None
-    # ── Migration 016 — the "Good game" reaction.
+    # ── The "Good game" reaction.
     #
     # Per PLAY, though the UI draws it per session: a feed session is grouped
     # client-side off `played_at | participants`, and participants is filtered
@@ -2458,11 +2456,12 @@ class FeedSuggestedBuddy(BaseModel):
     avatar: Avatar | None = None
     # Accepted buddies shared with the viewer, and plays shared with them.
     # A suggestion has at least one of the three counts; the rail labels
-    # whichever it has. play_count is what ranks the rail — see migration 057.
+    # whichever it has. play_count is what ranks the rail: anyone with a shared play sorts above
+    # every graph-only candidate (bgb_suggested_buddies).
     mutual_count: int
     play_count: int = 0
     # People the viewer has SENT a request to who are buddies with this
-    # candidate (migration 072). Deliberately not folded into mutual_count:
+    # candidate. Deliberately not folded into mutual_count:
     # someone who has not accepted yet is not a mutual buddy, and the tile
     # says exactly that sentence off that number.
     pending_mutual_count: int = 0
@@ -2472,11 +2471,11 @@ class FeedSuggestedBuddy(BaseModel):
     # on a shared play, and for the whole 'active' tier.
     via_user_id: str | None = None
     via_display_name: str | None = None
-    # Which tier the candidate came from (migration 063). Only the onboarding
+    # Which tier the candidate came from. Only the onboarding
     # endpoint sets it — the Feed rail and GET /buddies/suggested return
     # earned-signal candidates exclusively, so their counts already say why a
     # suggestion is there. None means "derive the reason from the counts",
-    # which is what every pre-060 caller of the shared tile does.
+    # which is what every other caller of the shared tile does.
     source: BuddySuggestionSource | None = None
 
 
@@ -2607,7 +2606,7 @@ class DiscoverTrendingEntry(BaseModel):
     year_published: int | None = None
     thumbnail_url: str | None = None
     game: GameSummary | None = None
-    # From bgb_bgg_hot_latest (migration 039): where the game sat in the run
+    # From bgb_bgg_hot_latest: where the game sat in the run
     # ~a day earlier. rank_delta positive = climbing; None when there is no
     # comparison run or the game was not in it. is_new = absent from the
     # comparison run. Both None/False on the live-/hot fallback.
@@ -2650,7 +2649,7 @@ class SuggestionNetworkGroup(BaseModel):
 
     `via_user_id` is a user_id from the `suggestions` list beside it. The
     onboarding deck holds these until the user ticks that person, then
-    promotes `buddies` into the grid in the same frame (migration 072). One
+    promotes `buddies` into the grid in the same frame. One
     candidate can appear under several groups; the client keeps the first."""
 
     via_user_id: str
@@ -2684,7 +2683,7 @@ class GameBundlesResponse(BaseModel):
     truncated: bool = False
 
 
-# ── Achievements (migration 062) ──────────────────────────────────────────────
+# ── Achievements ──────────────────────────────────────────────────────────────
 
 class AchievementGroup(BaseModel):
     """One section heading on the Achievements spoke."""
@@ -2702,7 +2701,7 @@ class AchievementItem(BaseModel):
     name: str
     # What the badge is for, in plain language and past tense ("You've played
     # a game made specifically for 2 players."). Printed on earned badges and
-    # in the unlock popup — see migration 067.
+    # in the unlock popup, so an earned badge still says what earned it.
     tagline: str
     # The same fact in the imperative. Printed on locked badges.
     requirement: str
@@ -3027,7 +3026,7 @@ class ReleaseNotice(BaseModel):
     """One admin-authored what's-new note.
 
     `published_at is None` IS the draft flag — there is no separate status
-    field, here or in the table (migration 042). The same timestamp is the sort
+    field, here or in the table. The same timestamp is the sort
     key and the unit `profiles.release_notices_seen_at` compares against.
     """
 
@@ -3125,7 +3124,7 @@ class ReleaseNoticesSeenResponse(BaseModel):
     seen_at: datetime
 
 
-# ── Board Game Arena import (migration 043) ──────────────────────────────────
+# ── Board Game Arena import ──────────────────────────────────────────────────
 #
 # The wizard's third source. Everything here is REQUEST/RESPONSE shape only —
 # what BGA's own wire looks like lives in routes/bga_endpoints.py, which is
@@ -3285,7 +3284,7 @@ class BgaRememberResponse(BaseModel):
     stored: int = 0
 
 
-# ── Affiliate partners (migration 046) ───────────────────────────────────────
+# ── Affiliate partners ───────────────────────────────────────────────────────
 #
 # A partner is LIVE only when enabled AND it holds a credential (a tracking
 # tag or a wrapper link). `enabled` is never a field on the write model:
@@ -3394,7 +3393,7 @@ class AffiliateClickSummary(BaseModel):
     by_partner: list[AffiliateClickCount] = []
 
 
-# ── Admin usage (migration 047) ──────────────────────────────────────────────
+# ── Admin usage ──────────────────────────────────────────────────────────────
 
 class BucketUsage(BaseModel):
     """One R2 bucket's footprint, as `object_store.usage()` reports it.

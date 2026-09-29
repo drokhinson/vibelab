@@ -93,7 +93,7 @@ def _upsert_collection(sb: Client, user_id: str, game_id: str, status: str) -> N
 
 
 def _set_played_mark(sb: Client, user_id: str, game_id: str, on: bool) -> None:
-    """The played mark (migration 057): "played it, somewhere I didn't log it".
+    """The played mark: "played it, somewhere I didn't log it".
 
     One mark behind both switches — the collection sheet's and the Stats Shelf
     of Shame's — stored as played_before_at on the game's row, whatever its
@@ -375,7 +375,7 @@ async def collection_grid(
 ) -> CollectionPageResponse:
     """Collection shelf sorted by `sort` (default last_played DESC NULLS LAST, then added_at DESC).
 
-    One RPC: bgb_collection_page (migration 024) filters, sorts, counts and
+    One RPC: bgb_collection_page filters, sorts, counts and
     slices in Postgres. This used to read the WHOLE shelf on every page turn
     and do all four in Python, across two round trips (owned/wishlist) or three
     (played) — and worse than slow, the reads were unbounded, PostgREST

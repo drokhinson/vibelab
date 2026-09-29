@@ -1,4 +1,4 @@
-"""Pydantic models for game ranking (migration 056).
+"""Pydantic models for game ranking.
 
 Their own module rather than more of models.py, which is past ten times the
 ~300-line ceiling; GameSummary is imported from there so a ranked game is the
@@ -93,7 +93,7 @@ class RankQueueItem(BaseModel):
     game: GameSummary
     category: str
     category_label: str
-    # Parked with "Rank after next play" and not played since (migration 058):
+    # Parked with "Rank after next play" and not played since:
     # still unranked, but left out of the count and the Start walk.
     deferred: bool = False
 

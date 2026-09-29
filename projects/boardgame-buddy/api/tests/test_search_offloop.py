@@ -165,7 +165,7 @@ def test_rpc_rows_split_into_collection_and_db_hits():
 
 
 def test_a_missing_rpc_falls_back_to_the_two_query_path():
-    """Migration 041 not applied yet — search still answers, from PostgREST."""
+    """The RPC is not there yet — search still answers, from PostgREST."""
     sb = _SB(rpc_fails=True, table_rows=[_game("Catan", "g1")])
     res = _search(sb)
     assert sb.rpc_calls == 1

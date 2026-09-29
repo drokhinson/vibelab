@@ -67,7 +67,7 @@
     { k: "bronze", label: "3rd", to: 7,  h: 42 },
   ];
 
-  // A real achievement, not an invented one: 002_seed.sql seeds `wins_10` as
+  // A real achievement, not an invented one: boardgamebuddy_achievements seeds `wins_10` as
   // "Crowned" / "Logged 10 game wins.", and the badge is the same sprite
   // views/achievements-view.js paints. The medallion carries its own dark
   // ground in both themes on purpose (.claude/rules/assets.md) — it is a coin

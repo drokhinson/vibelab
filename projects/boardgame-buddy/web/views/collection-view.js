@@ -81,9 +81,8 @@
   // adding a shelf can't leave a row wired to nothing.
   //
   // `selfOnly` is the wishlist's privacy rule, held in one place:
-  // bgb_collection_shelf returns an empty shelf to a non-owner by design
-  // (db/migrations/boardgamebuddy/055_hi_res_tile_art.sql), so offering the row
-  // on someone else's collection would only ever paint an empty grid. Read it
+  // bgb_collection_shelf returns an empty shelf to a non-owner by design, so
+  // offering the row on someone else's collection would only ever paint an empty grid. Read it
   // through _availableModes(), never by hand.
   const MODES = [
     { id: MODE_OWNED, label: "Owned", noun: "game", icon: "library-big" },
@@ -153,7 +152,7 @@
       this._targetUserId = null;
       this._targetProfile = null;
       this._lastSig = null;
-      // Rank your games (migration 056). The card comes back on every visit —
+      // Rank your games. The card comes back on every visit —
       // this runs per mount — and closing it lasts until the viewer leaves.
       this._ranks = null;
       this._rankQueue = null;
@@ -1393,7 +1392,7 @@
     }
 
     _setTreeRows(items, truncated) {
-      // The owned shelf carries prev_owned rows (migration 069), and this
+      // The owned shelf carries prev_owned rows, and this
       // shelf is specifically about the expansions you HAVE — its tally is the
       // same number the status map's expansion_counts reports, which excludes
       // them. So they are dropped here rather than in expansion-tree.js, which

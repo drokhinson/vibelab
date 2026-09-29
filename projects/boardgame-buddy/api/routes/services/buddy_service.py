@@ -193,8 +193,8 @@ def _accept_edge(sb: Client, edge: dict[str, Any], viewer_id: str) -> BuddyReque
         .update({
             "status": BuddyEdgeStatus.ACCEPTED.value,
             "accepted_at": now,
-            # Who said yes. Not derivable from requested_by — see the column's
-            # note in migration 009 — and it is what tells the REQUESTER their
+            # Who said yes. Not derivable from requested_by — a QR-scanned edge
+            # is born accepted with the scanner as requested_by — and it is what tells the REQUESTER their
             # request landed, on the notifications feed, without telling the
             # acceptor about their own tap.
             "accepted_by": viewer_id,

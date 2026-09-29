@@ -331,8 +331,8 @@
   // round holds two different non-empty values among its seats. Three things
   // fall out of that wording, and all three are the reason for it:
   //
-  //   * A play scored SEAT BY SEAT stays split. Team mode (migration 007) and
-  //     per-seat round scores (migration 028) mean plays where a side's members
+  //   * A play scored SEAT BY SEAT stays split. Team mode and
+  //     per-seat round scores mean plays where a side's members
   //     each carry their own number are real and saved.
   //     Merging those would pick one member's number and print it over
   //     everybody's — the detail popup would misreport a play it is the record
@@ -373,7 +373,7 @@
     // seat, so a grid whose sides are seated together is in the order the host
     // arranged and a grid whose sides are interleaved pulls each side's later
     // seats up to its first. Either way both ends of a live session derive the
-    // same order from the same array (migration 056), so the host's third
+    // same order from the same array, so the host's third
     // column is the spectator's third column.
     const draft = [];
     const byKey = new Map();

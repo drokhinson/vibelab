@@ -9,8 +9,8 @@
 // the two things about "who can I add?" that are invisible when they break:
 //
 //   1. PENDING BUDDIES ARE OFFERED. A buddy request nobody has answered yet
-//      (migration 049) is a seatable person: they get their own section while
-//      the search box is empty — the empty box paints `recent`, which they are
+//      is a seatable person: they get their own section while the search box
+//      is empty — the empty box paints `recent`, which they are
 //      not in — and they filter inline like anyone else once you type. The row
 //      says which way the request points, and picking one hands back their
 //      ACCOUNT, not a same-named ghost.

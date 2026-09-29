@@ -2,7 +2,7 @@
 
 Expansions are first-class games (`is_expansion=true`, `base_game_bgg_id=N`)
 imported via the BGG flow. Since expansions are hidden from game search
-(migration 041), this module owns the only path by which one enters the
+(boardgamebuddy_search_games), this module owns the only path by which one enters the
 catalog. It exposes:
 
 - listing the expansions linked to a base game (with the caller's enable state),

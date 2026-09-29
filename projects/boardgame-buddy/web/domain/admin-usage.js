@@ -5,7 +5,7 @@
 // Refresh. This file owns the payload's SHAPE CONTRACT — the endpoint returns
 // the RPC's JSONB verbatim (`response_model=dict`, the same call
 // GET /users/me/stats/detail makes and for the same reason), so the typedefs
-// below are the only declaration of it on this side. `047_usage_stats.sql` is
+// below are the only declaration of it on this side. bgb_admin_usage_stats is
 // the other.
 
 // @ts-check
@@ -21,7 +21,7 @@
 /**
  * @typedef {Object} UsagePayload
  * @property {string} generated_at
- * @property {boolean} exclude_admins  whether is_admin accounts were left out (055)
+ * @property {boolean} exclude_admins  whether is_admin accounts were left out
  * @property {{ total:number, new_24h:number, new_7d:number, new_30d:number,
  *             admins:number, bgg_linked:number, push_enabled:number,
  *             first_signup:string|null }} users
