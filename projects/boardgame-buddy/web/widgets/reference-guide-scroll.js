@@ -1570,13 +1570,17 @@
         ? `<span class="scroll-chapter__source-dot" style="--exp-color:${escapeAttr(c.source_color)}"
                  title="${escapeAttr(c.source_game_name || "")}"></span>`
         : (merged ? `<span class="scroll-chapter__source-dot scroll-chapter__source-dot--none"></span>` : "");
-      // Edit affordance appears only for chapters the current user authored.
-      // Routes through the shared add-view in "edit" mode with the chapter
-      // stashed on the singleton so we don't need an extra GET.
+      // Edit routes through the shared add-view in "edit" mode with the chapter
+      // stashed on the singleton so we don't need an extra GET. On the viewer's
+      // own chapter it edits in place; on anyone else's the add-view opens a
+      // copy and saves it as the viewer's own version. A rulebook link is the
+      // exception: its body is only a URL, so there is no version to write.
       const me = window.store && window.store.get("user");
       const isOwner = !!(me && c.created_by && me.id === c.created_by);
-      const editBtn = isOwner ? `
+      const canCopy = !!me && !isOwner && c.layout !== "rulebook_link";
+      const editBtn = isOwner || canCopy ? `
         <button class="btn btn-ghost btn-xs"
+                ${canCopy ? `title="Edit and save your own version"` : ""}
                 onclick="window.referenceGuideScroll._editChapter('${c.id}', event)">
           <i data-icon="pencil" class="w-3.5 h-3.5"></i> Edit
         </button>
