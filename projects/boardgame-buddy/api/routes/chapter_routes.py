@@ -24,6 +24,7 @@ Every handler runs its Supabase round trips through `asyncio.to_thread`; the
 import asyncio
 import logging
 from typing import Any, Optional
+from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Path, Query, Response
 from supabase import Client
@@ -463,6 +464,24 @@ async def count_chapter_pool(
     return ChapterPoolCountResponse(total=total)
 
 
+def _resolve_derived_from(sb: Client, source_id: UUID | None) -> str | None:
+    """The source chapter id to store on a copy, or None.
+
+    The source may have been deleted while the copy was open in the editor, and
+    the column's FK would then fail the insert. Losing the credit is the better
+    outcome than losing the author's save, so a missing source stores NULL.
+    """
+    if source_id is None:
+        return None
+    found = (
+        sb.table("boardgamebuddy_guide_chapters")
+        .select("id")
+        .eq("id", str(source_id))
+        .execute()
+    )
+    return str(source_id) if found.data else None
+
+
 def _create_chapter_sync(
     sb: Client, game_id: str, body: ChapterCreate, user: CurrentUser
 ) -> MyGuideChapterResponse:
@@ -531,6 +550,8 @@ def _create_chapter_sync(
         content = chapter_rulebook.url_to_content(link_url)
         title = chapter_rulebook.rulebook_title(game.data[0].get("name"))
 
+    derived_from = _resolve_derived_from(sb, body.derived_from)
+
     insert = (
         sb.table("boardgamebuddy_guide_chapters")
         .insert({
@@ -562,6 +583,7 @@ def _create_chapter_sync(
             "moderated_by": None,
             "moderated_at": None,
             "created_by": user_id,
+            "derived_from": derived_from,
         })
         .execute()
     )

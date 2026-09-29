@@ -227,7 +227,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_achievements (
   display_order INTEGER NOT NULL,
   CONSTRAINT boardgamebuddy_achievements_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_achievements_group_id_fkey FOREIGN KEY (group_id) REFERENCES boardgamebuddy_achievement_groups(id),
-  CONSTRAINT bgb_achievements_metric_chk CHECK ((metric = ANY (ARRAY['plays_logged'::text, 'wins'::text, 'biggest_table'::text, 'two_player_games'::text, 'buddies'::text, 'guide_chapters'::text, 'chapters_borrowed'::text, 'plays_with_notes'::text, 'bgg_linked'::text, 'app_installed'::text, 'countries'::text, 'continents'::text, 'plays_with_grid'::text, 'grid_adopters'::text, 'team_wins'::text, 'coop_wins'::text]))),
+  CONSTRAINT bgb_achievements_metric_chk CHECK ((metric = ANY (ARRAY['plays_logged'::text, 'wins'::text, 'biggest_table'::text, 'two_player_games'::text, 'buddies'::text, 'guide_chapters'::text, 'chapters_borrowed'::text, 'plays_with_notes'::text, 'bgg_linked'::text, 'app_installed'::text, 'countries'::text, 'continents'::text, 'plays_with_grid'::text, 'grid_adopters'::text, 'team_wins'::text, 'coop_wins'::text, 'chapters_inspired'::text]))),
   CONSTRAINT boardgamebuddy_achievements_threshold_check CHECK ((threshold > 0))
 );
 ALTER TABLE public.boardgamebuddy_achievements ENABLE ROW LEVEL SECURITY;
@@ -280,7 +280,12 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
   moderated_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
+  -- The chapter this one was saved as a copy of (Edit on someone else's
+  -- chapter). NULL when written from scratch, or once the original is deleted.
+  -- Counted by bgb_sync_achievements' chapters_inspired metric.
+  derived_from UUID,
   CONSTRAINT boardgamebuddy_guide_chunks_pkey PRIMARY KEY (id),
+  CONSTRAINT bgb_chapters_derived_from_fkey FOREIGN KEY (derived_from) REFERENCES boardgamebuddy_guide_chapters(id) ON DELETE SET NULL,
   CONSTRAINT bgb_chapters_moderated_by_fkey FOREIGN KEY (moderated_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
   CONSTRAINT boardgamebuddy_guide_chunks_chunk_type_fkey FOREIGN KEY (chapter_type) REFERENCES boardgamebuddy_chapter_types(id),
   CONSTRAINT boardgamebuddy_guide_chunks_created_by_fkey FOREIGN KEY (created_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
@@ -333,6 +338,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_chapters_scoring_grid ON public.boardgamebudd
 -- paths.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_chapters_rulebook_author ON public.boardgamebuddy_guide_chapters USING btree (game_id, created_by) WHERE (layout = 'rulebook_link'::text);
 CREATE INDEX IF NOT EXISTS idx_bgb_chapters_rulebook_status ON public.boardgamebuddy_guide_chapters USING btree (moderation_status, created_at) WHERE (layout = 'rulebook_link'::text);
+CREATE INDEX IF NOT EXISTS idx_bgb_chapters_derived_from ON public.boardgamebuddy_guide_chapters USING btree (derived_from) WHERE (derived_from IS NOT NULL);
 GRANT SELECT ON public.boardgamebuddy_guide_chapters TO boardgamebuddy_role;
 
 

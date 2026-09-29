@@ -2954,6 +2954,8 @@ components above.
       const targetGameId = this._createTargetGameId || this._gameId;
       try {
         if (isEditing && this._copyOfChapterId) {
+          // derived_from credits the original's author with the
+          // "You're an Inspiration" achievement.
           await window.Chapter.create(targetGameId, {
             chapter_type: this._formType,
             ...titleFields,
@@ -2961,6 +2963,7 @@ components above.
             content,
             layout,
             grid,
+            derived_from: this._copyOfChapterId,
           });
           // The new version is already in the guide (the create auto-adds it).
           // A failed removal of the original leaves both in the guide, which the
