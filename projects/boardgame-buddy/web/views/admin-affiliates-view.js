@@ -97,7 +97,7 @@
           </div>`;
       }
       if (!this._partners.length) {
-        return `<div class="text-sm opacity-60 p-6 text-center">No partners seeded. Run migration 046.</div>`;
+        return `<div class="text-sm opacity-60 p-6 text-center">No partners seeded. Run db/migrations/004_seed.sql.</div>`;
       }
       return `<ul class="rel-admin__list">${this._partners.map((p) => this._renderRow(p)).join("")}</ul>`;
     }
