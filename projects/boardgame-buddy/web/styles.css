@@ -10173,9 +10173,13 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-cell-wrap { display: flex; align-items: center; min-width: 0; }
 .scoring-cell-wrap .scoring-cell { flex: 1 1 auto; min-width: 0; }
 .scoring-cell-wrap.is-neg .scoring-cell { color: var(--rust-ink); }
-.scoring-cell-wrap.is-summing { position: relative; }
-.scoring-cell-wrap.is-summing .scoring-cell { font-weight: 700; border-color: var(--accent-ink); }
-.scoring-cell-wrap.is-summing::before {
+/* .score-pad-field is the same wrapper for a score field outside a grid (the
+   play-detail card's whole-play scores). */
+.score-pad-field { display: block; flex: none; position: relative; }
+:is(.scoring-cell-wrap, .score-pad-field).is-summing { position: relative; }
+:is(.scoring-cell-wrap, .score-pad-field).is-summing input { font-weight: 700; border-color: var(--accent-ink); }
+.score-pad-field.is-summing input { padding-left: 1.4rem; }
+:is(.scoring-cell-wrap, .score-pad-field).is-summing::before {
   content: "\03A3";
   position: absolute;
   left: 6px;

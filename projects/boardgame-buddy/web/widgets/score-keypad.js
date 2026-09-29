@@ -9,7 +9,9 @@
 //
 // On a coarse pointer the cells render with inputmode="none"
 // (round-score-grid.js asks ScoreKeypad.custom), so focusing one raises no
-// system keyboard and this pad slides up instead. A mouse-and-keyboard screen
+// system keyboard and this pad slides up instead. A score field outside a grid
+// (the play-detail card's whole-play scores) opts in with `data-score-pad`,
+// and Prev / Next walk the nearest [data-score-pad-group] around it. A mouse-and-keyboard screen
 // keeps plain typing, with Enter / Shift+Enter moving between cells.
 //
 // The pad is one element on <body>, created on first use, so it is never inside
@@ -36,7 +38,8 @@
 // cell keeps that total; Cancel puts back what the cell held before.
 
 (function () {
-  const CELL = "input.scoring-cell";
+  // A scoring-grid cell, or any other score field that opts in.
+  const CELL = "input.scoring-cell, input[data-score-pad]";
   const Sum = window.ScoreSum;
   const custom = !!(typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches);
 
@@ -76,7 +79,7 @@
   // round, then down to the next one — which is document order, because each
   // round is one <tr>.
   function cellsOf(el) {
-    const grid = el.closest(".rg") || document;
+    const grid = el.closest(".rg, [data-score-pad-group]") || document;
     return Array.from(grid.querySelectorAll(CELL));
   }
 
@@ -196,7 +199,7 @@
     before = el.value;
     sum = Sum.create(el.value === "" || el.value === "-" || !Number.isFinite(n) ? null : n);
     pad.classList.add("is-summing");
-    const wrap = el.closest(".scoring-cell-wrap");
+    const wrap = el.closest(".scoring-cell-wrap, .score-pad-field");
     if (wrap) wrap.classList.add("is-summing");
     Sum.spotlight(el);
     sumChanged();
@@ -206,7 +209,7 @@
     if (!sum) return;
     sum = null;
     if (pad) pad.classList.remove("is-summing");
-    document.querySelectorAll(".scoring-cell-wrap.is-summing").forEach((w) => w.classList.remove("is-summing"));
+    document.querySelectorAll(".is-summing:is(.scoring-cell-wrap, .score-pad-field)").forEach((w) => w.classList.remove("is-summing"));
     Sum.unspotlight();
   }
 

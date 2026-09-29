@@ -150,8 +150,14 @@
 
   // The cell, its column's header and its row's label. The header is in a
   // separate table (.rg__head) laid out on the same colgroup, so the header
-  // cell sits at the same index as the cell's own <td>.
+  // cell sits at the same index as the cell's own <td>. A score field outside
+  // a grid lights itself and the name its [data-score-pad-row] carries.
   function targets(cell) {
+    if (!cell.closest(".rg")) {
+      const row = cell.closest("[data-score-pad-row]");
+      const name = row ? row.querySelector("[data-score-pad-name]") : null;
+      return [cell, name].filter(Boolean);
+    }
     const td = cell.closest("td");
     const tr = cell.closest("tr");
     const grid = cell.closest(".rg");
