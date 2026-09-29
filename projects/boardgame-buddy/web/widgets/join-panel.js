@@ -225,12 +225,10 @@
             onclick="window.joinPanel._joinSession('${escapeAttr(s.code)}')">
           ${thumb}
           <div class="cascade-join__row-body">
-            <div class="cascade-join__row-top">
-              <span class="cascade-join__row-host">${escapeHtml(s.host_display_name)}</span>
-              <span class="cascade-join__row-code">${escapeHtml(s.code)}</span>
-            </div>
+            <span class="cascade-join__row-host">${escapeHtml(s.host_display_name)}</span>
             <div class="cascade-join__row-bottom">
               <span class="cascade-join__row-game">${escapeHtml(gameName)}</span>
+              <span class="cascade-join__row-sep" aria-hidden="true">·</span>
               <span class="cascade-join__row-count">
                 <i data-icon="users" class="w-3 h-3"></i>
                 ${s.participant_count}
@@ -238,10 +236,13 @@
             </div>
             ${badges.length ? `<div class="cascade-join__row-badges">${badges.join("")}</div>` : ""}
           </div>
-          <button type="button" class="btn btn-primary cascade-join__row-action"
-                  onclick="event.stopPropagation(); window.joinPanel._joinSession('${escapeAttr(s.code)}')">
-            ${spectate ? "Spectate" : "Join"}
-          </button>
+          <div class="cascade-join__row-side">
+            <span class="cascade-join__row-code">${escapeHtml(s.code)}</span>
+            <button type="button" class="btn btn-primary cascade-join__row-action"
+                    onclick="event.stopPropagation(); window.joinPanel._joinSession('${escapeAttr(s.code)}')">
+              ${spectate ? "Spectate" : "Join"}
+            </button>
+          </div>
         </li>
       `;
     }
