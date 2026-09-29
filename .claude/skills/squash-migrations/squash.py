@@ -1,29 +1,20 @@
 #!/usr/bin/env python3
-"""Squash one app's migration history into 001_baseline.sql + 002_seed.sql.
+"""Squash one app's migration history into a generated baseline + seed.
 
 Replays the migrations into a throwaway Postgres cluster that stubs the parts
 of Supabase they touch (supabase_stubs.sql), reads the end state back out of
-the catalog, and writes it as two files. With --verify it then builds a second
-database from those two files and diffs it against the replay; any difference
-is printed and the exit status is 1.
+the catalog, and writes it as:
+
+  001_baseline_tables.sql            roles, extensions, tables, RLS policies
+  00N_baseline_functions_<group>.sql one per --function-group
+  00M_seed.sql                       reference rows
+
+With --verify it then builds a second database from those files and diffs it
+against the replay; any difference is printed and the exit status is 1.
 
 The script never touches the migrations directory: it writes to --out and
-leaves archiving to the caller (see SKILL.md).
-
-Example (BoardgameBuddy):
-
-  python3 .claude/skills/squash-migrations/squash.py \
-    --migrations projects/boardgame-buddy/db/migrations \
-    --prereq db/migrations/_shared/001_analytics.sql \
-    --prereq db/migrations/_shared/004_api_logs.sql \
-    --prereq db/migrations/_shared/005_api_sessions.sql \
-    --prereq db/migrations/_shared/006_drop_api_sessions.sql \
-    --skip 036_r2_photo_urls.sql \
-    --tables 'boardgamebuddy\\_%' \
-    --functions 'bgb\\_%' --functions 'boardgamebuddy\\_%' \
-    --extra-seed "storage.buckets(id,name,public,file_size_limit,allowed_mime_types):id LIKE 'boardgamebuddy-%'" \
-    --app boardgamebuddy --archive archive/2026-09-28 \
-    --out /tmp/squash --verify
+leaves archiving to the caller (see SKILL.md). SKILL.md also keeps the exact
+invocation for each app that has been squashed.
 """
 
 import argparse
@@ -37,6 +28,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -267,23 +259,8 @@ def order_functions(fns):
     return ordered
 
 
-def provenance(files, patterns):
-    """Basenames of the migration files matching any regex, in replay order."""
-    hits = []
-    for path in files:
-        text = open(path, encoding="utf-8").read()
-        if any(re.search(p, text, re.I) for p in patterns):
-            hits.append(os.path.basename(path))
-    return hits
-
-
-def table_block(t, deferred_names, files, archive):
-    out = []
-    shaped = provenance(files, [rf"CREATE TABLE\s+(IF NOT EXISTS\s+)?(public\.)?{t['name']}\b",
-                                rf"ALTER TABLE\s+(IF EXISTS\s+)?(ONLY\s+)?(public\.)?{t['name']}\b"])
-    out.append(f"-- ── {t['name']} " + "─" * max(3, 73 - len(t["name"])))
-    if shaped:
-        out.append(wrap_list(f"-- shaped by {archive}/: ", shaped))
+def table_block(t, deferred_names):
+    out = [f"-- ── {t['name']} " + "─" * max(3, 73 - len(t["name"]))]
     cols = []
     for col in t["columns"]:
         line = f"  {col['name']} {col['type']}"
@@ -359,6 +336,10 @@ def wrap_list(prefix, items, width=79):
     return "\n".join(lines)
 
 
+def prose(text):
+    return textwrap.fill(text, 79, initial_indent="-- ", subsequent_indent="-- ").split("\n")
+
+
 def section(title):
     return f"\n\n{RULE}\n-- {title}\n{RULE}\n"
 
@@ -391,13 +372,106 @@ def check_supported(c, db, args):
                  "\n  ".join(f["what"] for f in found))
 
 
-def build_baseline(c, db, args, files):
+def function_block(f):
+    b = [f"-- {f['name']}({f['args']})", f["def"].rstrip() + ";"]
+    target = f"public.{f['name']}({f['args']})"
+    b += grant_lines("FUNCTION ", target, f["acl"], ["EXECUTE"], ["PUBLIC"] + DEFAULT_ROLES)
+    if f["comment"]:
+        b.append(f"COMMENT ON FUNCTION {target} IS {sql_lit(f['comment'])};")
+    return "\n".join(b)
+
+
+def callees(fns):
+    names = sorted({f["name"] for f in fns}, key=len, reverse=True)
+    return {f["name"]: {n for n in names if n != f["name"]
+                        and re.search(rf"\b{n}\s*\(", f["def"].split("AS $", 1)[-1])} for f in fns}
+
+
+def plan_files(args, fns, policies):
+    """Assign every function to a file. Functions a policy expression calls,
+    and whatever they call, go in the tables file so RLS sits beside its
+    tables; the rest go to the first --function-group whose regex matches,
+    with a '.*' catch-all tried last wherever it sits in file order."""
+    calls = callees(fns)
+    helpers = {n for _, p in policies for n in calls
+               if re.search(rf"\b{n}\s*\(", (p["using"] or "") + (p["check"] or ""))}
+    frontier = list(helpers)
+    while frontier:
+        for n in calls.get(frontier.pop(), ()):
+            if n not in helpers:
+                helpers.add(n)
+                frontier.append(n)
+    groups = args.function_group or [["functions", ".*", "Every function."]]
+    assigned, unmatched = {g[0]: [] for g in groups}, []
+    tables_fns = []
+    for f in order_functions(fns):
+        if f["name"] in helpers:
+            tables_fns.append(f)
+            continue
+        g = next((g[0] for g in sorted(groups, key=lambda g: g[1] == ".*") if re.search(g[1], f["name"])), None)
+        (assigned[g] if g else unmatched).append(f)
+    if unmatched:
+        sys.exit("functions no --function-group matches (add one, or end with a catch-all '.*'):\n  " +
+                 "\n  ".join(sorted({f["name"] for f in unmatched})))
+    return tables_fns, [(g[0], g[2], assigned[g[0]]) for g in groups]
+
+
+def sources(args, files):
+    """'the 58 migrations in archive/2026-09-28/ and 059_x.sql' — the first
+    --migrations directory is named by --archive, the place it is moved to."""
+    parts = []
+    for i, src in enumerate(args.migrations):
+        if os.path.isdir(src):
+            n = sum(1 for f in files if os.path.dirname(f) == os.path.normpath(src)) + \
+                (len(args.skip) if i == 0 else 0)
+            parts.append(f"the {n} migrations in {args.archive if i == 0 else src}/")
+        else:
+            parts.append(os.path.basename(src))
+    return " and ".join(parts)
+
+
+def header(args, files, title, names, index, lines):
+    today = datetime.date.today().isoformat()
+    order = [f"{n}{' (this file)' if i == index else ''}" for i, n in enumerate(names)]
+    head = [RULE, f"-- {args.app} — {title}", "--",
+            wrap_list("-- Run on an empty database in this order: ", order),
+            "-- then every later NNN_*.sql in this directory, in number order.", "--",
+            *prose(f"Generated on {today} by .claude/skills/squash-migrations/squash.py from "
+                   f"{sources(args, files)}: they were replayed into an empty database and these "
+                   "files were read back out of its catalog. A database built from them diffs clean "
+                   "against that replay."),
+            "--",
+            "-- FRESH-DB ONLY. Production reaches this state through the migrations it was",
+            "-- generated from. Never run these files there."]
+    if args.prereq:
+        # Last two path components (`_shared/004_api_logs.sql`): the files are
+        # read from wherever this one is installed, not from where it was built.
+        short = ["/".join(os.path.normpath(p).split(os.sep)[-2:]) for p in args.prereq]
+        head += ["--"] + prose("Needs these first, for the cross-app tables it reads: " + ", ".join(short) + ".")
+    if lines:
+        head += ["--"] + lines
+    return "\n".join(head + [RULE])
+
+
+GRANTS_NOTE = ["-- Grants are the difference from Supabase's defaults, which give anon,",
+               "-- authenticated and service_role everything on a new table or function (and",
+               "-- EXECUTE to PUBLIC). An object with no GRANT/REVOKE lines keeps them."]
+
+
+def build_files(c, db, args, files):
+    """[(filename, text)] for the tables file, one file per function group,
+    then the seed."""
     check_supported(c, db, args)
     tables = read_tables(c, db, args.tables)
     fns = read_functions(c, db, args.functions)
     ordered, deferred = order_tables(tables)
     deferred_names = {(n, k["name"]) for n, k in deferred}
-    table_names = [t["name"] for t in tables]
+    policies = [(t["name"], p) for t in ordered for p in t["policies"]]
+    tables_fns, groups = plan_files(args, fns, policies)
+    groups = [g for g in groups if g[2]]
+    names = (["001_baseline_tables.sql"] +
+             [f"{i + 2:03d}_baseline_functions_{g[0]}.sql" for i, g in enumerate(groups)] +
+             [f"{len(groups) + 2:03d}_seed.sql"])
 
     roles = c.json(db, f"""
         SELECT rolname AS name, rolcanlogin AS login, rolinherit AS inherit FROM pg_roles
@@ -410,37 +484,13 @@ def build_baseline(c, db, args, files):
     pubs = c.json(db, f"""
         SELECT pubname, tablename FROM pg_publication_tables
          WHERE schemaname = 'public' AND {like_any('tablename', args.tables)} ORDER BY 1, 2""")
-    policies = [(t["name"], p) for t in ordered for p in t["policies"]]
 
-    today = datetime.date.today().isoformat()
-    head = [RULE,
-            f"-- {args.app} 001 — baseline: tables, functions, policies",
-            "--",
-            f"-- The end state of the {len(files) + len(args.skip)} migrations in {args.archive}/,",
-            f"-- squashed on {today} by .claude/skills/squash-migrations/squash.py: they",
-            "-- were replayed into an empty database and this file was read back out of",
-            "-- its catalog. A database built from this file and 002_seed.sql diffs clean",
-            "-- against that replay (pg_dump of the schema, ACLs, policies and seed rows).",
-            "--",
-            *([wrap_list("-- Left out of the replay as data-only (a no-op on an empty database): ",
-                         args.skip), "--"] if args.skip else []),
-            "-- FRESH-DB ONLY. Production is already at this state. Do not run it there.",
-            "--",
-            *([wrap_list("-- Replayed on top of, so run those first: ",
-                         [os.path.relpath(p, os.getcwd()) for p in args.prereq]), "--"] if args.prereq else []),
-            f"-- {len(tables)} tables, {len(fns)} functions, {len(policies)} RLS policies. Tables are in foreign-key",
-            "-- order and functions come callees-first, so the file runs top to bottom.",
-            "-- Each object names the archived migrations that shaped it; their",
-            "-- comments are the design record and are not repeated here.",
-            "--",
-            "-- Grants are written as the difference from Supabase's defaults, which give",
-            "-- anon, authenticated and service_role everything on a new table or function",
-            "-- (and EXECUTE to PUBLIC). An object with no GRANT/REVOKE lines keeps them.",
-            "-- Function bodies are pg_get_functiondef() output, the server's normalized",
-            "-- rendering, not the archive's hand-written text.",
-            RULE]
-    out = ["\n".join(head)]
-
+    about = [f"-- {len(tables)} tables in foreign-key order, each with its indexes, RLS switch,",
+             "-- grants and comments."]
+    if policies:
+        about += prose(f"Then the {len(policies)} RLS policies, preceded by the "
+                       f"function{'s' if len(tables_fns) != 1 else ''} they call.")
+    out = [header(args, files, "baseline: tables", names, 0, about + ["--"] + GRANTS_NOTE)]
     pre = []
     for r in roles:
         attrs = ("LOGIN PASSWORD " + sql_lit(args.role_password) if r["login"] else "NOLOGIN") + \
@@ -458,34 +508,17 @@ def build_baseline(c, db, args, files):
         out.append(section("Roles and extensions") + "\n".join(pre))
         if roles and args.role_password == "change-me":
             out.append("-- LOGIN roles get a placeholder password; set a real one out of band.")
-
     out.append(section(f"Tables ({len(tables)})"))
-    out.append("\n\n".join(table_block(t, deferred_names, files, args.archive) for t in ordered))
+    out.append("\n\n".join(table_block(t, deferred_names) for t in ordered))
     if deferred:
         out.append("\n\n-- Foreign keys that close a cycle, added once both ends exist.")
         for n, k in deferred:
             out.append(f"ALTER TABLE public.{n} ADD CONSTRAINT {k['name']} {k['def']};")
-
-    out.append(section(f"Functions ({len(fns)})"))
-    blocks = []
-    for f in order_functions(fns):
-        src = provenance(files, [rf"FUNCTION\s+(public\.)?{f['name']}\s*\("])
-        b = [f"-- {f['name']}({f['args']})"]
-        if src:
-            b.append(f"--   last defined in {args.archive}/{src[-1]}")
-        b.append(f["def"].rstrip() + ";")
-        target = f"public.{f['name']}({f['args']})"
-        b += grant_lines("FUNCTION ", target, f["acl"], ["EXECUTE"], ["PUBLIC"] + DEFAULT_ROLES)
-        if f["comment"]:
-            b.append(f"COMMENT ON FUNCTION {target} IS {sql_lit(f['comment'])};")
-        blocks.append("\n".join(b))
-    out.append("\n\n".join(blocks))
-
+    if tables_fns:
+        out.append(section("Functions the policies call") + "\n\n".join(function_block(f) for f in tables_fns))
     if policies:
         out.append(section(f"Row-level security policies ({len(policies)})") +
-                   "-- After the functions, since a policy expression may call one.\n\n" +
                    "\n\n".join(policy_sql(t, p) for t, p in policies))
-
     if pubs:
         body = []
         for p in pubs:
@@ -498,36 +531,37 @@ def build_baseline(c, db, args, files):
         out.append(section("Realtime publication") +
                    "-- Guarded: a plain Postgres database has no supabase_realtime publication.\n"
                    "DO $$\nBEGIN\n" + "\n".join(body) + "\nEND $$;")
-    return "\n".join(out) + "\n", tables, table_names
+    result = [(names[0], "\n".join(out) + "\n")]
+
+    for i, (name, desc, group) in enumerate(groups, start=1):
+        about = prose(f"{desc} {len(group)} functions, callees first, so the file runs top to "
+                      "bottom. Bodies are pg_get_functiondef() output: the server's normalized rendering.")
+        text = (header(args, files, f"baseline: {name} functions", names, i, about + ["--"] + GRANTS_NOTE) +
+                "\n\n\n" + "\n\n".join(function_block(f) for f in group) + "\n")
+        result.append((names[i], text))
+
+    result.append((names[-1], build_seed(c, db, args, tables, files, names)))
+    return result, [t["name"] for t in tables]
 
 
-def build_seed(c, db, args, tables, files):
+def build_seed(c, db, args, tables, files, names):
     ordered, _ = order_tables(tables)
     blocks, counts = [], []
     for t in ordered:
         n = int(c.query(db, f"SELECT count(*) FROM public.{t['name']}"))
         if n:
-            blocks.append(insert_block(c, db, f"public.{t['name']}", "true", files, args.archive))
+            blocks.append(insert_block(c, db, f"public.{t['name']}", "true"))
             counts.append(f"{t['name']} ({n})")
     for spec in args.extra_seed:
         rel, _, where = spec.partition(":")
-        blocks.append(insert_block(c, db, rel, where or "true", files, args.archive))
+        blocks.append(insert_block(c, db, rel, where or "true"))
         counts.append(rel.split("(")[0])
-    today = datetime.date.today().isoformat()
-    head = [RULE,
-            f"-- {args.app} 002 — seed: reference rows",
-            "--",
-            f"-- Every row the {len(files) + len(args.skip)} migrations in {args.archive}/ leave behind in an",
-            f"-- otherwise empty database, squashed on {today}. On a fresh database a one-time",
-            "-- backfill in the archive touches nothing, so what remains is exactly the",
-            "-- reference data the app needs to work at all.",
-            "--",
-            "-- FRESH-DB ONLY. Run after 001_baseline.sql. ON CONFLICT DO NOTHING, so a",
-            "-- second run changes nothing.",
-            "--",
-            wrap_list("-- Tables: ", counts),
-            RULE]
-    return "\n".join(head) + "\n\n\n" + "\n\n\n".join(blocks) + "\n"
+    about = ["-- Every row the migrations leave in an otherwise empty database. A one-time",
+             "-- backfill touches nothing there, so what remains is the reference data the",
+             "-- app needs to work at all. ON CONFLICT DO NOTHING, so a second run is a no-op.",
+             "--", wrap_list("-- Tables: ", counts)]
+    return (header(args, files, "seed: reference rows", names, len(names) - 1, about) +
+            "\n\n\n" + "\n\n\n".join(blocks) + "\n")
 
 
 VOLATILE_DEFAULT = r"now\(\)|CURRENT_(TIMESTAMP|DATE|TIME)|clock_timestamp|gen_random_uuid|uuid_generate|random\("
@@ -551,7 +585,7 @@ def seeded_columns(c, db, rel):
     return rel, [col for col in cols if not (col["def"] and re.search(VOLATILE_DEFAULT, col["def"], re.I))]
 
 
-def insert_block(c, db, rel, where, files, archive):
+def insert_block(c, db, rel, where):
     rel, cols = seeded_columns(c, db, rel)
     pk = c.query(db, f"""
         SELECT string_agg(quote_ident(a.attname), ', ' ORDER BY array_position(i.indkey, a.attnum))
@@ -562,11 +596,7 @@ def insert_block(c, db, rel, where, files, archive):
     rows = json.loads(c.query(db, f"SELECT coalesce(json_agg(json_build_array({exprs}) ORDER BY {pk}), '[]') "
                                   f"FROM {rel} WHERE {where}"))
     widths = [max(len(r[i]) for r in rows) for i in range(len(cols))]
-    bare = rel.split(".")[-1]
-    src = provenance(files, [rf"INSERT INTO\s+({rel.split('.')[0]}\.)?{bare}\b"])
     out = [f"-- ── {rel} " + "─" * max(3, 73 - len(rel))]
-    if src:
-        out.append(wrap_list(f"-- rows from {archive}/: ", src))
     overriding = " OVERRIDING SYSTEM VALUE" if any(col["identity"] == "a" for col in cols) else ""
     out.append(f"INSERT INTO {rel} ({', '.join(quote_ident(col['name']) for col in cols)}){overriding} VALUES")
     lines = []
@@ -608,7 +638,9 @@ def normalized_dump(c, db, tables, extra_seed):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--migrations", required=True, help="directory holding NNN_*.sql, replayed in name order")
+    ap.add_argument("--migrations", action="append", required=True,
+                    help="directory of NNN_*.sql replayed in name order, or a single file; repeat to "
+                         "replay several in the order given")
     ap.add_argument("--prereq", action="append", default=[],
                     help="file to run before the migrations (cross-app tables they read); not squashed")
     ap.add_argument("--skip", action="append", default=[],
@@ -619,17 +651,25 @@ def main():
                     help="'schema.table(col, ...):WHERE clause' rows outside public to carry into "
                          "the seed; the column list keeps stub-only columns out")
     ap.add_argument("--app", required=True, help="name used in the file headers")
-    ap.add_argument("--archive", required=True, help="where the replayed files will live, relative to --migrations")
+    ap.add_argument("--archive", required=True,
+                    help="where the first --migrations directory is archived to, as the headers cite it")
     ap.add_argument("--role-password", default="change-me", help="placeholder password for LOGIN roles")
-    ap.add_argument("--out", required=True, help="output directory for 001_baseline.sql and 002_seed.sql")
+    ap.add_argument("--function-group", nargs=3, action="append", default=[],
+                    metavar=("NAME", "REGEX", "DESCRIPTION"),
+                    help="functions whose name matches REGEX go to NNN_baseline_functions_<NAME>.sql; "
+                         "files follow the order given. The first matching REGEX wins, except that a "
+                         "'.*' group is tried last. Every function must match one. Omitted: one file")
+    ap.add_argument("--out", required=True, help="output directory for the generated files")
     ap.add_argument("--port", type=int, default=54329)
     ap.add_argument("--verify", action="store_true", help="rebuild from the output and diff against the replay")
     args = ap.parse_args()
     if not args.functions:
         args.functions = ["\x00"]
 
-    files = sorted(f for f in glob.glob(os.path.join(args.migrations, "[0-9][0-9][0-9]_*.sql"))
-                   if os.path.basename(f) not in args.skip)
+    files = []
+    for src in args.migrations:
+        found = sorted(glob.glob(os.path.join(src, "[0-9][0-9][0-9]_*.sql"))) if os.path.isdir(src) else [src]
+        files += [os.path.normpath(f) for f in found if os.path.basename(f) not in args.skip]
     if not files:
         sys.exit(f"no NNN_*.sql files in {args.migrations}")
     os.makedirs(args.out, exist_ok=True)
@@ -646,10 +686,11 @@ def main():
             c.psql_file("replay", f)
         print(f"replayed {len(files)} migrations", file=sys.stderr)
 
-        baseline, tables, table_names = build_baseline(c, "replay", args, files)
-        seed = build_seed(c, "replay", args, tables, files)
-        paths = [os.path.join(args.out, "001_baseline.sql"), os.path.join(args.out, "002_seed.sql")]
-        for path, text in zip(paths, (baseline, seed)):
+        outputs, table_names = build_files(c, "replay", args, files)
+        paths = []
+        for name, text in outputs:
+            path = os.path.join(args.out, name)
+            paths.append(path)
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(text)
             print(f"wrote {path} ({text.count(chr(10))} lines)", file=sys.stderr)
@@ -657,7 +698,7 @@ def main():
         if args.verify:
             for p in paths:
                 c.psql_file("squashed", p)
-            # Running both files twice proves they are safe to re-run.
+            # Running every file twice proves they are safe to re-run.
             for p in paths:
                 c.psql_file("squashed", p)
             a = normalized_dump(c, "replay", table_names, args.extra_seed)

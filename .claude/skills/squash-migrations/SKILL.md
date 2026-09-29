@@ -1,21 +1,32 @@
 ---
 name: squash-migrations
-description: Squash one app's SQL migration history back to two files — 001_baseline.sql (tables, functions, policies, grants) and 002_seed.sql (reference rows) — generated from a replay and verified against it, with the old files moved into a dated archive generation. Run it when an app's migration directory holds 50 or more migrations past its baseline, or when asked to squash, compact, collapse or consolidate migrations.
+description: Squash one app's SQL migration history into a generated baseline — 001_baseline_tables.sql (tables, RLS, grants), one NNN_baseline_functions_<topic>.sql per topic, and NNN_seed.sql (reference rows) — replayed from the history and verified against it, with the old files moved into a dated archive generation. Run it when an app's migration directory holds 50 or more migrations past its baseline, or when asked to squash, compact, collapse or consolidate migrations.
 ---
 
 # Squash Migrations
 
 A migration directory grows by one file per schema change and nothing ever
 shrinks it. Past about 50 files, reading the schema means replaying the
-history in your head. This skill folds that history into two generated files
-and archives it, so the directory reads as the schema again.
+history in your head. This skill folds that history into a generated baseline
+and archives it, so the directory reads as the schema again:
+
+```
+001_baseline_tables.sql              roles, extensions, tables, indexes, grants,
+                                     RLS policies and the functions they call
+002_baseline_functions_<topic>.sql   one file per --function-group, callees first
+003_baseline_functions_<topic>.sql
+NNN_seed.sql                         reference rows
+```
+
+Split the functions into topics that keep each file around 3,000 lines or
+less. A single file of every function is hard to read.
 
 ## When
 
 Count the live migrations past the baseline:
 
 ```bash
-ls <migrations-dir>/[0-9][0-9][0-9]_*.sql | grep -vE '/00[12]_(baseline|seed)\.sql$' | wc -l
+ls <migrations-dir>/[0-9][0-9][0-9]_*.sql | grep -vE '_(baseline|seed)(_[a-z_]+)?\.sql$' | wc -l
 ```
 
 **50 or more → squash.** Check this whenever you add a migration to a
@@ -63,6 +74,10 @@ would never reach production. Do not proceed on a guess.
   (`'sauceboss\_%'`). Rows outside `public` that the migrations seed, such as
   storage buckets, go in `--extra-seed 'storage.buckets(id,name,…):id LIKE …'`.
   The column list keeps the stub's own columns out of the seed.
+- **Topics** → `--function-group NAME REGEX DESCRIPTION`, repeated. Files come
+  out in the order given. A function goes to the first group whose regex
+  matches its name, except that a `.*` catch-all is always tried last. Every
+  function must land in one group.
 
 ### 3. Generate and verify into a scratch directory
 
@@ -92,16 +107,17 @@ re-verify.
 - **Grants**: written as the difference from Supabase's defaults. Every
   `SECURITY DEFINER` function should show `REVOKE ... FROM PUBLIC, anon,
   authenticated` (`.claude/rules/database-supabase.md`).
-- **Size**: the baseline is one large generated file. That is expected; the
-  ~300-line guideline is for hand-written code.
+- **Size**: generated files run long, and the ~300-line guideline is for
+  hand-written code. If one functions file is far larger than the others,
+  rebalance the `--function-group` regexes.
 
 ### 5. Archive and install
 
 ```bash
 cd <migrations-dir>
 mkdir -p archive/<YYYY-MM-DD>
-git mv [0-9][0-9][0-9]_*.sql archive/<YYYY-MM-DD>/   # every live file, old 001/002 included
-cp <scratchpad>/squash/00[12]_*.sql .
+git mv [0-9][0-9][0-9]_*.sql archive/<YYYY-MM-DD>/   # every live file, the old baseline included
+cp <scratchpad>/squash/*.sql .
 ```
 
 If `archive/` still holds loose files from an older squash, first move them
@@ -111,32 +127,45 @@ Add a row to `archive/README.md` for the new generation (create the README on
 the first squash, modelled on BoardgameBuddy's), with the number range, what
 it squashed into, and the date.
 
-### 6. Keep every reference resolving
+### 6. No comment points at a migration
 
-- **Paths to moved files** (`db/migrations/046_x.sql` in docs, runbooks,
-  `db/tests/`, `db/functions/`, `.claude/rules/`): rewrite them to the archive
-  path. Find them with
-  `grep -rnE "db/migrations/[0-9]{3}_" --exclude-dir=archive --exclude-dir=.git .`,
-  and for an app under `db/migrations/<app>/`, search for that prefix too.
-- **`archive/NNN` paths** from an earlier squash that you moved in step 5:
-  rewrite them to `archive/<old-date>/NNN`.
-- **Bare numbers** ("migration 045") in code comments: leave them. They stay
-  unambiguous because of the counter rule below, and the archive README says
-  which generation they live in.
-- Leave the text of the archived files alone. They are history.
+Comments cite no migration (`.claude/rules/database-supabase.md`), and after
+a squash any that slipped in point into the archive. Find them:
+
+```bash
+grep -rnE '[Mm]igrations? #?[0-9]{3}|archive/|\b0[0-9]{2}_[a-z][a-z0-9_]+\.sql|\b(per|since|as of|pre-)[ ]?0[0-9]{2}\b|\(0[0-9]{2}\)' \
+  <app dir> --exclude-dir=archive --exclude-dir=Docs
+```
+
+Rewrite each one to name the table, column or function it is about and to
+state what is true now (read the archived file to find out). Leave the
+`STRUCTURE.md` changelog, `Docs/` and the archived files alone: they are
+history. A SQL test named after a migration (`db/tests/057_x.sql`) is renamed
+after what it tests.
+
+Comments inside the database are the one catch. A `COMMENT ON` string or a
+comment in a function body is part of production's state, so the squash
+reproduces it verbatim. To change one, write a migration (`COMMENT ON …`,
+`CREATE OR REPLACE FUNCTION` with only comments changed), then regenerate with
+`--migrations archive/<date> --migrations <that file>` so the baseline
+includes it. Keep the migration live until production has run it. Before you
+commit, check that stripping `--` comments leaves every function body
+unchanged.
 
 ### 7. Continue the counter
 
-The next migration takes the number after the highest archived one, not
-`003`. If the counter restarted, "migration 012" would mean two different
-files, and code comments cite migrations by number. Update the "next number"
-guidance wherever the app documents it (its `CLAUDE.md`, `STRUCTURE.md`,
-`db/migrations/README.md`).
+The next migration takes the number after the highest archived one (or after
+the highest live one, if a migration from step 6 is live), not the number after
+the baseline. That way an archived file and a live one never share a number,
+and the changelog and commit messages that cite numbers stay unambiguous.
+Update the "next number" guidance wherever the app documents it (its
+`CLAUDE.md`, `STRUCTURE.md`, `db/migrations/README.md`).
 
 ### 8. Snapshots, docs, commit
 
-- `db/schema/<app>.sql` and `db/functions/<app>.sql` do not change shape.
-  Point their "Last updated" line at the squash.
+- `db/schema/<app>.sql` and `db/functions/<app>.sql` do not change shape, but
+  every "Defined in" entry in the functions inventory now names a baseline
+  file. Update those.
 - Add a changelog line to the app's `STRUCTURE.md` and a paragraph under
   "Production state" in `db/migrations/README.md`.
 - Commit as `[<app>] squash migrations NNN–MMM into baseline + seed`, with the
@@ -148,24 +177,25 @@ guidance wherever the app documents it (its `CLAUDE.md`, `STRUCTURE.md`,
 
 **BoardgameBuddy**, last squashed 2026-09-28 (`001`–`058` →
 `archive/2026-09-28/`). The next squash adds `--skip` for any new data-only
-files and keeps the rest:
+files, adds a `--function-group` if a new topic has grown, and keeps the rest:
 
 ```bash
+B=projects/boardgame-buddy/db/migrations
 python3 .claude/skills/squash-migrations/squash.py \
-  --migrations projects/boardgame-buddy/db/migrations \
-  --prereq db/migrations/_shared/001_analytics.sql \
-  --prereq db/migrations/_shared/004_api_logs.sql \
-  --prereq db/migrations/_shared/005_api_sessions.sql \
-  --prereq db/migrations/_shared/006_drop_api_sessions.sql \
+  --migrations $B \
+  --prereq $B/_shared/001_analytics.sql --prereq $B/_shared/004_api_logs.sql \
+  --prereq $B/_shared/005_api_sessions.sql --prereq $B/_shared/006_drop_api_sessions.sql \
   --tables 'boardgamebuddy\_%' \
   --functions 'bgb\_%' --functions 'boardgamebuddy\_%' \
+  --function-group play '.*' 'Games and the table: logging and importing plays, live sessions, ghost players and claims, the catalog, collection shelves, ranks, discover and BGG sync.' \
+  --function-group social '^bgb_(admin_|bootstrap|delete_account|feed|mark_|notifications|onboarding_|play_partners|play_stats|plays_page|profile_bundle|release_notices|suggested_buddies|sync_achievements|user_stats)' 'People and what they see: profiles, the feed, buddies and suggestions, notifications, stats, achievements, account deletion, admin usage.' \
   --extra-seed "storage.buckets(id,name,public,file_size_limit,allowed_mime_types):id LIKE 'boardgamebuddy-%'" \
   --role-password change-me-via-shared-003 \
   --app boardgamebuddy --archive archive/<YYYY-MM-DD> \
   --out <scratchpad>/squash --verify
 ```
 
-The `_shared/005`/`006` prerequisites are there because
-`bgb_admin_usage_stats` reads `api_logs.user_id`. The migrations directory now
-opens with the previous baseline, which the replay picks up like any other
-`NNN_*.sql`.
+The prerequisites are the project's own byte-identical copies of the root
+`_shared/` files. `005` and `006` are there because `bgb_admin_usage_stats`
+reads `api_logs.user_id`. The migrations directory opens with the previous
+baseline, which the replay picks up like any other `NNN_*.sql`.

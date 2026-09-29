@@ -5,12 +5,11 @@ The 73 files in this directory are the migration history of
 They are kept **for reference only** and are never executed. The first three
 files of `../2026-09-28/` (`001_baseline.sql`, `002_seed.sql`, `003_rpcs.sql`)
 reproduce the exact end state of running all 73 of these in order; those were
-in turn squashed into `../../001_baseline.sql` and `../../002_seed.sql`.
+in turn squashed into the generated baseline in `../../`.
 
 They are worth keeping because the collapsed files record *what* the schema is,
 and these record *why*. Most carry a long comment explaining the problem the
-migration solved. Code comments cite them as `archive/NNN`; a bare number
-usually means the newer generation instead — `../README.md` has the rule.
+migration solved.
 
 ## Reading them
 

@@ -1,13 +1,24 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- boardgamebuddy 002 — seed: reference rows
+-- boardgamebuddy — seed: reference rows
 --
--- Every row the 58 migrations in archive/2026-09-28/ leave behind in an
--- otherwise empty database, squashed on 2026-09-28. On a fresh database a one-time
--- backfill in the archive touches nothing, so what remains is exactly the
--- reference data the app needs to work at all.
+-- Run on an empty database in this order: 001_baseline_tables.sql,
+--   002_baseline_functions_play.sql, 003_baseline_functions_social.sql,
+--   004_seed.sql (this file)
 --
--- FRESH-DB ONLY. Run after 001_baseline.sql. ON CONFLICT DO NOTHING, so a
--- second run changes nothing.
+-- Generated on 2026-09-29 by .claude/skills/squash-migrations/squash.py from
+-- the 58 migrations in archive/2026-09-28/: they were replayed into an
+-- empty database and these files were read back out of its catalog. A
+-- database built from them diffs clean against that replay.
+--
+-- FRESH-DB ONLY. Production is already at this state. Do not run it there.
+--
+-- Needs these first, for the cross-app tables it reads:
+-- _shared/001_analytics.sql, _shared/004_api_logs.sql,
+-- _shared/005_api_sessions.sql, _shared/006_drop_api_sessions.sql.
+--
+-- Every row the migrations leave in an otherwise empty database. A one-time
+-- backfill touches nothing there, so what remains is the reference data the
+-- app needs to work at all. ON CONFLICT DO NOTHING, so a second run is a no-op.
 --
 -- Tables: boardgamebuddy_achievement_groups (5),
 --   boardgamebuddy_achievements (23), boardgamebuddy_affiliate_partners (4),
@@ -18,7 +29,6 @@
 
 
 -- ── public.boardgamebuddy_achievement_groups ─────────────────────────────────
--- rows from archive/2026-09-28/: 002_seed.sql
 INSERT INTO public.boardgamebuddy_achievement_groups (id, label, blurb, display_order) VALUES
   ('guide',     'The reference guide', 'Chapters you keep, and chapters you write.',           30),
   ('setup',     'Making it yours',     'The small acts that turn the app into your app.',      40),
@@ -29,8 +39,6 @@ ON CONFLICT DO NOTHING;
 
 
 -- ── public.boardgamebuddy_achievements ───────────────────────────────────────
--- rows from archive/2026-09-28/: 002_seed.sql,
---   019_scoring_grid_achievements.sql, 034_team_coop_win_achievements.sql
 INSERT INTO public.boardgamebuddy_achievements (id, group_id, name, tagline, requirement, metric, threshold, icon, display_order) VALUES
   ('app_installed',      'setup',     'Pocket Buddy',     'Installed the web app on your phone.',                        'Install the web app on your phone',                              'app_installed',     1,   'pocket-buddy',     160),
   ('bgg_linked',         'setup',     'Geek Certified',   'Linked your BoardGameGeek account.',                          'Link your BoardGameGeek account',                                'bgg_linked',        1,   'geek-certified',   150),
@@ -59,7 +67,6 @@ ON CONFLICT DO NOTHING;
 
 
 -- ── public.boardgamebuddy_affiliate_partners ─────────────────────────────────
--- rows from archive/2026-09-28/: 046_affiliate_partners.sql
 INSERT INTO public.boardgamebuddy_affiliate_partners (id, label, url_template, wrapper_template, tracking_tag, disclosure, notes, display_order, enabled) VALUES
   ('amazon',           'Amazon',             'https://www.amazon.com/s?k={query}&tag={tag}',                   NULL, NULL, 'As an Amazon Associate, BoardgameBuddy earns from qualifying purchases.', 'Amazon Associates issues a Store ID (looks like bgbuddy-20). Paste it into Tracking tag. Leave Wrapper empty. Amazon requires the disclosure sentence above wherever its links appear — do not remove it.',                                              10, false),
   ('gamenerdz',        'GameNerdz',          'https://www.gamenerdz.com/search.php?search_query={query}',      NULL, NULL, NULL,                                                                      'Apply at gamenerdz.com/partners-affiliates. If they issue a redirect link, paste it into Wrapper with {url} where the destination goes; if they issue a URL parameter, add it to the URL template as &ref={tag} and paste the value into Tracking tag.', 30, false),
@@ -69,8 +76,6 @@ ON CONFLICT DO NOTHING;
 
 
 -- ── public.boardgamebuddy_chapter_types ──────────────────────────────────────
--- rows from archive/2026-09-28/: 002_seed.sql,
---   021_scoring_grid_chapter_type.sql, 052_rulebook_links.sql
 INSERT INTO public.boardgamebuddy_chapter_types (id, label, icon, display_order) VALUES
   ('card_reference', 'Card Reference',        'layers',    40),
   ('player_turn',    'Player Turn',           'gamepad-2', 20),
@@ -84,7 +89,6 @@ ON CONFLICT DO NOTHING;
 
 
 -- ── public.boardgamebuddy_countries ──────────────────────────────────────────
--- rows from archive/2026-09-28/: 002_seed.sql
 INSERT INTO public.boardgamebuddy_countries (code, continent) VALUES
   ('AD', 'EU'),
   ('AE', 'AS'),
@@ -337,7 +341,6 @@ ON CONFLICT DO NOTHING;
 
 
 -- ── public.boardgamebuddy_feedback_topics ────────────────────────────────────
--- rows from archive/2026-09-28/: 041_dev_feedback.sql
 INSERT INTO public.boardgamebuddy_feedback_topics (id, label, icon, display_order) VALUES
   ('discover',      'Discover',      'compass', 70),
   ('feed',          'Feed',          'home',    10),
@@ -350,7 +353,6 @@ ON CONFLICT DO NOTHING;
 
 
 -- ── public.boardgamebuddy_feedback_types ─────────────────────────────────────
--- rows from archive/2026-09-28/: 041_dev_feedback.sql
 INSERT INTO public.boardgamebuddy_feedback_types (id, label, icon, display_order) VALUES
   ('bug',        'Bug',             'alert-triangle', 10),
   ('feature',    'Feature request', 'sparkles',       20),
@@ -359,7 +361,6 @@ ON CONFLICT DO NOTHING;
 
 
 -- ── storage.buckets ──────────────────────────────────────────────────────────
--- rows from archive/2026-09-28/: 002_seed.sql
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types) VALUES
   ('boardgamebuddy-games', 'boardgamebuddy-games', true, 5242880, '{image/jpeg,image/png,image/webp,image/gif}'),
   ('boardgamebuddy-plays', 'boardgamebuddy-plays', true, 5242880, '{image/jpeg,image/png,image/webp,image/gif}')
