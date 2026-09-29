@@ -4849,8 +4849,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .play-session__title {
   font-size: 0.95rem;
+  line-height: 1.3;
   min-width: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* Wraps to a second line rather than truncating: the tail of the sentence
+     ("played 3 games", "played Catan") is what the row is for, and an ellipsis
+     on one line cuts exactly that. Two lines hold three names plus the count
+     at phone width; a longer run clamps. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--ink-muted);
   letter-spacing: -0.005em;
 }
