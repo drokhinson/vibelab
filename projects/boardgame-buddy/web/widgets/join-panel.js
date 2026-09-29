@@ -217,9 +217,6 @@
       // Sessions past Gather are spectator-only — the user lands in the
       // read-only session-viewer and isn't added to the host's player list.
       const spectate = s.phase && s.phase !== "gather";
-      const badges = [];
-      if (s.is_participant) badges.push(`<span class="cascade-join__badge cascade-join__badge--rejoin">Rejoin</span>`);
-      if (s.is_host_buddy && !s.is_participant) badges.push(`<span class="cascade-join__badge">Buddy</span>`);
       return `
         <li class="cascade-card cascade-join__row"
             onclick="window.joinPanel._joinSession('${escapeAttr(s.code)}')">
@@ -234,7 +231,6 @@
                 ${s.participant_count}
               </span>
             </div>
-            ${badges.length ? `<div class="cascade-join__row-badges">${badges.join("")}</div>` : ""}
           </div>
           <div class="cascade-join__row-side">
             <span class="cascade-join__row-code">${escapeHtml(s.code)}</span>

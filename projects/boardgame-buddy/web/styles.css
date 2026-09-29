@@ -12815,25 +12815,6 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   align-items: center;
   gap: 3px;
 }
-.cascade-join__row-badges { display: flex; gap: 6px; margin-top: 4px; }
-.cascade-join__badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  background: var(--polaroid-bg-soft);
-  color: var(--polaroid-muted);
-  border: 1px solid var(--polaroid-line);
-}
-/* --accent with #fff is 4.3:1 in light and 1.9:1 in dark — the badge label was
-   barely there on the very theme its gold is brightest in. --accent-fill /
-   --on-accent is the pair the system keeps for a solid accent chip. */
-.cascade-join__badge--rejoin {
-  background: var(--accent-fill);
-  color: var(--on-accent);
-  border-color: var(--accent-fill);
-}
 /* One box holds the list's whole lifecycle: the buddy loader while a load is
    in flight, then the empty message or the session rows in its place. The
    min-height keeps the box from resizing when the loader swaps out. */
