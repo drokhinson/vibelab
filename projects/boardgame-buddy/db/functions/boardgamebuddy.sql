@@ -1355,6 +1355,17 @@
 --               anon/authenticated. db/tests/rank_deferrals.sql is the
 --               behavioural test.
 
+-- bgb_good_games_received(p_user UUID)
+--   → INT
+--   Defined in: db/migrations/003_baseline_functions_social.sql
+--   Language:   sql
+--   Called by:  services/reaction_service.received_count (GET /profile/bundle
+--               for self, and the /bootstrap profile_bundle seed)
+--   Purpose:    How many "Good game" taps other people have given plays p_user
+--               logged or sat in. Distinct reaction_group_id, so one tap over a
+--               whole night counts once; p_user's own reactions are excluded.
+--               SECURITY DEFINER, REVOKEd from anon/authenticated.
+
 -- bgb_notifications(p_viewer UUID, p_limit INT DEFAULT 20,
 --                   p_before TIMESTAMPTZ DEFAULT NULL,
 --                   p_before_key TEXT DEFAULT NULL)

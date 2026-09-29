@@ -188,7 +188,7 @@ python3 .claude/skills/squash-migrations/squash.py \
   --tables 'boardgamebuddy\_%' \
   --functions 'bgb\_%' --functions 'boardgamebuddy\_%' \
   --function-group play '.*' 'Games and the table: logging and importing plays, live sessions, ghost players and claims, the catalog, collection shelves, ranks, discover and BGG sync.' \
-  --function-group social '^bgb_(admin_|bootstrap|delete_account|feed|mark_|notifications|onboarding_|play_partners|play_stats|plays_page|profile_bundle|release_notices|suggested_buddies|sync_achievements|user_stats)' 'People and what they see: profiles, the feed, buddies and suggestions, notifications, stats, achievements, account deletion, admin usage.' \
+  --function-group social '^bgb_(admin_|bootstrap|delete_account|feed|good_games|mark_|notifications|onboarding_|play_partners|play_stats|plays_page|profile_bundle|release_notices|suggested_buddies|sync_achievements|user_stats)' 'People and what they see: profiles, the feed, buddies and suggestions, notifications, stats, achievements, account deletion, admin usage.' \
   --extra-seed "storage.buckets(id,name,public,file_size_limit,allowed_mime_types):id LIKE 'boardgamebuddy-%'" \
   --role-password change-me-via-shared-003 \
   --app boardgamebuddy --archive archive/<YYYY-MM-DD> \

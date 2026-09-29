@@ -1,8 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- boardgamebuddy 059 — comments describe the schema as it is
+-- boardgamebuddy 060 — comments describe the schema as it is
 --
 -- Rewrites the database's own comments so they name tables, columns and
--- functions instead of citing the migration that introduced them: 38
+-- functions instead of citing the migration that introduced them: 39
 -- COMMENT ON statements, and 19 functions re-issued with CREATE OR REPLACE
 -- whose bodies differ from the live definitions in `--` comments only. No
 -- signature, body, grant or behaviour changes; CREATE OR REPLACE keeps each
@@ -11,6 +11,8 @@
 -- Safe to run on production and on a fresh database built from the baseline,
 -- which already contains this end state; a second run changes nothing.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+COMMENT ON FUNCTION public.bgb_good_games_received(uuid) IS 'How many "Good game" taps other people have given plays p_user logged or sat in. Distinct reaction_group_id, so a tap covering a whole night counts once. Called by GET /profile/bundle and GET /bootstrap.';
 
 COMMENT ON TABLE public.boardgamebuddy_bgg_thumb_cache IS 'BGG thumbnail per bgg_id for BGG search results. NULL thumbnail_url = BGG has none. Not a catalog: a game here is not imported. Written and read only by the API (service role).';
 

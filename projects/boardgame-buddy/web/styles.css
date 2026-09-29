@@ -17822,6 +17822,48 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 .statsblock__crown { color: var(--medal-gold); display: block; line-height: 0; }
 
+/* ── Hub: the Good games tally ───────────────────────────────────────────── */
+/* A .preview-card, so it takes the hub's --polaroid-* re-point with no rule of
+   its own; this only lays out one row of icon, label and number. */
+.preview-card.gg-tally {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-block: 0.75rem;
+}
+.gg-tally__icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.gg-tally__body { flex: 1 1 auto; min-width: 0; }
+.gg-tally__title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--polaroid-ink, #1D1812);
+  margin: 0;
+  line-height: 1.2;
+}
+.gg-tally__sub {
+  font-size: 0.78rem;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.gg-tally__v {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Spoke: podium ────────────────────────────────────────────────────────── */
 .stats-podium {
   /* The block each plinth's art stands on. Derived from the card surface, not
