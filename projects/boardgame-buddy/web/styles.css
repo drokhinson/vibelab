@@ -4824,6 +4824,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border-color: var(--accent);
   color: var(--accent);
 }
+/* Your own night's tally: the button's pill, read-only. Filled like a given
+   good game, because on your night every one of them is one you received. */
+.play-session__gg.play-session__gg--tally {
+  cursor: default;
+  background: var(--accent-quiet);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.play-session__gg.play-session__gg--tally::before { content: none; }
+.play-session__gg.play-session__gg--tally:active { transform: none; }
 .play-session__faces { display: inline-flex; align-items: center; flex: 0 0 auto; }
 /* Overlapped, and ringed in the GROUND so the overlap reads as depth. */
 .user-badge.play-session__face {
