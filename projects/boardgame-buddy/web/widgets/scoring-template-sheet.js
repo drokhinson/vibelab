@@ -67,7 +67,7 @@
    * @property {number} [popularity]   chapter-pool only: how many guides hold it
    * @property {boolean} [in_my_guide] chapter-pool only
    * @property {boolean} [disliked]    chapter-pool only: the viewer has turned
-   *   this grid down (migration 033). Never true on anything that reaches this
+   *   this grid down. Never true on anything that reaches this
    *   sheet — Chapter.pendingTemplates filters them out upstream — but the
    *   flag rides on the rows, so the shape says so.
    */
@@ -139,7 +139,7 @@
      * records, so the host is not asked again next round — and on any step but
      * the last they ADVANCE to the next game rather than closing, which is what
      * makes the queue a queue. A thumbs-down is the third: it turns ONE grid
-     * down for good (migration 033) and leaves the step standing, so a host
+     * down for good and leaves the step standing, so a host
      * looking at three grids they do not want can say so about each of them in
      * one pass. The card goes the moment it is tapped; when the last one on a
      * step goes there is nothing left to ask about that game and the queue

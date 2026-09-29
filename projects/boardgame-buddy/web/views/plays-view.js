@@ -381,7 +381,7 @@
         (w.user_id && me && w.user_id === me.id) ||
         (me && (w.name || "") === (me.display_name || ""))
       );
-      // Migration 005: one row can stand for a whole run of identical
+      // One row can stand for a whole run of identical
       // imported plays. The count leads the sub-line, because it is the thing
       // that makes this row different from the one above it.
       const n = p.group_count || 1;

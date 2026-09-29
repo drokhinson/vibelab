@@ -199,7 +199,7 @@ function photoDraft() {
  * A Board Game Arena draft: two tables of one game with the same two people,
  * one of another game. The repeated pair is what run-collapse and feed
  * grouping bite on; the two handles are one person, which is what the seat
- * collapse has to honour or migration 023's unique index refuses the play.
+ * collapse has to honour or uq_bgb_play_players_play_user refuses the play.
  *
  * `Ctor` so a caller with its own VM context can build one there — §8 saves
  * and restores through a fresh sandbox's localStorage, and a draft built from
@@ -481,14 +481,14 @@ console.log("\n5. Each source still writes its own columns after an edit");
     bSoloPayload.players.some((p) => p.score === 31));
 
   // The seat collapse, which is what stops two handles for one person becoming
-  // two seats for one account — a play migration 023 refuses outright.
+  // two seats for one account — a play uq_bgb_play_players_play_user refuses outright.
   ok("two handles for one person collapse to one seat",
     pairPayload.players.length === 1 && pairPayload.players[0].user_id === "u-tig");
   ok("the collapse keeps the win", pairPayload.players[0].is_winner === true);
 
   // The BoardGameGeek source's own asymmetry, and the one that matters most:
-  // its second idempotency key. Without bgg_play_id on the payload, migration
-  // 044's pre-check cannot see BGG plays stored with no client_key and the
+  // its second idempotency key. Without bgg_play_id on the payload,
+  // bgb_log_play's pre-check cannot see BGG plays stored with no client_key and the
   // wizard re-imports every one of them.
   const g = bggDraft();
   const gGroups = g.assignGroups(g.importable());

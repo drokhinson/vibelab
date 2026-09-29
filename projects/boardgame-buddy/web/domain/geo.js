@@ -1,7 +1,7 @@
 // @ts-check
 // domain/geo.js — which country a play happened in.
 //
-// The play row carries an ISO 3166-1 alpha-2 code (migration 065) so that
+// The play row carries an ISO 3166-1 alpha-2 code (country_code) so that
 // "what gets played in Germany" is answerable later. Nothing renders that
 // answer yet; this module exists so the data starts accumulating now, because
 // a play logged today with no country can never be given one afterwards.

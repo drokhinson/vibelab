@@ -1,15 +1,14 @@
 """The admin review counts — the gear's dot and the per-row badges.
 
-Lodged in test_description_backfill.py until migration 045 deleted that file's
-subject. They were only ever there by accident of chronology; the counts are
-their own endpoint with their own failure mode, which is over-reporting.
+The counts are their own endpoint with their own failure mode, which is
+over-reporting.
 
 THREE COUNTS, NOT FIVE. The description, stats and publisher queues became one
 metadata queue, and collapsing them fixed an over-count as well as three round
 trips: a game missing both its blurb and its year used to be counted twice, so
 the dot claimed more work than existed.
 
-FOUR SINCE MIGRATION 052, which added the rulebook-link queue. It is counted
+FOUR WITH THE RULEBOOK-LINK QUEUE. It is counted
 here for the same reason the others are — one round trip lights the whole gear —
 but it is the one queue where the number is not tidy-up: a pending rulebook link
 is already visible to its author's buddies, so a count sitting here is readers

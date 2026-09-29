@@ -10,8 +10,7 @@ That carry-over is per seat, which tempts the key onto the rows that have one
 and off the rows that don't — a ghost, or a player just added. PostgREST
 writes a bulk insert as one statement over the union of the keys it was
 handed, so the absent ones are sent an explicit NULL instead of falling
-through to the column default, and `linked_at` is `DEFAULT now() NOT NULL`
-(migration 008):
+through to the column default, and `linked_at` is `DEFAULT now() NOT NULL`:
 
     null value in column "linked_at" of relation "boardgamebuddy_play_players"
     violates not-null constraint

@@ -168,9 +168,9 @@ def _collection_hits(
     This runs per keystroke, so it must not fetch the viewer's ENTIRE
     collection every call and substring-filter in Python. The !inner hint
     makes the embedded-game ilike apply to the parent collection rows, and
-    the trigram index from migration 039 serves the ILIKE.
+    idx_bgb_games_name_trgm serves the ILIKE.
 
-    A 'played' row only holds the played mark (migration 057) and is not a
+    A 'played' row only holds the played mark and is not a
     shelf, so that game is left to the catalog hits — as one with only logged
     plays is, and as the RPC path does.
     """
@@ -250,8 +250,8 @@ def _rpc_hits(
     The RPC does the trigram-indexed catalog ILIKE, LEFT JOINs the viewer's
     collection, and returns rows collection-first. Each row carries the
     GameSummary columns plus `in_collection` / `collection_status`. Raises if
-    the RPC is missing or predates migration 041's `p_include_expansions`
-    parameter, so unified_search can fall back.
+    the RPC is missing or lacks the `p_include_expansions` parameter, so
+    unified_search can fall back.
     """
     res = sb.rpc(
         "boardgamebuddy_search_games",
@@ -402,7 +402,7 @@ def _as_results(sb: Client, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
             have.add(row["bgg_id"])
             if row.get("thumbnail_url"):
                 thumbs[row["bgg_id"]] = row["thumbnail_url"]
-    # Then whatever BGG has already told us (migration 054) — never BGG itself.
+    # Then whatever BGG has already told us (boardgamebuddy_bgg_thumb_cache) — never BGG itself.
     # The sheet asks /search/bgg-thumbnails for the rows still without one.
     unseen = [r["bgg_id"] for r in raw if r["bgg_id"] not in thumbs and not r.get("thumbnail_url")]
     if unseen:
@@ -441,8 +441,8 @@ def _catalog_hits(
     at exactly the moment the service is already degraded.
 
     Fast path is one index-backed RPC. Falls back to the two-query PostgREST
-    path if the RPC isn't present yet (migration 041 not applied) or errors,
-    so an auto-deploy ahead of the migration never breaks search.
+    path if the RPC isn't present yet or errors, so an auto-deploy ahead of
+    its SQL never breaks search.
     """
     try:
         return _rpc_hits(sb, viewer_id, query, limit, include_expansions=include_expansions)

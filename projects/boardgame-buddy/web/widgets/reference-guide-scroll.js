@@ -15,8 +15,8 @@
   // A scoring grid is a chapter of a different kind, and it is drawn LAST,
   // in its own Scoring section, never in the type-ordered flow above it.
   //
-  // In that flow, migration 021's display_order would put it FIRST — a table
-  // pushing the rules somebody actually opened the scroll for below the fold.
+  // In that flow, the scoring_grid type's display_order (5) would put it
+  // FIRST — a table pushing the rules somebody actually opened the scroll for below the fold.
   // Leaving it out of this widget entirely is wrong too: on the Play screen the
   // grid is two cards up in the scorepad, but on a game's own page there is no
   // scorepad, and "what do we score on" is exactly the kind of thing the guide
@@ -33,10 +33,10 @@
     return c.layout === "scoring_grid" || c.chapter_type === "scoring_grid";
   }
 
-  // A rulebook link is the other chapter drawn outside the type-ordered flow
-  // (migration 052), and it is drawn FIRST rather than last. The order is the
-  // argument: the rulebook is the document every other chapter is a shortcut
-  // around, so it heads the scroll, where the score sheet — a table you fill in
+  // A rulebook link is the other chapter drawn outside the type-ordered flow,
+  // and it is drawn FIRST rather than last. The order is the argument: the
+  // rulebook is the document every other chapter is a shortcut around, so it
+  // heads the scroll, where the score sheet — a table you fill in
   // rather than read — sits at the foot.
   //
   // Read defensively off either column, exactly as the API's
@@ -49,7 +49,7 @@
 
   // Has anybody vouched for where this link goes? Two statuses say no —
   // `pending`, where an admin was asked and has not answered, and `unlisted`,
-  // where nobody was asked at all (migration 053) — and to every reader but
+  // where nobody was asked at all — and to every reader but
   // the author they are one state. The predicate is written as "not approved
   // and not denied" rather than as a list of the two, so a fifth status added
   // later is treated as unreviewed rather than silently rendered as vouched
@@ -71,8 +71,7 @@
 
   /**
    * The rows of a scoring grid, or null for any other chapter. Read
-   * defensively: a row cached before migration 018, and a stale layout with no
-   * grid, both have to fall through to markdown rather than draw a broken
+   * defensively: an older cached row, and a stale layout with no grid, both have to fall through to markdown rather than draw a broken
    * table (same guard as views/reference-guide-add-view.js).
    */
   function gridRows(c) {
@@ -87,7 +86,7 @@
   // ScoringTemplateEditor.preview the author's editor and the offer sheet use
   // (.claude/rules/ui-object-design.md §2).
   //
-  // An EXPANSION's grid gets its mode badge above the table (migration 032).
+  // An EXPANSION's grid gets its mode badge above the table.
   // Without it the guide shows two scorepads for one game with nothing to say
   // that the second one either joins or supplants the first — which is the
   // whole distinction the play screen then acts on.
@@ -142,8 +141,8 @@
      *   renders the live scorepad (the Play cascade, the session viewer) —
      *   there the same table two cards apart is a duplicate, not a reference.
      *   The "a grid exists for this game" offer is unaffected either way.
-     * @param {boolean} [opts.showRulebook=true] draw the Rulebook section
-     *   (migration 052). There is no surface that needs it off today — the
+     * @param {boolean} [opts.showRulebook=true] draw the Rulebook section.
+     *   There is no surface that needs it off today — the
      *   game page and both cascade screens all want it, and it is THE place the
      *   link lives. The flag exists so a
      *   future screen that shows the link itself can turn the section off
@@ -169,12 +168,12 @@
       this._chapters = [];
       this._loading = false;
       this._search = "";
-      // Scoring-grid chapters that EXIST for this game, adopted or not
-      // (migration 018). Drives the "templates available" notice.
+      // Scoring-grid chapters that EXIST for this game, adopted or not.
+      // Drives the "templates available" notice.
       this._templates = [];
-      // The rulebook links this viewer is allowed to see for this game
-      // (migration 052), and whether that answer has actually landed. Same
-      // split as _templatesLoaded above and for the same reason: an empty list
+      // The rulebook links this viewer is allowed to see for this game,
+      // and whether that answer has actually landed. Same split
+      // as _templatesLoaded above and for the same reason: an empty list
       // before the fetch is silence, and "no rulebook link available" is a
       // CLAIM — printing it while the request is still out would flash the one
       // sentence that is worst to be wrong about.
@@ -255,7 +254,7 @@
         this._render();
         // A signed-out reader has no guide, and still has a rulebook: the pool
         // endpoint takes optional auth and hands an anonymous caller the
-        // APPROVED links and nothing else (migration 052). This matters for a
+        // APPROVED links and nothing else. This matters for a
         // real screen rather than in theory — a guest watching a session from a
         // join code is signed out, and this is the only place the link reaches
         // them.
@@ -308,7 +307,7 @@
       }
     }
 
-    // ── The rulebook link (migration 052) ───────────────────────────────────
+    // ── The rulebook link ───────────────────────────────────────────────────
 
     /**
      * The rulebook links this viewer may see for this game.
@@ -363,8 +362,8 @@
      * surface that shows "the rulebook" has to pick the same one, so the moment
      * a second surface wants it the answer must already be somewhere shared.
      * There is deliberately no `guide-rulebook-loaded` event to go with the
-     * scoring pool's: nothing outside this widget draws the link (migration
-     * 052), and an announcement nobody listens to is dead code that reads as a
+     * scoring pool's: nothing outside this widget draws the link,
+     * and an announcement nobody listens to is dead code that reads as a
      * contract.
      */
     _currentRulebook() {
@@ -373,7 +372,7 @@
         : null;
     }
 
-    // ── "Scoring templates available" notice (migration 018) ────────────────
+    // ── "Scoring templates available" notice ────────────────────────────────
 
     async _fetchTemplates() {
       if (!this._baseGameId || !window.session) return;
@@ -725,7 +724,7 @@
       }
       // Unlisted and pending read the same to a reader and say the same thing
       // here: nobody has vouched for where this goes. The difference between
-      // them — whether an admin was ASKED to (migration 053) — is the author's
+      // them — whether an admin was ASKED to — is the author's
       // business and appears on their own row below, not on a strip somebody
       // is reading mid-game.
       const unreviewed = isUnreviewedRulebook(link);
@@ -806,8 +805,8 @@
     /**
      * The author's own link when something else is on show, or nothing is.
      *
-     * The one place a denial is ever visible, and — per migration 053 — the
-     * one place an author is reminded that their link is unlisted on purpose.
+     * The one place a denial is ever visible, and the one place an author is
+     * reminded that their link is unlisted on purpose.
      * That sentence has to say it is THEIR doing and how to undo it: an
      * unlisted link looks identical to a pending one from the outside, and an
      * author who cannot tell which they have is an author waiting on a queue
@@ -974,7 +973,7 @@
     _renderCreateTemplate() {
       if (!this._showScoringGrids) return "";
       // "Grids exist" means grids that still exist FOR THIS VIEWER: a grid
-      // they have turned down (migration 033) is one they have already
+      // they have turned down is one they have already
       // decided about, and leaving it to suppress this button is how somebody
       // who refused the only bad grid for a game ends up on a screen that
       // offers them nothing at all. Refusing it is exactly the moment writing
@@ -1131,8 +1130,8 @@
       }
       window.BgbScoringTemplateSheet.offer({
         steps,
-        // So an expansion's grid is badged with the mode it would act in
-        // (migration 032) — the guide's pool merges base + expansions, and
+        // So an expansion's grid is badged with the mode it would act in —
+        // the guide's pool merges base + expansions, and
         // "adds two rows" and "is the whole score sheet instead" are not the
         // same offer.
         baseGameId: this._baseGameId,
@@ -1145,7 +1144,7 @@
     }
 
     /**
-     * Turn one offered grid down for good (migration 033).
+     * Turn one offered grid down for good.
      *
      * The sheet has already dropped the card; this is the write behind it. Not
      * _dismissTemplates: that is the per-device "not now" that only quiets this
@@ -1225,7 +1224,7 @@
     // Hand the loaded chapter list to anyone else on the screen that needs it.
     //
     // The only listener today is play-flow-view, which wants the scoring-grid
-    // chapters (migration 018) to know whether to pre-fill the scoring table.
+    // chapters to know whether to pre-fill the scoring table.
     // It listens rather than fetching because the two mount in the SAME frame
     // for the same gameIds: calling Chapter.myChapters itself would double the
     // request on every cold mount, and this widget has already done it — with a
@@ -1506,13 +1505,13 @@
             </div>
             <div class="scroll-panel__body" id="guide-scroll-body">
               <!-- First, always: the rulebook is the document every other
-                   chapter is a shortcut around (migration 052). The score sheet
+                   chapter is a shortcut around. The score sheet
                    is the mirror of this and sits last. -->
               <div class="scroll-panel__rulebook-host" data-rulebook-host>${this._renderRulebookSection()}</div>
               ${bodyInner}
               <!-- Last, always: a scoring grid is the shape of the scorepad
                    rather than a rule anybody opened the scroll to look up, and
-                   migration 021's display_order would otherwise put it first.
+                   the scoring_grid type's display_order would otherwise put it first.
                    No whitespace inside either host below: :empty does not match
                    an element holding a whitespace text node, and an empty host
                    is a flex item that would buy a 16px gap. -->
@@ -1625,7 +1624,7 @@
 
     _editChapter(chapterId, event) {
       if (event) event.preventDefault();
-      // The rulebook pool is searched too (migration 052): a link the author
+      // The rulebook pool is searched too: a link the author
       // has removed from their own guide is still theirs to edit, and the
       // Rulebook section draws it from `_rulebooks` rather than from the guide.
       const chapter = this._chapters.find((c) => c.id === chapterId)

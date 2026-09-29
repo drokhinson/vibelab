@@ -54,7 +54,7 @@ def _count_guides(sb: Client, user_id: str) -> int:
     their guide — subtracted so the number matches the unioned file rather than
     counting an authored-and-kept chapter twice.
 
-    Both selection counts carry `state='kept'` (migration 033), matching
+    Both selection counts carry `state='kept'`, matching
     export_reads.build_guides — the tick beside the file has to count the rows
     the file actually holds, and a disliked chapter is in neither.
     `_count` cannot express the second filter, so these two are spelled out.

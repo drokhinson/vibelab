@@ -51,7 +51,7 @@
         // rather than one total: the nav dot only needs "something is
         // waiting", but each hub card names its own count.
         achievementUnseenCount: 0,
-        // Pending INCOMING ghost account claims (migration 070) — someone
+        // Pending INCOMING ghost account claims — someone
         // asking to link one of this user's ghost players to their account.
         // Third source on the same dot; the hub's Buddies card sums it with
         // buddyRequestCount, since both resolve behind that one card.
@@ -72,7 +72,7 @@
         adminChapterReportCount: 0,
         adminMissingImageCount: 0,
         adminMissingMetaCount: 0,
-        // Rulebook links waiting on a decision (migration 052). The one admin
+        // Rulebook links waiting on a decision. The one admin
         // queue here that is not tidy-up: a pending link is already live for
         // its author's buddies, so this number is readers following an
         // unreviewed outbound link.

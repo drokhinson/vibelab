@@ -13,8 +13,8 @@
   // game-detail page is instant. Mutations clear the namespace so a just-edited
   // guide is never served stale.
   const CHAPTERS_NS = "chapters";
-  // The scoring-grid chapters that EXIST for a game, adopted or not (migration
-  // 018). A separate namespace from the guide above because it answers a
+  // The scoring-grid chapters that EXIST for a game, adopted or not.
+  // A separate namespace from the guide above because it answers a
   // different question — "what is out there" rather than "what is mine" — and
   // is read by the scroll's "templates available" notice.
   const TEMPLATES_NS = "scoring-templates";
@@ -23,7 +23,7 @@
   // TEMPLATES_NS: it answers "what is out there", not "what is mine", and it is
   // a single integer rather than a row list.
   const POOL_COUNT_NS = "chapter-pool-count";
-  // The rulebook links that EXIST for a game (migration 052), each already
+  // The rulebook links that EXIST for a game, each already
   // filtered server-side to what this viewer is allowed to see. Its own
   // namespace for the same reason TEMPLATES_NS has one — it answers "what is
   // out there", not "what is mine" — and because the answer is PER VIEWER in a
@@ -159,7 +159,7 @@
       return window.api.get(`/games/${gameId}/chapter-pool`, query);
     },
 
-    // ── Scoring templates (migration 018) ───────────────────────────────────
+    // ── Scoring templates ───────────────────────────────────────────────────
     //
     // The pool already answers "does this game have scoring templates I haven't
     // added?" — every row carries in_my_guide — so this is the pool with one
@@ -190,7 +190,7 @@
       });
     },
 
-    // ── Rulebook links (migration 052) ──────────────────────────────────────
+    // ── Rulebook links ──────────────────────────────────────────────────────
     //
     // The pool again, filtered to one layout — the same trick scoringTemplates
     // plays above, and for the same reason: every row already carries
@@ -243,7 +243,7 @@
      *   2. an APPROVED one, most-adopted first. The safe public answer, and the
      *      only kind a signed-out reader is ever handed.
      *   3. whatever is left — an unreviewed link of their own or a buddy's,
-     *      whether it is pending or unlisted (migration 053). The two are one
+     *      whether it is pending or unlisted. The two are one
      *      case here on purpose: both are live for exactly these readers, and
      *      whether an admin was ASKED about it says nothing about which link
      *      this viewer should be sent to. It is on their screen because the
@@ -312,7 +312,7 @@
      * are to say it.
      *
      * TWO refusals, and they are not the same refusal. `disliked` is the
-     * durable, server-side one (migration 033): the viewer has turned the grid
+     * durable, server-side one: the viewer has turned the grid
      * down for good, on every device, and it is also gone from their pool and
      * their chapter count. The localStorage list below is the soft one: "not
      * now", per device, and only ever about this offer. A grid needs to clear
@@ -380,8 +380,8 @@
     // a reply shape, and generate() 400s a scoring_grid chapter_type outright.
     // No chapter type on the wire at all — a grid is one type by definition.
     //
-    // `mode` is the add_on / replace choice for an EXPANSION's grid (migration
-    // 032), and unlike `prompt` it changes WHAT is drafted rather than steering
+    // `mode` is the add_on / replace choice for an EXPANSION's grid, and
+    // unlike `prompt` it changes WHAT is drafted rather than steering
     // it: an add-on wants the rows the box brings, a replacement wants the whole
     // reprinted sheet. Sent unconditionally, exactly as create() sends it — the
     // backend re-resolves it against the game (it is the only side that knows
@@ -403,7 +403,7 @@
       return window.api.del(`/games/${gameId}/my-chapters/${chapterId}`);
     },
 
-    // ── Dislikes (migration 033) ────────────────────────────────────────────
+    // ── Dislikes ────────────────────────────────────────────────────────────
     //
     // The inverse of add/remove above, and NOT the same thing as
     // dismissTemplates() further up this file. A dismissal is a per-device
@@ -434,7 +434,7 @@
     report(chapterId, reason) {
       return window.api.post(`/chapters/${chapterId}/report`, { reason: reason || null });
     },
-    // ── Admin: the rulebook queue (migration 052) ───────────────────────────
+    // ── Admin: the rulebook queue ───────────────────────────────────────────
     //
     // A different queue from adminReports below and deliberately not the same
     // screen: a report is somebody objecting to prose after the fact, a

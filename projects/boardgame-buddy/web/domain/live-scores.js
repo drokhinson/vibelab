@@ -2,7 +2,7 @@
 //
 // Wraps a Supabase Realtime channel on boardgamebuddy_play_session_scores.
 // The host's browser writes straight to the table via the anon key and
-// everybody else reads — RLS (migration 029's split policies)
+// everybody else reads — RLS (the bgb_session_scores_* policies)
 // enforces that only the host of the session can write, and only while
 // phase='play'.
 //
@@ -103,8 +103,8 @@
       this._seed = new Map();
       // Has a direct table read ever returned rows? Everyone watching a
       // session may read the table — host, seated player or spectator
-      // alike (migration 027, on the viewer row POST /sessions/{code}/watch
-      // leaves behind) — so the answer is normally yes for anybody who got as
+      // alike (on the viewer row POST /sessions/{code}/watch leaves
+      // behind) — so the answer is normally yes for anybody who got as
       // far as this screen. It is still no when that registration did not
       // happen (an API older than this client, a failed POST), and then the
       // seed is the only copy of the grid this screen will get.
@@ -255,7 +255,7 @@
 
     /**
      * Fold in the server's copy of this session's scores, as carried by the
-     * session bundle (`GET /sessions/{code}` → `scores`, migration 054).
+     * session bundle (`GET /sessions/{code}` → `scores`).
      *
      * This is the only path that reaches a spectator who joined after Gather:
      * they hold no participant row, so `bgb_session_scores_select` hides the
@@ -294,7 +294,7 @@
      * is the fast path" cadence must not stand down for us.
      *
      * This is the exception rather than the spectator's lot: watching a
-     * session earns the read (migration 027), so the seeded path is what is
+     * session earns the read, so the seeded path is what is
      * left when the viewer row could not be written (an API older than this
      * client, or a POST that failed). The degraded mode is worth keeping
      * precisely because it is invisible to the person watching.

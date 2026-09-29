@@ -178,7 +178,7 @@
     }
 
     /**
-     * Ticking someone introduces the people they know (migration 072), out of
+     * Ticking someone introduces the people they know, out of
      * the payload that arrived with the suggestions — so this costs no request
      * and happens in the tap's own frame.
      *

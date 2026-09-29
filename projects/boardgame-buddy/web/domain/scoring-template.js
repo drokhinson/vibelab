@@ -1,10 +1,10 @@
 // @ts-check
 // domain/scoring-template.js — how several scoring grids become one scorepad.
 //
-// A scoring grid is a chapter and a chapter belongs to ONE game (migration
-// 018). Expansions are games, so an expansion can carry a grid of its own —
+// A scoring grid is a chapter and a chapter belongs to ONE game.
+// Expansions are games, so an expansion can carry a grid of its own —
 // and the play a host is scoring is base game PLUS the expansions on the
-// table, which means the grids have to meet somewhere. Migration 032 says
+// table, which means the grids have to meet somewhere. The grid's `mode` says
 // where: every expansion grid declares a MODE.
 //
 //   * "add_on"  — its rows are APPENDED to the base game's grid. Everdell +
@@ -98,9 +98,8 @@
    * The mode a grid ACTS in, which is not quite the mode it stores.
    *
    * Stored: NULL on a base game's grid, add_on|replace on an expansion's. But
-   * a grid written against an expansion before migration 032 stored nothing at
-   * all, and a base game's grid served from a cache written before the guide
-   * knew about expansions can arrive with no source tagging. So the mode is
+   * an expansion's grid can store no mode at all, and a base game's grid
+   * served from a cache written before the guide knew about expansions can arrive with no source tagging. So the mode is
    * resolved against the BASE GAME the composition is for, not read off the
    * document alone:
    *
@@ -108,8 +107,7 @@
    *     a stray mode on it (an older client, a hand-edited row) is ignored
    *     rather than allowed to turn the base game into an add-on to itself;
    *   * an expansion's grid with no mode is an add-on, matching
-   *     services/chapter_grid.resolve_grid_mode's default and the behaviour
-   *     those pre-032 grids already had.
+   *     services/chapter_grid.resolve_grid_mode's default.
    *
    * @param {GridChapter} c
    * @param {string} baseGameId
@@ -170,8 +168,8 @@
    *
    * Grids only — every other chapter's title was TYPED by its author, and a
    * title someone chose is not ours to trim. Either tagging counts, matching
-   * isScoringGrid in widgets/reference-guide-scroll.js: a row cached before
-   * migration 018 carries the type without the layout.
+   * isScoringGrid in widgets/reference-guide-scroll.js: an older cached row
+   * carries the type without the layout.
    *
    * Omit `baseGameName` where the full name is the point: a report, a
    * moderation queue, a confirm dialog naming what is about to be deleted.
@@ -402,7 +400,7 @@
    * whichever grid led them, and the seam list.
    *
    * `parts` is omitted when one grid supplied the whole thing, so an
-   * uncomposed template has the single-grid shape a pre-032 snapshot has, and
+   * uncomposed template has the plain single-grid shape older snapshots have, and
    * every reader of that shape reads it unchanged.
    *
    * @param {GridChapter|null} base

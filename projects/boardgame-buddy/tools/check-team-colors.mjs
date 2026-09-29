@@ -5,7 +5,7 @@
 //
 // Three surfaces read ui/team-colors.js — the play-detail popup's banded player
 // list and the scoring grid's column headers, which are in the SAME modal,
-// inches apart; and the spectator's live mirror (migration 050), which is not
+// inches apart; and the spectator's live mirror, which is not
 // in the room at all but is looking at the same table from another phone. If
 // any two disagreed about which side is which colour, the error would be
 // invisible in the code and glaring on screen.
@@ -144,7 +144,7 @@ console.log("\na seventh custom side wraps rather than losing its colour:");
   ok("no side is left uncoloured", slots.every((n) => n >= 1 && n <= T.TEAM_SLOTS));
 }
 
-// ── The spectator reads the same sides as the host (migration 050) ──────────
+// ── The spectator reads the same sides as the host ──────────────────────────
 //
 // Two DIFFERENT rosters describe one table. The host's screens are handed
 // `ps.players` off the local draft; a spectator's mirror is handed the
@@ -154,7 +154,7 @@ console.log("\na seventh custom side wraps rather than losing its colour:");
 // exact failure this file exists to prevent, one wire further out.
 //
 // The agreement rests on one thing: both arrays are in the SAME ORDER. The
-// bundle sorts by `position NULLS LAST, joined_at` (migration 056) and the
+// bundle sorts by `position NULLS LAST, joined_at` and the
 // host's list IS that order — it is what the host dragged and what the order
 // write published. Slots are assigned by order of first appearance, so equal
 // order plus equal tags is equal colours, with neither side told which slot a

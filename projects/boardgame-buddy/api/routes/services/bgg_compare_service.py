@@ -91,7 +91,7 @@ def _load_local_collection(sb: Client, user_id: str) -> list[dict]:
     a truncated shelf reads as "not in BgB" and the push would clear `own` off
     games still owned.
 
-    A 'played' row (migration 057) is left out: BGG has no flag for "played it,
+    A 'played' row is left out: BGG has no flag for "played it,
     never logged it", so the game compares exactly as one with no row at all —
     as a game with only logged plays already does."""
     return page_all(

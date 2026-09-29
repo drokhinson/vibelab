@@ -6,7 +6,7 @@
 // changing a line of it.
 //
 // THE OPTION LISTS ARE FETCHED, NEVER HARDCODED. Types and topics are seeded
-// rows (migration 040), the same arrangement chapter types have, because adding
+// rows, the same arrangement chapter types have, because adding
 // a topic must not need a deploy. `options()` pulls both in parallel and caches
 // them for the session — they change about once a year, and paying two requests
 // every time the compose sheet opens would be the wrong trade in the other

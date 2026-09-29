@@ -63,8 +63,8 @@ console.log("\noutside team mode nothing merges:");
   eq("competitive is one column per seat",
      shape(columns(roster, "competitive", 1)), ["Ana:0", "Bo:1"]);
   eq("co-op too", shape(columns(roster, "coop", 1)), ["Ana:0", "Bo:1"]);
-  // The mode is the gate, and this is why the lobby publishes it (migration
-  // 050): a mirror reading tags alone would merge a grid the host un-merged.
+  // The mode is the gate, and this is why the lobby publishes it: a mirror
+  // reading tags alone would merge a grid the host un-merged.
   eq("team does", shape(columns(roster, "team", 1)), ["Red:0+1"]);
 }
 
@@ -73,7 +73,7 @@ console.log("\na side of one keeps its own column:");
   const roster = [seat("Ana", "Red", [10]), seat("Bo", "Blue", [7])];
   eq("two sides of one are two columns",
      shape(columns(roster, "team", 1)), ["Ana:0", "Bo:1"]);
-  // ...and still carries the side's colour, which is the whole of migration 048.
+  // ...and still carries the side's colour, which is the whole point of storing it.
   // Red and Blue are palette circles, so each wears its own token (5 and 1).
   eq("both keep their tint", columns(roster, "team", 1).map((c) => c.slot), [5, 1]);
 }

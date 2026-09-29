@@ -1,7 +1,7 @@
 // @ts-check
 // widgets/play-run-sheet.js — what a run of identical imported plays can do.
 //
-// A run card (ui/play-card.js, migration 005) stands for N plays that are
+// A run card (ui/play-card.js) stands for N plays that are
 // indistinguishable from one another. It does not flip, because a flip
 // promises a scorecard and there is no single play here to show one for.
 // Tapping opens this instead.
@@ -22,8 +22,8 @@
 // featureless, so it can carry a note or a scoreline as long as every play in
 // it carries the same one. Those have nowhere else to appear — so this sheet
 // is where they belong. The note rides on the card; so does the roster
-// (migration 015 put the whole play on the feed card), and the fetch below is
-// only the fallback for a card that predates it.
+// (the feed card carries the whole play), and the fetch below is only the
+// fallback for a card without one.
 //
 // An ordinary card previews its note on a paper plate across the bottom of
 // its photo. The run card does not, because it has no photograph. Its frame
@@ -89,7 +89,7 @@
         },
       });
       // Not awaited: the sheet's own answer — what this card is — is already on
-      // screen, and on any card since migration 015 the roster is too.
+      // screen, and on any card carrying `players` the roster is too.
       this._loadDetail();
     }
 
@@ -97,7 +97,7 @@
      * Fetch the play the card stands for, purely for its roster. Every play in
      * the run carries the same seats and scores by construction, so the
      * representative's are the run's. Skipped outright when the card already
-     * carries `players` (migration 015), which is every card the current feed
+     * carries `players`, which is every card the current feed
      * draws. Failure is silent: the sheet's actual job is unaffected, and an
      * error banner over a delete button would read as though the delete were
      * the thing that failed.
@@ -203,7 +203,7 @@
       // The ROSTER decides, the way the card's own caption does: it carries the
       // ids, so the alias resolves and "You" is an identity test rather than a
       // string match against a display name the account may since have changed.
-      // `winner_display_name` is the pre-015 fallback — a comma-joined string
+      // `winner_display_name` is the fallback for a card with no roster — a comma-joined string
       // with nothing beside it to resolve or compare by.
       const crowned = this._players().filter((p) => p && p.is_winner);
       const winner = crowned.length
@@ -220,7 +220,7 @@
         : null;
       // "They count as a play in YOUR stats" is only true when the viewer is at
       // the table — every play-derived surface counts a play for the person who
-      // logged it or who sits in play_players (migration 045).
+      // logged it or who sits in play_players.
       const iPlayed = !!(me && this._players().some((p) => p && p.user_id === me.id));
       return `
         <div class="bgb-sheet__panel">

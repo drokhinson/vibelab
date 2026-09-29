@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// check-rulebook-links.mjs — the client half of migration 052.
+// check-rulebook-links.mjs — the client half of rulebook links.
 //
 //     node projects/boardgame-buddy/tools/check-rulebook-links.mjs
 //
@@ -21,10 +21,10 @@
 //      the AUTHOR's own copy can say which of the four states it is in. A
 //      denied link reaching a viewer at all means it is theirs, and it is shown
 //      as such rather than dropped.
-//   4. UNLISTED AND PENDING ARE ONE STATE TO A READER and two to their author
-//      (migration 053). Both reach the same people; only the author is told
-//      which, because for them it is the difference between waiting on somebody
-//      and waiting on nobody — and a link that says "Waiting for approval" when
+//   4. UNLISTED AND PENDING ARE ONE STATE TO A READER and two to their author.
+//      Both reach the same people; only the author is told which, because for
+//      them it is the difference between waiting on somebody and waiting on
+//      nobody — and a link that says "Waiting for approval" when
 //      it was never submitted is a queue somebody keeps checking for.
 import fs from "node:fs";
 import vm from "node:vm";

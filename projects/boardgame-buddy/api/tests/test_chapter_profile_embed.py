@@ -1,14 +1,13 @@
 """An embed of profiles from the chapters table must name which FK it means.
 
-Migration 052 gave boardgamebuddy_guide_chapters a SECOND foreign key into
-boardgamebuddy_profiles — `moderated_by`, alongside the `created_by` that has
-always been there. The moment it landed, every PostgREST embed written as a bare
-`boardgamebuddy_profiles(display_name)` stopped resolving: with two candidate
-relationships and no hint, PostgREST refuses to guess and returns PGRST201
-("Could not embed because more than one relationship was found"), which this API
-surfaces as a 500. That took out the whole reference guide — /my-chapters and
-every /chapter-pool read, i.e. opening the editor at all — with nothing in the
-chapter code changed and nothing in the test suite red, because the suite's
+boardgamebuddy_guide_chapters has TWO foreign keys into
+boardgamebuddy_profiles — `created_by` and `moderated_by`. Every PostgREST embed
+written as a bare `boardgamebuddy_profiles(display_name)` therefore fails to
+resolve: with two candidate relationships and no hint, PostgREST refuses to
+guess and returns PGRST201 ("Could not embed because more than one relationship
+was found"), which this API surfaces as a 500. That takes out the whole
+reference guide — /my-chapters and every /chapter-pool read, i.e. opening the
+editor at all — with nothing in the test suite red, because the suite's
 Supabase stand-ins never parse a select string.
 
 So this file reads the two things the stubs can't: the SCHEMA, for how many FKs
@@ -19,8 +18,8 @@ rule that no longer applies.
 
 Why the hint is the column and not the constraint name: PostgREST accepts
 either, and `created_by` says what it means. The constraint is still called
-`boardgamebuddy_guide_chunks_created_by_fkey` — a name from before archive/2026-09-01/018
-renamed the tables — and a select that quoted it would read as though it joined
+`boardgamebuddy_guide_chunks_created_by_fkey` — a name older than the table's
+own — and a select that quoted it would read as though it joined
 some other table entirely.
 """
 

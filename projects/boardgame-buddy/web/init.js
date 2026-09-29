@@ -578,7 +578,7 @@
     // already on their screen and a drain must never gate it.
     if (window.Outbox) window.Outbox.flush();
     // First-time onboarding: a brand-new profile carries needs_setup=true
-    // (migration 030, set by the dependency-side auto-create). Prompt the user
+    // (set by the dependency-side auto-create). Prompt the user
     // to pick their display name + badge before they start using the app.
     // Dismissing without saving leaves the flag set so the modal returns on
     // next load.
@@ -598,7 +598,7 @@
       // What's new, for everyone who is not brand new. The else is what
       // guarantees the two decks can never stack — belt-and-braces, since a
       // fresh account's watermark is its own signup time and its unseen list
-      // is empty by construction (migration 042), but the onboarding deck is
+      // is empty by construction, but the onboarding deck is
       // not a surface to be wrong about.
       //
       // On a WARM boot this is the call that lands, over an already-painted
@@ -1046,7 +1046,7 @@
     if (document.readyState === "complete") registerWorker();
     else window.addEventListener("load", registerWorker, { once: true });
 
-    // Push (migration 017). Two separate jobs, and neither blocks the boot.
+    // Push. Two separate jobs, and neither blocks the boot.
     //
     // listen() picks up the "a notification was tapped" message sw.js posts, so
     // the tap routes inside the running app instead of reloading it. Armed

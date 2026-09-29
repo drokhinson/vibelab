@@ -1,9 +1,9 @@
-"""The played mark (migration 057): "played it, somewhere I didn't log it".
+"""The played mark: "played it, somewhere I didn't log it".
 
 One mark on any game, stored as played_before_at on the game's collection row
 whatever its status; a game on no shelf holds it on a status 'played' row. The
 SQL half (which games land on the Played shelf, the status map's marks,
-search) is exercised against Postgres by db/tests/057_played_mark.sql. Pinned
+search) is exercised against Postgres by db/tests/played_mark.sql. Pinned
 here is what the API decides:
 
   * setting the mark stamps any row, keeping an existing stamp, and creates a

@@ -62,7 +62,7 @@
 // ── PENDING BUDDIES ARE PEOPLE ──────────────────────────────────────────────
 //
 // A candidate can carry `pending`: a buddy request between the viewer and that
-// person that nobody has answered yet (migration 049). They are offered like
+// person that nobody has answered yet. They are offered like
 // any other account — the request is evidence they are at the table tonight,
 // and the accept happens later on someone else's phone — and while the search
 // box is empty they get their own section at the top, because "the person I

@@ -1,6 +1,6 @@
 """Web Push — the one place BoardgameBuddy talks to a phone that isn't open.
 
-The bell (008/009/017) is derived, complete and correct, and completely
+The bell (bgb_notifications) is derived, complete and correct, and completely
 invisible to anyone not currently looking at the app. This is the other half:
 the same events, delivered to a device.
 

@@ -23,7 +23,7 @@
 // The gate is `this._profile.is_buddy` from /users/{id}/profile, which is
 // fetched fresh on every mount — NOT the bundle, which is cached for up to
 // five minutes and could hand back a pre-buddy copy. The RPC enforces the
-// same rule server-side (migration 064 nulls recent_plays / together /
+// same rule server-side (bgb_profile_bundle nulls recent_plays / together /
 // top_games for a stranger), so the client gate is presentation rather than
 // the enforcement — GET /plays?user_id= is 403 for a stranger too.
 //
@@ -555,7 +555,7 @@
     // already know who you are looking at, so the news is how the record stands.
     //
     // `together` is competitive-only and counts plays you both SAT IN, so a
-    // co-op night or a play one of you merely logged is out — see migration 064.
+    // co-op night or a play one of you merely logged is out — bgb_profile_bundle computes it that way.
     _renderTogether(b) {
       const t = b && b.together;
       // Null for a stranger, and for a buddy the two have never actually sat

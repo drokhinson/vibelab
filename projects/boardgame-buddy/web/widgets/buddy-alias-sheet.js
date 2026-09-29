@@ -5,7 +5,7 @@
 // list the app renders, and the one that actually costs you something is the
 // Gather player picker: pick the wrong Dave and the play is logged against the
 // wrong person. This sheet sets a PRIVATE alias — stored on the viewer's own
-// side of the buddy edge (migration 012), never shown to the person it names.
+// side of the buddy edge (alias_by_a / alias_by_b), never shown to the person it names.
 //
 // Opened from three places, all through the same open(): the Buddies row, a
 // seated player in Gather, and a player row in the play-detail popup. It takes

@@ -83,7 +83,7 @@
       this.notes        = initial.notes || "";
       this.expansionIds = initial.expansionIds || [];
       this.playMode     = initial.playMode || null;
-      // The scoring grid this play is being scored on (migration 018), or null
+      // The scoring grid this play is being scored on, or null
       // for the plain R1..Rn grid. A SNAPSHOT of the chapter's rows, not a
       // reference to it — see the COMMENT ON boardgamebuddy_plays
       // .scoring_template. Holding a copy on the draft has a second payoff
@@ -100,8 +100,8 @@
       // stores the template a play WAS scored on, and a play scored on plain
       // rounds is a null template there, with nothing more to say.
       this.scoringTemplateOff = !!initial.scoringTemplateOff;
-      // Whether the host has PICKED the scorepad from the bar's pill row
-      // (migration 032), as opposed to it having been derived for them.
+      // Whether the host has PICKED the scorepad from the bar's pill row, as
+      // opposed to it having been derived for them.
       //
       // The two need telling apart for the same reason as the switch above.
       // Deriving is not a one-time act: ticking a replace-mode expansion
@@ -114,7 +114,7 @@
       // Local to the draft, like the switch: the server stores the rows a play
       // WAS scored on and has no use for how they were arrived at.
       this.scoringTemplatePicked = !!initial.scoringTemplatePicked;
-      // Where this is being played, ISO 3166-1 alpha-2 (migration 065). Seeded
+      // Where this is being played, ISO 3166-1 alpha-2. Seeded
       // from the device the moment the draft is born rather than read at Save:
       // Settle Up shows it and the host can correct it, so it has to be a real
       // field of the draft, and a resumed draft must not silently re-detect
@@ -536,7 +536,7 @@
      * Not a join: it never touches the roster, so watching cannot turn into a
      * column on the host's grid or a player on the saved play. What it buys is
      * the grid itself — the live-score table and its Realtime channel are
-     * RLS-gated on being the host, seated, OR watching (migration 027), and
+     * RLS-gated on being the host, seated, OR watching, and
      * without a viewer row a spectator reads an empty table and lives on the
      * bundle's baked-in copy plus a faster poll for the whole game.
      *
@@ -614,7 +614,7 @@
     // without this the host would read a grid banded into sides while every
     // spectator read the same grid with identical columns, and the pairings
     // would surface only once the game was over. This is what carries them
-    // across while it still matters (migration 050).
+    // across while it still matters.
     //
     // `playMode` rides along rather than taking a call of its own because the
     // two are one fact: a side's seats share ONE cell in the scoring grid, and
@@ -684,7 +684,7 @@
           score: rollupScore(p),
           user_id: p.user_id || null,
           round_scores: persistableRounds(p, !!this.scoringTemplate),
-          // The side this seat played on (migration 048). Without it a team
+          // The side this seat played on. Without it a team
           // night saves as N seats and no sides, and the play detail has
           // nothing to group by. `null` rather than "" for an untagged
           // seat, or every seat in the app would share one anonymous side.

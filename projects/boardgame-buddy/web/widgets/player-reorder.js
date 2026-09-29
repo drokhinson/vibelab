@@ -4,7 +4,7 @@
 // Why this exists: the scoring grid's columns ARE the players array order.
 // widgets/round-score-grid.js maps that array straight to <th>/<td> with no
 // sort anywhere, so moving a row here moves a column there — and, once the
-// order is pushed to the lobby roster (migration 056), on every spectator's
+// order is pushed to the lobby roster, on every spectator's
 // mirror too. Seating order at the table rarely matches the order names got
 // typed in.
 //

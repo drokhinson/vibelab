@@ -1,6 +1,6 @@
 """BGG's own image URLs are recorded, and search thumbnails are asked for once.
 
-Migration 054. Two things are pinned here:
+Two things are pinned here:
 
   * the image-links backfill: 20 ids per BGG call, every asked-about row
     stamped (even with no art, even unknown to BGG) so the drain terminates,

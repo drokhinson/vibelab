@@ -6,8 +6,7 @@ free-text nicknames the viewer logged without an account; the link endpoint
 promotes them by stamping player_user_id on every matching row.
 
 The read paths — buddies, ghosts, played-with — are one RPC
-(bgb_play_partners, migration 047). Migration 049 adds a fourth list to the
-same call: `pending`, the buddy requests waiting on an answer either way, which the player
+(bgb_play_partners). The same call carries a fourth list: `pending`, the buddy requests waiting on an answer either way, which the player
 picker offers as seatable people — the request is why they are at your table.
 """
 
@@ -27,7 +26,7 @@ from ..models import (
 def fetch_play_partners(sb: Client, viewer_id: str) -> PlayPartnersResponse:
     """Everything the Gather player picker needs, in ONE round trip.
 
-    bgb_play_partners (migration 047) does the buddy edges, the ghost roll-up
+    bgb_play_partners does the buddy edges, the ghost roll-up
     and the played-with counts as SQL aggregates. Counting in Python would mean
     pulling every play id the viewer touches into a dict, which is unbounded
     for a BGG-synced account.
@@ -36,9 +35,9 @@ def fetch_play_partners(sb: Client, viewer_id: str) -> PlayPartnersResponse:
     return PlayPartnersResponse(
         accounts=[BuddyEdgeResponse.model_validate(x) for x in (data.get("accounts") or [])],
         # `or []` is doing real work here, not being defensive for its own sake:
-        # the key only exists once migration 049 has been applied, and a Railway
-        # deploy that lands before the SQL does would otherwise 500 the picker
-        # seed on every boot rather than serving one fewer list.
+        # a Railway deploy that lands before the SQL returning this key would
+        # otherwise 500 the picker seed on every boot rather than serving one
+        # fewer list.
         pending=[PendingBuddyEdge.model_validate(x) for x in (data.get("pending") or [])],
         ghosts=[GhostPlayer.model_validate(x) for x in (data.get("ghosts") or [])],
         recent=[PlayedWithUser.model_validate(x) for x in (data.get("recent") or [])],
@@ -74,7 +73,7 @@ def link_ghost(
     if target_user_id == viewer_id:
         raise HTTPException(status_code=400, detail="Cannot link a ghost to yourself")
 
-    # One statement (migration 050), not a SELECT of every play id the viewer
+    # One statement (bgb_link_ghost), not a SELECT of every play id the viewer
     # owns handed back as a PostgREST `in_` filter — that rides in the query
     # string, so a few thousand plays produce a URL that fails outright rather
     # than merely slowly.
@@ -210,7 +209,7 @@ def _write_ghost_name(sb: Client, viewer_id: str, src: str, tgt: str) -> int:
     """Set `tgt` as the display name on every ghost row of the viewer's own
     plays whose name matches `src` case-insensitively. Returns the row count.
 
-    One statement (migration 050) — same query-string cliff as link_ghost.
+    One statement (bgb_merge_ghosts) — same query-string cliff as link_ghost.
     """
     data = sb.rpc("bgb_merge_ghosts", {
         "p_viewer": viewer_id,

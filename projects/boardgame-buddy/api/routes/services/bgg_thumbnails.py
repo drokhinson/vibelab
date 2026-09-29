@@ -3,7 +3,7 @@
 Three sources, cheapest first, for at most one /thing call per request:
 
   1. The catalog. A game already imported has a thumbnail we host.
-  2. boardgamebuddy_bgg_thumb_cache (migration 054). Every answer BGG has
+  2. boardgamebuddy_bgg_thumb_cache. Every answer BGG has
      given is kept — including "none" — so a game is looked up once rather
      than once per search, per deploy, per worker. Not a stub games row: that
      would flip already_in_db and join every backfill queue.

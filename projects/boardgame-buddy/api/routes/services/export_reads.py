@@ -168,7 +168,7 @@ def build_guides(sb: Client, user_id: str, _ctx: dict[str, Any]) -> list[CsvFile
     user typed, so both reads are unioned on chapter id and the two flags say
     which case each row is.
 
-    `state='kept'` (migration 033) keeps "in your guide" meaning what the two
+    `state='kept'` keeps "in your guide" meaning what the two
     flags below say it means. A disliked chapter is a row in the same table
     saying the opposite, and exporting it as a selection would put chapters the
     user refused into the file as chapters they keep.

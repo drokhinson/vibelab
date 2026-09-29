@@ -84,7 +84,7 @@
     // it regardless of which view rendered it — game-detail's recent_plays
     // reel, for one, never writes to window.store.feed.
     if (card && card.play_id) cardRegistry.set(card.play_id, card);
-    // Migration 015: the card carries the whole play, so hand it to the domain
+    // The card carries the whole play, so hand it to the domain
     // layer. This is the one place every card on every surface passes through,
     // which is why the seeding lives here rather than in each view — the
     // play-detail popup reads the seed, and it is a no-op against an RPC that
@@ -110,7 +110,7 @@
     // one case where they actually collide.
     const notedAttr = noteText(card.notes) ? " has-note" : "";
 
-    // A run of identical imported plays (migration 005) is ONE card standing
+    // A run of identical imported plays (one import_group_id) is ONE card standing
     // for many. It is a variant of this component rather than a component of
     // its own (.claude/rules/ui-object-design.md §2): still a Play, still in
     // the session rail beside the ordinary cards.
@@ -394,7 +394,7 @@
 
   // Who won, by name.
   //
-  // THE ROSTER WINS when the card carries one (migration 015). Every surface
+  // THE ROSTER WINS when the card carries one. Every surface
   // that patches a card in place writes `players` — a saved edit through
   // Play.mergeIntoCard, the hand-built cards in game-detail and import-detail
   // — while `winner_display_name` is an aggregate the feed RPC computed when
@@ -404,7 +404,7 @@
   // "nobody won" renders as "We lost".
   //
   // `winner_display_name` remains the fallback for a payload with no roster
-  // (pre-015, or an adapter that omits it). It is a comma-joined list, and
+  // (an older cached payload, or an adapter that omits it). It is a comma-joined list, and
   // names normally don't contain commas, so a comma-split is reliable enough
   // for the UI bucket selection.
   function winnerNames(card) {
@@ -476,7 +476,7 @@
   // the card has no business inventing a result for it.
   //
   // The roster is the evidence, so a card built without `players` — a payload
-  // predating migration 015, or an adapter that omits it — keeps the
+  // cached before the feed carried rosters, or an adapter that omits it — keeps the
   // winner-list reading rather than guessing from an absence it cannot see.
   function outcomeUnrecorded(card) {
     if (winnerNames(card).length > 0) return false;

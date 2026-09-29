@@ -35,8 +35,8 @@
   }
 
   // bggId → thumbnail URL, or null when BoardGameGeek has none. Session-long:
-  // BGG art does not move, and the server keeps the durable copy (migration
-  // 054). `has()` is the "already asked" test — null is an answer.
+  // BGG art does not move, and the server keeps the durable copy
+  // (boardgamebuddy_bgg_thumb_cache). `has()` is the "already asked" test — null is an answer.
   const _bggThumbs = new Map();
   // /search/bgg-thumbnails takes at most this many ids — one BGG call.
   const BGG_THUMB_BATCH = 20;
@@ -293,7 +293,7 @@
         .then((r) => { Game.invalidateBundle(); return r; });
     }
 
-    // ── Admin: BGG image links (migration 054) ───────────────────────────────
+    // ── Admin: BGG image links ───────────────────────────────────────────────
     // Records BoardGameGeek's own image URLs next to the re-hosted ones, for
     // games imported before import started keeping them. Nothing the app
     // renders reads them yet, so no cache is dropped.
@@ -315,7 +315,7 @@
       );
     }
 
-    // ── Admin: the catalog metadata sweep (migration 045) ────────────────────
+    // ── Admin: the catalog metadata sweep ────────────────────────────────────
     // ONE trio where there were three — descriptions, BGG stats and publishers
     // each had their own list / refresh-one / backfill-all, and all three asked
     // BoardGameGeek the same question. One /thing?stats=1 response carries the
@@ -374,7 +374,7 @@
       });
     }
 
-    /** Snapshot BGG's hot list now (migration 039) and import what the
+    /** Snapshot BGG's hot list now and import what the
      *  catalog lacks. Same call the daily cron makes; the Discover bundle is
      *  dropped so the next mount shows the new run. */
     static adminRefreshTrending(opts) {
@@ -384,11 +384,6 @@
           return r;
         });
     }
-
-    // RETIRED with migration 052: adminSetRulebookUrl(gameId, url), which
-    // PATCHed /games/admin/{id}/rulebook-url. A rulebook link is a
-    // reference-guide chapter now (domain/chapter.js#rulebookLinks) and that
-    // endpoint no longer exists.
   }
 
   window.Game = Game;

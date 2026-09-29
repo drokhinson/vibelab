@@ -1,14 +1,13 @@
 """The sides reach a spectator while the game is still being played.
 
-Migration 048 gave a SAVED seat its ``team`` and said plainly what it was
-leaving open: the lobby participant table had no such column, the tags lived on
-the host's local draft, and so "a spectator's live mirror shows untinted
-columns until the play is saved". Migration 050 closes that — and what this
-file pins is the two halves of the wire that make it true.
+A SAVED seat carries its side in ``boardgamebuddy_play_players.team``; a lobby
+seat carries it in ``boardgamebuddy_play_session_participants.team``, which is
+what lets a spectator's live mirror tint columns before the play is saved. This
+file pins the two halves of the wire that make that true.
 
   * ``SessionParticipantResponse.team`` must DEFAULT to None. The bundle RPC is
-    deployed separately from this service, and every participant row written
-    before the migration has no key at all; a required field would 500 the poll
+    deployed separately from this service and can return no key at all; a
+    required field would 500 the poll
     both ends of a live session are sitting on.
   * ``SessionTeamsBody`` normalizes ``""`` to None, exactly as
     ``PlayerEntry.team`` does. This is the common case, not an edge one — the

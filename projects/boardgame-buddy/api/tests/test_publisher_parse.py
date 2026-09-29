@@ -8,7 +8,7 @@ for anything popular, which is a paragraph of company names in a UI that shows
 one.
 
 The empty case matters as much as the full one. `publishers` is nullable with
-no default (migration 040) precisely so NULL can mean "never synced", so a game
+no default precisely so NULL can mean "never synced", so a game
 BGG credits to nobody must come back as [] — which the backfill writes, and the
 row leaves the queue — rather than as None, which would leave it there forever.
 
@@ -97,7 +97,7 @@ def test_game_detail_reads_a_null_publishers_column_as_empty():
 
 
 def test_game_detail_reads_a_missing_publishers_key_as_empty():
-    # A row cached before migration 040 simply has no key.
+    # A cached row written without the key simply has none.
     assert GameDetail(**_row()).publishers == []
 
 

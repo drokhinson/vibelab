@@ -3,7 +3,7 @@
 played_with_service.link_ghost runs owner → ghost: the person who logged the
 plays decides that "davo" is really Julia's account. This module runs the other
 way. The claimant asks, the owner approves, and approving performs that same
-merge (bgb_link_ghost_rows, migration 070, shared by both paths so they can
+merge (bgb_link_ghost_rows, shared by both paths so they can
 never move different sets of rows).
 
 Almost everything is an RPC. That is not gold-plating: a ghost has no id, so
@@ -11,8 +11,7 @@ every operation is keyed by (owner, normalized name) and has to re-derive which
 play_players rows that means — plus, for anything the claimant initiates,
 whether they can even see those plays and whether merging would seat them twice
 in one game. Splitting that across a PostgREST read and a Python decision opens
-a window between the check and the write. Migration 070's header has the full
-argument.
+a window between the check and the write.
 
 The two exceptions are cancel (a plain ownership-checked delete) and the
 response shaping here.
@@ -136,7 +135,7 @@ def accept_claim(sb: Client, viewer_id: str, claim_id: str) -> GhostClaimAcceptR
     One transaction inside the RPC, which is what lets it re-check the
     double-seat collision at accept time — state moves between request and
     accept, and a claim that was clean when it was sent can collide by the time
-    it is approved. Migration 023's uq_bgb_play_players_play_user would refuse
+    it is approved. The uq_bgb_play_players_play_user index would refuse
     the merge regardless; the re-check is what turns that into "You're already a
     player on one of those plays" rather than a failed write.
     """

@@ -134,7 +134,7 @@
      *
      * Reads the CATALOG session counters, not the import ones: a check queues
      * kind='catalog' rows into the same table an import uses, in a window of
-     * their own (migration 006) — a shared window would make a finished import
+     * their own — a shared window would make a finished import
      * read as unfinished and make this exit instantly for anyone who had never
      * run an import. Same session-counter argument as importDrained otherwise.
      *

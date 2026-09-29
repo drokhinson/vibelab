@@ -1,7 +1,7 @@
 """An expansion's scoring grid carries a mode; a base game's never does.
 
-Migration 032 gives a `layout='scoring_grid'` chapter written for an EXPANSION
-one extra fact: whether its rows are ADDED to the base game's scorepad or
+A `layout='scoring_grid'` chapter written for an EXPANSION carries one extra
+fact: whether its rows are ADDED to the base game's scorepad or
 REPLACE it. The distinction only exists for an expansion — a base game's own
 grid has nothing to meet — and the client cannot be trusted to know which side
 of that line a game falls on, because only the write path has just SELECTed the
@@ -10,7 +10,7 @@ row.
 So the resolution lives server-side in services/chapter_grid, and this file
 pins the four cases plus the two properties that make it safe to be wrong:
 
-  * a pre-032 grid carries no mode at all and must keep working;
+  * an older grid carries no mode at all and must keep working;
   * a mode on a BASE game's grid is dropped rather than stored, because storing
     'add_on' there would make every base grid read as half a scorepad.
 
@@ -45,7 +45,7 @@ def _grid(mode=None):
         # An expansion's grid keeps what its author chose...
         (ScoringGridMode.REPLACE, True, ScoringGridMode.REPLACE),
         (ScoringGridMode.ADD_ON, True, ScoringGridMode.ADD_ON),
-        # ...and one that names nothing (a pre-032 row, an older client) is an
+        # ...and one that names nothing (an older row, an older client) is an
         # add-on, which is both the commoner shape and the safe one to be wrong
         # about: extra rows on the table beat missing ones.
         (None, True, ScoringGridMode.ADD_ON),
@@ -130,13 +130,13 @@ def test_uncomposed_snapshot_grows_no_seams():
 
     A play scored on a single grid must not grow a one-element seam list, and
     its rows must not claim to have come from an expansion — those two absences
-    are what keep every pre-032 reader reading a new snapshot unchanged.
+    are what keep every older reader reading a new snapshot unchanged.
 
     The keys are PRESENT and null rather than missing, which is the same shape
-    `note` has had since migration 018: this model re-serializes a document on
+    `note` has: this model re-serializes a document on
     the PUT /plays/{id} path, and it emits its optional fields. The client's own
     composer (web/domain/scoring-template.js) omits both, so the document a play
-    is CREATED with is byte-identical to a pre-032 one.
+    is CREATED with is byte-identical to an older client's.
     """
     snap = PlayScoringTemplate(
         chapter_id="c1", title="Everdell score sheet", rows=[{"label": "Cards"}]

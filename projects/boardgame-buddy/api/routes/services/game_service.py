@@ -16,7 +16,7 @@ def recently_played(sb: Client, viewer_id: str, limit: int = 6) -> list[GameSumm
 
     "Has plays for" is the same rule every other play-derived surface uses:
     plays the viewer logged, OR plays someone else logged that list the viewer
-    as a player. Reads through bgb_play_stats (migration 039), which already
+    as a player. Reads through bgb_play_stats, which already
     aggregates that in SQL and returns one row per game with its last_played_at.
 
     This used to scan the viewer's 200 most recent OWN play rows and de-dupe in

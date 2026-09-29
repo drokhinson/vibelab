@@ -9,19 +9,19 @@
 Stage 4 of Docs/MIGRATION_PLAN.md — see Docs/RUNBOOK_R2_CUTOVER.md for where
 this sits in the sequence. Run it TWICE:
 
-  * after `rclone copy`, BEFORE migration 036. Rows still hold supabase.co
+  * after `rclone copy`, BEFORE the runbook's URL rewrite. Rows still hold supabase.co
     URLs; this derives each object key from them and checks the key exists on
     the R2 domain. A miss here means the copy is incomplete, and finding that
     out now costs nothing — the rows still point at Supabase and the app is
     fine.
 
-  * after migration 036. Rows now hold R2 URLs and this checks them directly.
+  * after the URL rewrite. Rows now hold R2 URLs and this checks them directly.
     This run is the acceptance gate: a miss here is a broken image a user can
     see.
 
 The two runs need no flags to tell them apart. Every URL is reduced to an
 object key first, and both URL shapes reduce to the same key — which is only
-true because the migration is a prefix substitution and the keys are identical
+true because the rewrite is a prefix substitution and the keys are identical
 on both sides. If that ever stops being true, this tool stops being valid.
 
 Read-only. It never writes to the database, R2 or Supabase Storage; the worst
@@ -70,7 +70,7 @@ def env(name: str) -> str:
 def object_key(url: str, store: str, r2_base: str) -> str | None:
     """Reduce a stored URL to its object key, or None if it is not ours.
 
-    Handles both shapes so one run works either side of migration 036:
+    Handles both shapes so one run works either side of the URL rewrite:
       https://<ref>.supabase.co/storage/v1/object/public/<bucket>/<key>
       https://img.bgbuddy.app/<key>
     """

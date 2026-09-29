@@ -3,7 +3,7 @@
 // Joiners subscribe to UPDATE events on the host's row of
 // boardgamebuddy_play_sessions so they auto-advance their read-only
 // mirror the moment the host moves Gather → Play → Settle. RLS limits
-// the read to host + participants (migration 026).
+// the read to host + participants.
 
 // @ts-check
 

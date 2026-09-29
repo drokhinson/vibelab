@@ -1,7 +1,7 @@
 // views/admin-affiliates-view.js — switching retailer partners on, and off.
 //
 // The spoke behind Settings → Admin tools → Affiliate partners. Four fixed
-// rows (migration 046 seeds them; there is no New and no Delete — a retailer
+// rows (seeded; there is no New and no Delete — a retailer
 // is a program you joined, not a note you wrote), each with an Edit that opens
 // widgets/affiliate-partner-editor.js inline and an Enable/Disable that is
 // THE switch: nothing on any game page shows a pill until one of these is

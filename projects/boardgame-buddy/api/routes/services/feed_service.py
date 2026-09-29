@@ -1,5 +1,5 @@
 """Feed assembly — composes play cards + hot games + suggested buddies.
-Hits the RPCs added in migration 012."""
+Each section is read through its own bgb_* RPC."""
 
 import asyncio
 from supabase import Client
@@ -56,31 +56,31 @@ def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:
         winner_display_name=row.get("winner_display_name"),
         participant_count=int(row.get("participant_count") or 0),
         # Default to [] so the route keeps responding against an unmigrated
-        # RPC (migration 025 introduces the `participants` jsonb column).
+        # bgb_feed_plays that returns no `participants` key.
         participants=[
             FeedPlayParticipant(**p) for p in (row.get("participants") or [])
         ],
-        # Migration 005. Defaults to 1 the same way `participants` defaults to
+        # Defaults to 1 the same way `participants` defaults to
         # [], so the route keeps answering against an RPC that predates the
         # column — an unmigrated database serves ordinary cards rather than 500s.
         group_count=int(row.get("group_count") or 1),
         import_group_id=(str(row["import_group_id"]) if row.get("import_group_id") else None),
-        # Migration 022. Same unmigrated-RPC tolerance as everything around it:
+        # Same unmigrated-RPC tolerance as everything around it:
         # an older function returns no such key, the default holds, and the
         # feed groups imports by roster alone.
         import_batch_id=(str(row["import_batch_id"]) if row.get("import_batch_id") else None),
-        # Migration 015. Same unmigrated-RPC tolerance as `participants` and
+        # Same unmigrated-RPC tolerance as `participants` and
         # `group_count` above: an older function returns neither key, the
         # defaults hold, and the client falls back to fetching the play on
         # first flip.
         players=[PlayPlayerResponse(**p) for p in (row.get("players") or [])],
         expansions=[PlayExpansionRef(**e) for e in (row.get("expansions") or [])],
         country_code=row.get("country_code"),
-        # Migration 031. Same unmigrated-RPC tolerance as everything above: an
+        # Same unmigrated-RPC tolerance as everything above: an
         # older function returns no such key, the default holds, and the detail
         # popup repaints once to pick up the template.
         scoring_template=row.get("scoring_template"),
-        # Migration 016. Same unmigrated-RPC tolerance as everything above: an
+        # Same unmigrated-RPC tolerance as everything above: an
         # older function returns none of these keys, the defaults hold, and the
         # session footer simply does not render.
         reaction_count=int(row.get("reaction_count") or 0),
@@ -98,7 +98,7 @@ def _decode_cursor(cursor: str | None) -> tuple[date | None, datetime | None]:
     if not cursor:
         return None, None
     if "|" not in cursor:
-        # Tolerate legacy single-timestamp cursors from before migration 014.
+        # Tolerate a legacy single-timestamp (created_at only) cursor.
         try:
             return None, datetime.fromisoformat(cursor.replace("Z", "+00:00"))
         except ValueError:
@@ -142,7 +142,7 @@ def fetch_feed_plays(
 def fetch_hot_games(sb: Client, *, window_days: int = 7, limit: int = 10) -> HotGamesResponse:
     """Top-N games by plays in the window, for the Feed's "Hot this week" rail.
 
-    play_count counts LIVE-LOGGED plays only: bgb_hot_games (migration 013)
+    play_count counts LIVE-LOGGED plays only: bgb_hot_games
     drops every row the Settings importer wrote — anything carrying an
     import_batch_id or import_group_id — so one pasted notebook of 106 games
     can't take the rail. BGG-synced plays still count. This is the one read of
@@ -201,7 +201,7 @@ def fetch_suggested_buddies(sb: Client, viewer_id: str, *, limit: int = 5) -> Su
     """Candidates the viewer has played with, then friends-of-friends.
 
     Every suggestion shares at least one play, one accepted buddy, or one
-    person the viewer has sent a request to (migration 072) with the viewer;
+    person the viewer has sent a request to with the viewer;
     the RPC ranks shared plays first and returns the top `limit`."""
     rows = sb.rpc(
         "bgb_suggested_buddies",

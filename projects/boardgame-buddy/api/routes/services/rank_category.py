@@ -1,7 +1,7 @@
 """Which list a game is ranked in — decided by BoardGameGeek, not the player.
 
 The player is told "Ranking against your Family games" and never picks. The
-answer is BGG's own family ranks (bgg_family, migration 056) where the game has
+answer is BGG's own family ranks (boardgamebuddy_games.bgg_family) where the game has
 one, and otherwise a fallback read off the categories and weight the catalog
 already holds, so a game the metadata backfill has not reached yet still gets a
 sensible list rather than a blank.
@@ -10,7 +10,7 @@ One rule outranks BGG's families: a traditional playing-card game (Euchre,
 500, Hearts, Cribbage) is ranked in Card. BGG's "Card Game" tag alone is far
 too broad for that — Dominion, Sushi Go and Exploding Kittens all carry it —
 but BGG credits the traditional ones to the publisher "(Public Domain)", which
-the catalog already holds (migration 040). The pair picks out exactly the games
+the catalog already holds (boardgamebuddy_games.publishers). The pair picks out exactly the games
 played with an ordinary deck, and they group together even where BGG also
 ranks one under Family or Strategy.
 

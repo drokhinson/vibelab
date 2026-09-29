@@ -160,7 +160,7 @@
         if (state.playId !== playId) return;
         state.partners = {
           accounts: (bundle && bundle.accounts) || [],
-          // Buddy requests nobody has answered yet (migration 049) — seatable
+          // Buddy requests nobody has answered yet — seatable
           // people, same as the accepted edges beside them.
           pending: (bundle && bundle.pending) || [],
           ghosts: (bundle && bundle.ghosts) || [],
@@ -275,9 +275,8 @@
   }
 
   async function load(playId) {
-    // The feed card carries the whole play (migration 015), scoring template
-    // included (migration 031), so a popup opened from a card the
-    // feed drew has its content before it is mounted and never shows a loading
+    // The feed card carries the whole play, scoring template included, so a
+    // popup opened from a card the feed drew has its content before it is mounted and never shows a loading
     // state. Play.seeded also falls back to a cached /plays page, which covers
     // the surfaces that draw no feed cards at all — the plays log, the profile
     // preview, notifications, the session viewer.
@@ -488,7 +487,7 @@
 
   function renderCard() {
     // Gated on having nothing to show, NOT on a request being in flight. A
-    // popup opened from a feed card starts with a seeded play (migration 015)
+    // popup opened from a feed card starts with a seeded play
     // and a request still in flight to revalidate it — gating on the request
     // would put the spinner over content that is already on screen, which is
     // the exact thing the seed exists to prevent.
@@ -599,7 +598,7 @@
 
   // True when there's a score breakdown worth surfacing. Single-round /
   // no-round plays leave round_scores NULL on the backend and the grid stays
-  // hidden — UNLESS the play carries a scoring template (migration 018), in
+  // hidden — UNLESS the play carries a scoring template, in
   // which case even one row is a real breakdown, because the template says that
   // row MEANS something. domain/play-session.js holds up the other end of the
   // invariant: a non-null scoring_template implies non-null round_scores.
@@ -613,8 +612,8 @@
 
   /**
    * Expansions in name order — the order the feed RPC already sorts them into
-   * (migration 031) and the REST row does not, so without this the chips
-   * reshuffle when the confirming fetch lands. Same argument as
+   * and the REST row does not, so without this the chips reshuffle
+   * when the confirming fetch lands. Same argument as
    * Play.rankPlayers, one list down.
    *
    * @param {any[]} exps
@@ -626,7 +625,7 @@
     );
   }
 
-  /** A play's template rows, or [] — defensive against a row cached pre-018. */
+  /** A play's template rows, or [] — defensive against an older cached row. */
   function templateRows(template) {
     return (template && Array.isArray(template.rows)) ? template.rows : [];
   }
@@ -704,8 +703,8 @@
   }
 
   /**
-   * The scoreboard: one flat list, or — when the seats carry sides
-   * (migration 048) — one labelled, colour-coded band per side.
+   * The scoreboard: one flat list, or — when the seats carry sides —
+   * one labelled, colour-coded band per side.
    *
    * A team night is the one case where the ranked list alone is misleading:
    * four rows sorted by score say nothing about the pairing the evening
@@ -847,13 +846,13 @@
 
   /**
    * The date line under the game name, plus where it was played when the play
-   * carries a country (migration 065).
+   * carries a country.
    *
    * The only surface that shows the country back to the user. It reads as one
    * more fact about the play — "31 Aug 2026 · Germany" — rather than as its
    * own labelled row, because that is the weight it has: a field the app
    * filled in for a count nobody is looking at yet. A play with no country —
-   * logged before migration 060, or on a device that couldn't resolve one —
+   * an older play, or one logged on a device that couldn't resolve one —
    * shows the date alone.
    *
    * Not editable here. The country is set where it is captured — the Where

@@ -12,7 +12,7 @@
 // only copy of a play someone spent two hours recording. Nothing in here is
 // evictable, and nothing in here expires.
 //
-// Retry safety comes from `client_key` (migration 048): one UUID per finished
+// Retry safety comes from `client_key` (idx_bgb_plays_client_key): one UUID per finished
 // play, minted when the host taps Save and re-sent by every attempt — the live
 // write included (play-flow's _save stamps it on the payload). If a request
 // lands but its response is lost — signal drops mid-flush, tab closed, backend

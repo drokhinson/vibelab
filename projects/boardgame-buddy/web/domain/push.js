@@ -1,6 +1,6 @@
 // domain/push.js — Web Push, from the page's side.
 //
-// The device half of the notification setting (migration 017). Two independent
+// The device half of the notification setting. Two independent
 // pieces of state, and most of this file is keeping them straight:
 //
 //   * THE TIER lives on the profile and is per ACCOUNT. It answers "how much do
@@ -112,7 +112,7 @@
       try { return Notification.permission; } catch (_) { return "unsupported"; }
     },
 
-    /** The account's tier. Absent on a profile cached before 017 — read as off. */
+    /** The account's tier. Absent on an older cached profile — read as off. */
     tier() {
       const me = window.store && window.store.get("user");
       return (me && me.push_tier) || "none";

@@ -124,7 +124,7 @@ def test_only_on_bgg_is_a_clear(monkeypatch):
 
 
 def test_a_played_mark_is_not_pushed(monkeypatch):
-    """A 'played' row (migration 057) has no BGG flag to push, and the push
+    """A 'played' row has no BGG flag to push, and the push
     queue's target_status CHECK would refuse one: it must plan nothing."""
     plan = _plan(monkeypatch, local=[_row(1, "played")], remote=[])
     assert plan.push == [] and plan.unpushable == []

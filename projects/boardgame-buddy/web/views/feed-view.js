@@ -650,7 +650,7 @@
       const me = window.store && window.store.get && window.store.get("user");
       const viewer = me ? { id: me.id, display_name: me.display_name } : null;
       const firstPlay = card.plays[0];
-      // Count PLAYS, not cards. Since migration 005 one card can stand for a
+      // Count PLAYS, not cards. One card can stand for a
       // whole run of identical imported plays, so a night of 106 Carcassonne
       // games arrives as six cards — and a header reading "played 6 games"
       // would be the one number on screen that is wrong.
@@ -691,7 +691,7 @@
       `;
     }
 
-    // ── "Good game" (migration 016) ──────────────────────────────────────────
+    // ── "Good game" ──────────────────────────────────────────────────────────
     //
     // One reaction for the whole night, under the whole rail. The rows behind it
     // are per PLAY — a feed session is grouped client-side off a viewer-filtered
@@ -1193,8 +1193,8 @@
     // import of one day is one section, headed "Marco imported 19 games", with
     // every run's card in its rail and each card still naming its own winner.
     //
-    // `import_batch_id` rather than `import_group_id` is the flag on purpose
-    // (migration 022): the group id is set only on plays the importer judged
+    // `import_batch_id` rather than `import_group_id` is the flag on purpose:
+    // the group id is set only on plays the importer judged
     // indistinguishable from another in the same paste, so every one-off in an
     // import carries no group id and would otherwise be left behind as its own
     // section beside the runs it arrived with. Deliberately NOT keyed on the

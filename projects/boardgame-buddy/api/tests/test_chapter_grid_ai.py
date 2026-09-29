@@ -5,7 +5,7 @@ The wizard's head-start step hands `services/chapter_grid_ai` a game and gets a
 directions:
 
   * the PROMPT, because the mode decides which document is drafted at all
-    (migration 032) — an add-on's two extra rows, or a whole reprinted sheet —
+    — an add-on's two extra rows, or a whole reprinted sheet —
     and drafting the wrong one is not a quality problem: add-on rows saved as a
     replacement hide the base game's categories at the table;
   * the COERCION, because the rows go straight into `ScoringGrid`, whose caps

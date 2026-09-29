@@ -89,8 +89,8 @@
     // that reads it (the nav bar, the hub's Buddies card) is mounted when the
     // other needs the figure.
     //
-    // Two writers, in order of freshness: the profile bundle (migration 071's
-    // ghost_claims_incoming, refreshed by /bootstrap, the hub, and every
+    // Two writers, in order of freshness: the profile bundle's
+    // ghost_claims_incoming (refreshed by /bootstrap, the hub, and every
     // tab-focus warmRefresh) and the Buddies screen, whose accept / decline
     // handlers know the new count a round trip before the server does.
 

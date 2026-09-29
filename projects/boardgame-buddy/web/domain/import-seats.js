@@ -3,7 +3,7 @@
 // become one person.
 //
 // Every import source resolves names into seats, and every one of them has to
-// answer the same two questions the same way, because migration 023's
+// answer the same two questions the same way, because
 // uq_bgb_play_players_play_user REFUSES a play that seats one account twice.
 // Without the collapse, a note saying "Jas" on one line and "Jasmine" on the
 // next imports a two-player game with Jasmine in it twice, once winning and

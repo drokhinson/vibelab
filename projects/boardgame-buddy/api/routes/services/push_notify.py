@@ -87,7 +87,7 @@ def _session_tag(code: str) -> str:
     Upper-cased rather than passed through, because the two call sites do not
     get the code from the same place: the invite reads the canonical
     `session.code` off the row, while finalize has whatever the client put in
-    the URL, and every session RPC matches on `upper(p_code)` (migration 003)
+    the URL, and every session RPC matches on `upper(p_code)`
     so a lower-cased code is accepted there and would tag differently here.
     """
     return f"session:{code.strip().upper()}"

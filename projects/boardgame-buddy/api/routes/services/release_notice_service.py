@@ -4,7 +4,7 @@ Purely informational: an admin writes a short note when something big ships,
 and the next time each user opens the app it appears once. Nothing is asked of
 the reader, so nothing here is a queue and nothing carries an unread badge.
 
-TWO THINGS ARE LOAD-BEARING and both live in migration 042 rather than here.
+TWO THINGS ARE LOAD-BEARING and both live in the schema rather than here.
 
 `published_at IS NULL` is the ONLY draft flag. There is no status column and no
 status field on the model — the same timestamp is the draft flag, the sort key,
@@ -13,7 +13,7 @@ would be two sources of truth for one fact, written by three routes and correct
 only if all three remember.
 
 `profiles.release_notices_seen_at` is the whole of seen-state — one watermark
-per user, the shape `link_notifications_seen_at` has carried since 008, not a
+per user, the same shape as `link_notifications_seen_at`, not a
 per-(user, notice) table. Its `NOT NULL DEFAULT now()` is what implements "a new
 account does not see the backlog", which is why no function in this module has
 to know about signup dates.

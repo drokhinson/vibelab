@@ -5,7 +5,7 @@
 //
 //   * the Stats spoke's By game card, from bgb_user_stats_detail's games[];
 //   * Game Detail's Your record section, from the detail bundle's
-//     viewer_stats block (migration 030).
+//     viewer_stats block.
 //
 // Both rows are computed by the same rules, in SQL, so the ring on the game's
 // own page and the ring one tap deeper into the profile cannot disagree — which
@@ -32,7 +32,7 @@
    * @property {number} wins             plays the viewer's own seat won
    * @property {number} [decided_plays]  the subset that recorded a result —
    *                                     the denominator `wins` is read against.
-   *                                     Absent on a pre-020 cached payload, in
+   *                                     Absent on an older cached payload, in
    *                                     which case `plays` stands in.
    * @property {number} [scored_plays]   plays where the winner carried a score
    * @property {?number} avg_winning_score
@@ -50,7 +50,7 @@
     // Wins are read against the plays that recorded a RESULT, never against
     // every play: a play nobody won and nobody scored said nothing about how
     // it went, and counting it here reports a loss that never happened. The
-    // fallback keeps a cached pre-018 payload rendering against `plays`
+    // fallback keeps a cached payload without it rendering against `plays`
     // rather than dividing by undefined.
     const decided = g.decided_plays != null ? g.decided_plays : g.plays;
     const pct = decided ? Math.round((g.wins / decided) * 100) : 0;
@@ -109,7 +109,7 @@
   function footnote(g, isCoop, noScores, decided, undecided) {
     const last = g.last_played_at ? ` Last played ${formatDate(g.last_played_at)}.` : "";
     // The Plays fact counts every play; the ring counts only the ones the
-    // viewer sat in AND that recorded a result (migration 020's `decided`).
+    // viewer sat in AND that recorded a result (`decided_plays`).
     // Both halves of the gap have to be named, or the sentence libels a play
     // that has a winner and simply wasn't one of theirs.
     const blanks = undecided
