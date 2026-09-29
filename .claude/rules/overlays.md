@@ -447,7 +447,9 @@ customizer), `widgets/add-buddies-modal.js`,
 `widgets/play-detail-popup.js`, `widgets/onboarding-deck.js`, and the authoring
 guide plus the IN-VIEW create wizard in `views/reference-guide-add-view.js` (the
 routed wizard on the same screen deliberately arms nothing — see the bullet
-above). Grep `BgbBackGuard` rather than trusting the list. A new overlay that
+above), plus boardgame-buddy's score pad (`widgets/score-keypad.js`), which
+stands in for the system keyboard and so has to be put away by back the way
+one is. Grep `BgbBackGuard` rather than trusting the list. A new overlay that
 skips this is the bug again.
 
 ## Anti-patterns to refactor away when touching a project

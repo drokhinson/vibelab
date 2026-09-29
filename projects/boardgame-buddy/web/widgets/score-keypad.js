@@ -33,6 +33,14 @@
 // dispatches `scorekeypad:round` (bubbling) from the cell; the host adds the
 // row and focuses its first cell in the same tap.
 //
+// The device back gesture puts the pad away, the way it would a system
+// keyboard: the pad arms a back guard (ui/back-guard.js) while it is up, and
+// the press that pops it blurs the cell. Android's own back-with-keyboard never
+// reaches the page, but with the system keyboard kept down the press does, and
+// unguarded it would walk the screen behind the pad instead. Inside an overlay
+// the pad's guard sits above the overlay's, so the first press closes the pad
+// and the second the overlay.
+//
 // Σ Sum (widgets/score-sum.js) writes the running total into the cell on every
 // key, the same way typing does, so the host's totals follow along. Leaving the
 // cell keeps that total; Cancel puts back what the cell held before.
@@ -107,6 +115,8 @@
   let sum = null;
   let before = "";
   let touched = false;
+  /** The back guard's token while the pad is up, else 0. */
+  let guard = 0;
 
   function key(k, label, cls, aria) {
     return `<button type="button" tabindex="-1" class="score-pad__key${cls ? " " + cls : ""}" data-key="${k}"${aria ? ` aria-label="${aria}"` : ""}>${label}</button>`;
@@ -271,6 +281,15 @@
     const opening = pad.hidden;
     pad.hidden = false;
     report();
+    if (opening && !guard && window.BgbBackGuard) {
+      guard = window.BgbBackGuard.arm({
+        root: pad,
+        close: () => {
+          guard = 0;
+          if (active) active.blur();
+        },
+      });
+    }
     if (opening) requestAnimationFrame(() => { if (pad && active) pad.classList.add("is-open"); });
     // The browser scrolls a focused field into view without knowing about the
     // pad. Once the pad has settled, bring the cell out from under it too.
@@ -290,6 +309,8 @@
   function hide() {
     endSum();
     active = null;
+    if (guard && window.BgbBackGuard) window.BgbBackGuard.release(guard);
+    guard = 0;
     if (!pad) return;
     pad.classList.remove("is-open");
     pad.hidden = true;
