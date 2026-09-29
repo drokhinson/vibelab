@@ -6,6 +6,9 @@
 //                Option C editor, then POST /games/{id}/chapters.
 //   - "edit"   : the same Option C editor on its own, prefilled from a stashed
 //                chapter; Save calls PATCH /chapters/{id} instead of POST.
+//                On a chapter somebody else wrote, the editor opens as a COPY
+//                (_copyOfChapterId): Save POSTs a new chapter under the viewer's
+//                name and swaps it into their guide in place of the original.
 //
 // The create wizard's steps, all inside the same fixed keyboard-safe shell:
 //   0 "type"  — pick one of the six chapter types (+ the expansion target
@@ -42,6 +45,19 @@
   // (services/chapter_rulebook.validate_layout_pairing).
   const LINK_TYPE = "rulebook";
   const LINK_LAYOUT = "rulebook_link";
+
+  function isMine(c) {
+    const me = window.store && window.store.get("user");
+    return !!(me && c.created_by && me.id === c.created_by);
+  }
+
+  // Whether a chapter somebody else wrote can be edited into the viewer's own
+  // version. Every layout but a rulebook link: a link's whole body is its URL,
+  // so a copy would be the same link twice, and the API allows each author one
+  // link per game.
+  function canCopyChapter(c) {
+    return c.layout !== LINK_LAYOUT;
+  }
 
   // The body of an expanded chapter. A scoring grid's rows live in `grid`, not
   // in `content` — `content` holds a generated bullet mirror of them, which is
@@ -214,7 +230,16 @@ components above.
       // leave the next one opening there.
       this._step = 0;
       // Editor form fields
-      this._editingChapterId = null; // set when _tab === "edit"
+      this._editingChapterId = null; // set when _tab === "edit" on the viewer's own chapter
+      // Set instead of _editingChapterId when the chapter being edited belongs
+      // to somebody else. PATCH is creator-only, so Save creates the viewer's
+      // own version from the buffer rather than writing to the original.
+      this._copyOfChapterId = null;
+      this._copyOfAuthor = "";
+      // Whether the original sits in the viewer's guide. Their version is
+      // auto-added on create, so the original comes out to stop the guide
+      // holding the same chapter twice.
+      this._copyReplacesInGuide = false;
       this._formTitle = "";
       this._formContent = "";
       this._formType = "";
@@ -766,7 +791,9 @@ components above.
       const name = meta.name || this._gameName || "Reference guide";
       const thumb = meta.thumb || this._gameThumb;
       const sub = this._tab === "edit"
-        ? "Editing chapter"
+        ? (this._copyOfChapterId
+            ? (this._copyOfAuthor ? `Your version of ${this._copyOfAuthor}'s chapter` : "Saving your own version")
+            : "Editing chapter")
         : (this._tab === "create" ? "Creating new chapter" : "Browse all chapters");
       const cover = thumb
         ? `<div class="chapter-edit__gamechip-cv"><img src="${escapeAttr(thumb)}" alt="" onerror="this.parentNode.classList.add('chapter-edit__gamechip-cv--blank')"></div>`
@@ -1071,6 +1098,7 @@ components above.
       // mirrors exactly that — an admin browsing the pool can clear a bad
       // chapter without going through the reports queue.
       const canDelete = isOwner || !!(me && me.is_admin);
+      const canCopy = isAuthed && !isOwner && canCopyChapter(c);
       // Reserved column, not just a dot: there is no per-chapter glyph beside
       // it (the section header already carries the type's), so an undotted
       // row would start 17px left of a dotted one. Only while the pool
@@ -1136,8 +1164,9 @@ components above.
             </summary>
             <div class="scroll-chapter__content">${chapterBodyHtml(c, this._gameId)}</div>
             <div class="scroll-chapter__actions">
-              ${isOwner ? `
+              ${isOwner || canCopy ? `
                 <button class="btn btn-ghost btn-xs"
+                        ${canCopy ? `title="Edit and save your own version"` : ""}
                         onclick="event.preventDefault();window.referenceGuideAddView._editFromPool('${c.id}')">
                   <i data-icon="pencil" class="w-3.5 h-3.5"></i> Edit
                 </button>
@@ -1321,8 +1350,16 @@ components above.
     // drift on. `grid` is read defensively: a stale localStorage row can
     // carry a layout with no rows, and that has to
     // open as text rather than as a broken grid editor.
+    //
+    // A chapter the viewer did not write loads as a copy: same buffer, no
+    // PATCH target, and none of the original's moderation state — the copy is
+    // a new chapter that nobody has reviewed.
     _loadChapterIntoForm(c) {
-      this._editingChapterId = c.id;
+      const asCopy = !isMine(c);
+      this._editingChapterId = asCopy ? null : c.id;
+      this._copyOfChapterId = asCopy ? c.id : null;
+      this._copyOfAuthor = asCopy ? (c.created_by_name || "") : "";
+      this._copyReplacesInGuide = asCopy && c.in_my_guide !== false;
       this._formTitle = c.title || "";
       this._formContent = c.content || "";
       this._formType = c.chapter_type || "";
@@ -1339,14 +1376,14 @@ components above.
       // waiting on them, approved and denied are their answer — so the switch
       // opens ON for all three, and for a row with no status at all (an older
       // cached shape), which is the same reading the API's own default takes.
-      this._formLinkStatus = c.moderation_status || null;
+      this._formLinkStatus = asCopy ? null : (c.moderation_status || null);
       this._formLinkReview = c.moderation_status !== "unlisted";
       // The URL as it was LOADED, kept beside the editable buffer so the save
       // toast can tell "they changed where this points" (which re-opens the
       // gate server-side) from "they saved without touching it" (which does
       // not). The server makes the same comparison against the stored row; this
       // copy is only so the sentence on screen agrees with it.
-      this._formLinkUrlSaved = c.link_url || "";
+      this._formLinkUrlSaved = asCopy ? "" : (c.link_url || "");
       this._formRows = rows
         ? rows.map((r) => ({
             label: r.label || "",
@@ -1590,7 +1627,9 @@ components above.
     // slots on Skip / Generate without being a dead end.
     _renderWizardFooter(isEditing, step) {
       if (isEditing) {
-        const label = this._saving ? "Saving…" : "Save changes";
+        const label = this._saving
+          ? "Saving…"
+          : (this._copyOfChapterId ? "Save my version" : "Save changes");
         return `
           <div class="chapter-edit__footer">
             <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
@@ -2914,7 +2953,25 @@ components above.
       const arrivedByRoute = this._arrivedByRoute;
       const targetGameId = this._createTargetGameId || this._gameId;
       try {
-        if (isEditing) {
+        if (isEditing && this._copyOfChapterId) {
+          await window.Chapter.create(targetGameId, {
+            chapter_type: this._formType,
+            ...titleFields,
+            ...linkFields,
+            content,
+            layout,
+            grid,
+          });
+          // The new version is already in the guide (the create auto-adds it).
+          // A failed removal of the original leaves both in the guide, which the
+          // user can tidy by hand, so it does not fail the save.
+          if (this._copyReplacesInGuide) {
+            try {
+              await window.Chapter.remove(targetGameId, this._copyOfChapterId);
+            } catch (_) { /* both stay in the guide */ }
+          }
+          showToast("Your version is saved to your guide", "success");
+        } else if (isEditing) {
           await window.Chapter.update(this._editingChapterId, {
             chapter_type: this._formType,
             ...titleFields,
