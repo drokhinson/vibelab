@@ -674,20 +674,59 @@
         verb: card.is_import ? "imported" : "played",
       });
       // Every play is a tile of one of two widths, so the rail needs no
-      // size hint. `isSingle` only centres a lone tile.
+      // size hint. `isSingle` only drops the rail's snap on a lone tile.
       const isSingle = card.plays.length === 1;
       const cards = railOrder(card.plays)
         .map((p) => withMorphKey(window.renderPlayCard(p), cardMorphKey(p)))
         .join("");
+      const node = this._renderSessionNode(card, viewer);
       return `
         <section class="play-session${isSingle ? " play-session--single" : ""}"
                  data-session-key="${escapeAttr(sessionKey(firstPlay))}">
-          <header class="play-session__header">
-            <span class="play-session__title">${title}</span>
-          </header>
+          ${this._renderSessionHeader(card, title, node)}
           <div class="play-session__scroll">${cards}</div>
-          ${this._renderSessionFoot(card)}
         </section>
+      `;
+    }
+
+    // The avatar on the feed's spine: whoever the title names first, which is
+    // the viewer when they were at the table.
+    _renderSessionNode(card, viewer) {
+      const people = card.participants || [];
+      const lead = (viewer && people.find((p) => p.user_id === viewer.id))
+        || people[0]
+        || (card.plays[0] && card.plays[0].user
+          ? { user_id: card.plays[0].user.id, display_name: card.plays[0].user.display_name }
+          : null);
+      if (!lead) return "";
+      return window.BgbBadge.render({
+        avatar: lead.avatar || null,
+        displayName: window.Buddy.nameFor(lead.user_id, lead.display_name) || "",
+        size: "sm",
+        extraClass: "play-session__node",
+      });
+    }
+
+    // Title and "Good game" share one row: who played on the left, the
+    // reaction under it and its control on the right. The title and node are
+    // kept on the session so a reaction repaint can rebuild the row without
+    // recomputing them.
+    _renderSessionHeader(card, title, node) {
+      card._titleHtml = title;
+      card._nodeHtml = node;
+      const { count, mine, faces } = this._sessionReactions(card);
+      const who = (count || this._reactableIds(card).length)
+        ? `<span class="play-session__gg-who">${this._reactionSentence(count, mine, faces)}</span>`
+        : "";
+      return `
+        <header class="play-session__header">
+          ${node}
+          <div class="play-session__heading">
+            <span class="play-session__title">${title}</span>
+            ${who}
+          </div>
+          ${this._renderSessionGG(card)}
+        </header>
       `;
     }
 
@@ -728,48 +767,33 @@
         .map((p) => p.play_id);
     }
 
-    _renderSessionFoot(card) {
+    _renderSessionGG(card) {
       const ids = this._reactableIds(card);
-      const { count, mine, faces } = this._sessionReactions(card);
-      const stack = faces.slice(0, 3).map((f) => window.BgbBadge.render({
-        avatar: f.avatar || null,
-        displayName: window.Buddy.nameFor(f.user_id, f.display_name) || "",
-        size: "sm",
-        extraClass: "play-session__face",
-      })).join("");
-      // An all-mine night has nothing to react to, so the footer is the tally
-      // of good games it received: the same mark and number as the button,
-      // but not a control. With none received there is no footer at all.
+      const { count, mine } = this._sessionReactions(card);
+      const mark = `<i data-icon="handshake" class="w-4 h-4"></i>`;
+      // An all-mine night has nothing to react to, so the slot is the tally of
+      // good games it received: the same mark and number as the button, but
+      // not a control. With none received there is nothing to show.
       if (!ids.length) {
         if (!count) return "";
         return `
-          <div class="play-session__foot">
-            <span class="play-session__gg play-session__gg--tally"
-                  aria-label="${count} good game${count === 1 ? "" : "s"}">
-              <i data-icon="handshake" class="w-4 h-4"></i><span>${count}</span>
-            </span>
-            ${faces.length ? `<span class="play-session__faces">${stack}</span>` : ""}
-            <span class="play-session__gg-who">${this._reactionSentence(count, mine, faces)}</span>
-          </div>
+          <span class="play-session__gg play-session__gg--tally"
+                aria-label="${count} good game${count === 1 ? "" : "s"}">
+            ${mark}<span>${count}</span>
+          </span>
         `;
       }
       const key = sessionKey(card.plays[0]);
       const nav = `window.feedView._toggleReaction('${escapeAttr(jsStr(key))}')`;
-      // The label is only ever the words on an empty night; once there are any,
-      // it is the mark plus a bare number. That is the whole reason the phrase
-      // is spelled out rather than "GG" — the count never has to pluralise it.
-      const label = count ? String(count) : "Good game";
+      // The sentence beside it already says "Be the first to say good game",
+      // so an empty night's button is the bare mark.
       return `
-        <div class="play-session__foot">
-          <button class="play-session__gg${mine ? " is-mine" : ""}" type="button"
-                  aria-pressed="${mine ? "true" : "false"}"
-                  aria-label="${mine ? "Take back your good game" : "Say good game"}"
-                  onclick="${nav}">
-            <i data-icon="handshake" class="w-4 h-4"></i><span>${escapeHtml(label)}</span>
-          </button>
-          ${faces.length ? `<span class="play-session__faces">${stack}</span>` : ""}
-          <span class="play-session__gg-who">${this._reactionSentence(count, mine, faces)}</span>
-        </div>
+        <button class="play-session__gg${mine ? " is-mine" : ""}" type="button"
+                aria-pressed="${mine ? "true" : "false"}"
+                aria-label="${mine ? "Take back your good game" : "Say good game"}"
+                onclick="${nav}">
+          ${mark}${count ? `<span>${count}</span>` : ""}
+        </button>
       `;
     }
 
@@ -844,32 +868,21 @@
           ? [{ user_id: myId, display_name: (me && me.display_name) || "You", avatar: (me && me.avatar) || null }, ...others]
           : others;
       }
-      this._repaintSessionFoot(card);
+      this._repaintSessionHeader(card);
     }
 
     /**
-     * Repaint one session's footer and nothing else. A full render() here would
-     * rebuild every card in the feed — tearing down the control under the
-     * user's finger before :active could apply, which is the "laggy" feel the
-     * surgical-repaint rule exists to prevent.
+     * Repaint one session's header and nothing else. A full render() here would
+     * rebuild every card in the feed, the rail's photos included.
      */
-    _repaintSessionFoot(card) {
+    _repaintSessionHeader(card) {
       const host = this.container || document;
       const key = sessionKey(card.plays[0]);
       const esc = (window.CSS && CSS.escape) ? CSS.escape(key) : key;
       const section = host.querySelector(`.play-session[data-session-key="${esc}"]`);
-      if (!section) return;
-      const foot = section.querySelector(".play-session__foot");
-      const html = this._renderSessionFoot(card);
-      if (!foot) {
-        if (html) section.insertAdjacentHTML("beforeend", html);
-      } else if (!html) {
-        foot.remove();
-        return;
-      } else {
-        foot.outerHTML = html;
-      }
-      // Re-hydrate icons after the innerHTML patch, scoped to the section.
+      const header = section && section.querySelector(".play-session__header");
+      if (!header) return;
+      header.outerHTML = this._renderSessionHeader(card, card._titleHtml || "", card._nodeHtml || "");
       window.BgbIcons.render(section);
     }
 

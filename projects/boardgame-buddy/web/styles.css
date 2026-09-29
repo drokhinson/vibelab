@@ -106,6 +106,10 @@
      cream ink on a cream plate at 1.2:1. */
   --photo-plate: rgba(255, 251, 241, 0.9);
   --on-photo:    #211A12;
+  /* The same idea as a fade rather than a plate: light ink over a dark
+     gradient rising from a photo's bottom edge. */
+  --photo-scrim: linear-gradient(to top, rgba(20, 13, 8, 0.88), rgba(20, 13, 8, 0.55) 70%, rgba(20, 13, 8, 0));
+  --on-scrim:    #F6EEDF;
 }
 
 /* ── Layout tiers ──────────────────────────────────────────────────────────── */
@@ -4403,11 +4407,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    means the rail no longer needs slack padding to keep tilted corners from
    clipping. `.no-tilt` is retained as a no-op hook for callers that set it. */
 
-/* Single-play sessions: the lone polaroid sits flat and centered. The
+/* Single-play sessions: the lone polaroid sits flat under the title. The
    rail's horizontal scroll + scroll-snap don't apply when there's only
    one card, so we override them to avoid an off-axis anchor. */
 .play-session--single .play-session__scroll {
-  justify-content: center;
   overflow-x: visible;
   scroll-snap-type: none;
 }
@@ -4543,6 +4546,22 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    that carries both — lift it clear, off the band's own height. */
 .play-card.has-note .play-card__game-overlay {
   bottom: calc(var(--pc-note-h) + 8px);
+}
+/* In the feed the band is a scrim instead of a plate: a dark fade up from the
+   photo's bottom edge with light ink, so no cream strip sits on a dark card.
+   Both colours are --on-scrim / --photo-scrim, theme-independent for the same
+   reason as the plate. */
+.play-session .play-card__note {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px 10px 6px;
+  border-radius: 0;
+  background: var(--photo-scrim);
+  color: var(--on-scrim);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* ── Caption ──────────────────────────────────────────────────────────────
@@ -4744,24 +4763,85 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .game-detail__plays-scroll .play-card__date { display: block; }
 
 /* ── Play sessions (same-day, same-buddy-set plays) ───────────────────────
-   The session wrapper is the dark gallery wall the polaroids sit on. Every
-   play is a tile of one of the two widths, so a session holding a single play
-   just centres its lone tile — see .play-session--single above. */
+   One night is one row on a spine: an avatar node on a thin gold line, the
+   title and its "Good game" beside it, and the rail of polaroids indented to
+   start under the title. Consecutive sessions join up along the line; a day
+   divider breaks it.
+
+   Geometry lives in three tokens so the line, the node and the rail's indent
+   cannot drift apart: the gutter, the node's diameter, and the gap between the
+   node and the title. */
 .play-session {
-  padding: 0.5rem 0 0.5rem;
-  margin: 0 0 0.75rem;
+  --ps-gutter: 16px;
+  --ps-node: 32px;
+  --ps-gap: 12px;
+  --ps-indent: calc(var(--ps-gutter) + var(--ps-node) + var(--ps-gap));
+  /* What separates this session from the next one: its own margin plus the
+     .feed-cards gap. The line reaches across exactly that far. */
+  --ps-after: calc(1rem + 1rem);
+  position: relative;
+  padding: 0.25rem 0 0;
+  margin: 0 0 1rem;
   animation: fadeUp 200ms ease both;
+
+  /* Feed polaroids are cut from the ground's raised step, not from cream
+     paper, so a night reads as one surface with its header instead of a row of
+     lit rectangles on espresso. This is the one place a play card follows the
+     theme; every value is a var(), so light keeps white cards on cream. */
+  --polaroid-bg:       var(--bg-2);
+  --polaroid-bg-soft:  color-mix(in srgb, var(--bg-2) 80%, var(--line-strong));
+  --polaroid-ink:      var(--ink);
+  --polaroid-ink-soft: var(--ink-muted);
+  --polaroid-muted:    var(--ink-muted);
+  --polaroid-line:     var(--line);
+  --card-border:       var(--line);
+  /* The note band is a scrim over the photo rather than a plate on it, so it
+     runs to the frame's edges; this is its height up from the bottom edge. */
+  --pc-note-h: 48px;
 }
-/* The date used to sit here as an eyebrow on every card, which printed
-   "Today" once per session. It is now a .day-divider emitted once per day
-   above the group — see views/feed-view.js#render. */
+/* Only what a var() cannot supply (theming.md §7). (0,2,0) via the :root
+   prefix; the play card itself declares none of these. */
+:root[data-bgb="dark"] .play-session {
+  --accent-ink:      var(--accent);   /* the paper gold is 2.6:1 on --bg-2 */
+  --polaroid-accent: #E87B63;         /* terracotta is 3.4:1 on --bg-2; this is 5.2:1 */
+  --ghost-ink:       #C4A987;
+}
+.play-session::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--ps-gutter) + var(--ps-node) / 2 - 1px);
+  top: calc(0.25rem + var(--ps-node) / 2);
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  pointer-events: none;
+}
+.play-session:has(+ .play-session)::before { bottom: calc(-1 * var(--ps-after)); }
+
 .play-session__header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--ps-gap);
+  padding: 0 var(--ps-gutter);
+  margin-bottom: 12px;
+  min-width: 0;
+}
+/* Ringed in the ground so the line reads as passing behind it. */
+.user-badge.play-session__node {
+  flex: 0 0 auto;
+  width: var(--ps-node);
+  height: var(--ps-node);
+  box-shadow: 0 0 0 4px var(--bg-0);
+}
+.play-session__heading {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 0 1rem;
-  margin-bottom: 0.55rem;
-  min-width: 0;
 }
 .play-session__title {
   font-size: 0.95rem;
@@ -4770,85 +4850,66 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--ink-muted);
   letter-spacing: -0.005em;
 }
-
-/* ── "Good game" — the session footer ─────────────────────────────────────
-   One reaction for a whole night, sitting under the rail. GROUND tokens, not
-   the --polaroid-* family: this is app chrome beside the cards, not part of
-   the photo-paper surface they are made of, so it follows the theme where the
-   cards deliberately do not (.claude/rules/theming.md §6).
-
-   It lives OUTSIDE .play-card, so it cannot touch the one-height contract the
-   cards hold to. */
-.play-session__foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 16px 4px;
+.play-session__gg-who {
   min-width: 0;
+  font-size: 12px;
+  /* --ink-faint is 4.2:1 on the ground; this line is read, not decoration. */
+  color: var(--ink-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+
+/* ── "Good game" ──────────────────────────────────────────────────────────
+   One reaction for a whole night, at the right end of the session's title row.
+   GROUND tokens: this is app chrome beside the cards, not part of them. */
 .play-session__gg {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   flex: 0 0 auto;
   position: relative;
-  /* 32px of visible pill inside a 44px hit area (the ::before), per the tap
-     target floor. The pill stays small because the footer is a quiet row. */
-  height: 32px;
-  padding: 0 12px 0 10px;
+  /* 36px of visible pill inside a 44px hit area (the ::before), per the tap
+     target floor. */
+  height: 36px;
+  min-width: 52px;
+  padding: 0 12px;
   border-radius: var(--r-pill);
-  border: 1px solid var(--line-strong);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--accent);
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.01em;
   cursor: pointer;
   transition: background 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
 }
-.play-session__gg::before { content: ""; position: absolute; inset: -6px; }
+.play-session__gg::before { content: ""; position: absolute; inset: -4px; }
 .play-session__gg i,
 .play-session__gg svg { flex: 0 0 auto; }
 /* Touch has no hover, so the press state is the one that is not optional —
    without it the tap reads as not having registered. */
 .play-session__gg:active { transform: scale(0.96); }
 @media (hover: hover) {
-  .play-session__gg:hover { border-color: var(--accent); color: var(--ink); }
+  .play-session__gg:hover { border-color: var(--accent); }
 }
 .play-session__gg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Given. The quiet wash rather than a solid fill: a feed of nights you have
-   all reacted to should not be a row of loud chips. */
+/* Given: the solid fill, so a night you have reacted to is readable from the
+   control alone. */
 .play-session__gg.is-mine {
-  background: var(--accent-quiet);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--accent-fill);
+  border-color: transparent;
+  color: var(--on-accent);
 }
-/* Your own night's tally: the button's pill, read-only. Filled like a given
-   good game, because on your night every one of them is one you received. */
+/* Your own night's tally: read-only, so the quiet wash rather than the fill a
+   control takes. */
 .play-session__gg.play-session__gg--tally {
   cursor: default;
   background: var(--accent-quiet);
-  border-color: var(--accent);
+  border-color: transparent;
   color: var(--accent);
 }
 .play-session__gg.play-session__gg--tally::before { content: none; }
 .play-session__gg.play-session__gg--tally:active { transform: none; }
-.play-session__faces { display: inline-flex; align-items: center; flex: 0 0 auto; }
-/* Overlapped, and ringed in the GROUND so the overlap reads as depth. */
-.user-badge.play-session__face {
-  width: 20px; height: 20px;
-  margin-left: -6px;
-  box-shadow: 0 0 0 2px var(--bg-0);
-}
-.user-badge.play-session__face:first-child { margin-left: 0; }
-.user-badge.play-session__face .user-badge__initials { font-size: 9px; }
-.play-session__gg-who {
-  min-width: 0;
-  font-size: 11.5px;
-  color: var(--ink-faint);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
 .play-session__name {
   font-weight: 600;
   color: var(--ink);
@@ -4873,7 +4934,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      the overflow value, so state the honest one. */
   overflow-y: hidden;
   min-width: 0;
-  padding: 4px 16px 12px;
+  /* Above the spine, so a card scrolled back past the indent covers the line. */
+  position: relative;
+  z-index: 1;
+  /* Starts under the title, and snaps back to that same edge. */
+  padding: 4px 16px 12px var(--ps-indent, 16px);
+  scroll-padding-inline-start: var(--ps-indent, 16px);
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -21241,9 +21307,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
    name — taking the winner line, which is the thing the cards are here for. */
 .vfeed__day, .vfeed__header, .vfeed__foot { flex: none; }
 .vfeed__railclip { flex: none; overflow: hidden; padding: 3px 0 5px; }
-/* A one-game night uses the SAME rail and only centres its lone tile —
-   .play-session--single does exactly this and nothing more (styles.css above),
-   so the mock does not invent a second layout for it. */
+/* A one-game night uses the SAME rail and only centres its lone tile. */
 .vfeed__rail--single { justify-content: center; transform: none; }
 .vfeed__rail {
   display: flex;
@@ -21404,8 +21468,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 
 /* ── The Good game footer ─────────────────────────────────────────────────
-   Outside the cards, on the GROUND, one per night — which is where the real
-   control lives (.play-session__foot) and why it is not on a card here. */
+   Outside the cards, on the GROUND, one per night. */
 .vfeed__foot { display: flex; align-items: center; gap: 5px; padding-right: 9px; min-width: 0; }
 .vfeed__gg {
   flex: none;
@@ -21431,11 +21494,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   color: var(--accent);
 }
 .vfeed__faces { display: inline-flex; flex: none; }
-/* Overlapped and ringed in the ground, so the stack reads as depth — the
-   same treatment .play-session__face gets on the real footer, at this scene's
-   size. THE RING IS --bg-1: that is what .vig paints. It rang in --bg-0,
-   which is a step darker, so every face carried a halo instead of reading as
-   cut out of the surface it sits on. */
+/* Overlapped and ringed in the ground, so the stack reads as depth. THE RING
+   IS --bg-1: that is what .vig paints; --bg-0 is a step darker and would put
+   a halo on every face instead of cutting it out of the surface. */
 .vfeed__faces .vig-av {
   margin-left: -5px;
   /* The base rule's highlight RESTATED: box-shadow does not merge across
