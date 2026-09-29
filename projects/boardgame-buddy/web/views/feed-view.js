@@ -2,6 +2,8 @@
 //
 // Composition:
 //   - Optional "resume play" chip when a PlaySession draft is active
+//   - "Is this you?" — buddies' ghosts whose names look like the viewer's
+//     (GET /ghost-claims/suggestions; absent when there are none)
 //   - Mixed cards from /feed: plays (spine) + hot games / suggested buddies
 //     (first page only)
 //   - "Load more" tail when next_cursor is set
@@ -47,6 +49,14 @@
       this._ggBusy = new Set();
       // groupCards()' output from the last render — see _sessionByKey.
       this._grouped = [];
+      // "Is this you?" rows. Fetched beside /feed rather than carried on it:
+      // the first page is cached for a day, and a cached copy would offer
+      // Claim on a ghost already claimed (see domain/ghost-claim.js).
+      this._ghostClaims = [];
+      // Per-row action state for those rows, keyed by suggestionKey — the
+      // same busy / resolved split views/buddies-view.js keeps.
+      this._claimBusy = new Set();
+      this._claimResolved = new Map();
       // The pull-to-refresh controller, built on first mount and re-attached on
       // every later one. Held rather than rebuilt because it binds to
       // `this.container`, which the router keeps across mounts.
@@ -107,6 +117,7 @@
       this.listenDom("play-changed", (e) => this._onPlayChanged(e.detail || {}));
       this.listenDom("plays-uploaded", (e) => this._onUploadsLanded(e.detail || {}));
       this._refreshCollectionData();
+      this._loadGhostClaims();
       await this._load({ initial: true });
       this._installScrollObserver();
       this._attachPull();
@@ -261,6 +272,7 @@
      * state.
      */
     async _refresh() {
+      this._loadGhostClaims();
       if (!this._page || !Array.isArray(this._page.cards)) {
         await this._load({ initial: true });
         return;
@@ -515,6 +527,7 @@
           ${this._error ? `<div class="alert alert-error mb-3">${escapeHtml(this._error)}</div>` : ""}
           <div class="feed-stream">
             <div class="feed-cards">
+              ${withMorphKey(this._renderGhostClaims(), "ghost-claims")}
               ${stream.length === 0 && !this._loading ? withMorphKey(this._renderEmpty(), "empty") : ""}
               ${body}
             </div>
@@ -921,6 +934,78 @@
         title: "Hot this week",
         meta: (entry) => `${entry.play_count} plays`,
       });
+    }
+
+    // ── "Is this you?" ──────────────────────────────────────────────────────
+
+    /** Re-fetch the suggestions. A failure keeps whatever is on screen. */
+    async _loadGhostClaims() {
+      if (!window.GhostClaim) return;
+      let list;
+      try {
+        list = await window.GhostClaim.suggestions();
+      } catch (_) {
+        return;
+      }
+      if (!this._mounted) return;
+      window.GhostClaim.setSuggestions(list);
+      this._ghostClaims = list;
+      this._claimResolved.clear();
+      if (this._page) this.render();
+    }
+
+    _renderGhostClaims() {
+      if (!window.renderGhostClaimSection) return "";
+      return window.renderGhostClaimSection(this._ghostClaims, {
+        handler: "window.feedView",
+        stateFor: (key) => this._claimStateFor(key),
+      });
+    }
+
+    _claimStateFor(key) {
+      if (this._claimBusy.has(key)) return "busy";
+      return this._claimResolved.get(key) || null;
+    }
+
+    _patchClaim(key, state, row) {
+      window.patchGhostClaimRow(key, state, row, "suggestion", {
+        root: this.container || document,
+        handler: "window.feedView",
+      });
+    }
+
+    // Both write a verb into the row and leave it where it is — the list
+    // re-forms on the next fetch, not under the finger that tapped it.
+    _claimGhost(ownerId, nameKey, displayName) {
+      return this._settleGhost(ownerId, nameKey, "requested", "Couldn't send that request",
+        () => window.GhostClaim.create(ownerId, displayName));
+    }
+
+    _dismissGhost(ownerId, nameKey, displayName) {
+      return this._settleGhost(ownerId, nameKey, "dismissed", "Couldn't dismiss that",
+        () => window.GhostClaim.dismiss(ownerId, displayName));
+    }
+
+    async _settleGhost(ownerId, nameKey, verb, failMsg, write) {
+      const key = window.GhostClaim.suggestionKey({ owner_user_id: ownerId, ghost_name_key: nameKey });
+      if (this._claimBusy.has(key)) return;
+      const row = this._ghostClaims.find(
+        (s) => s.owner_user_id === ownerId && s.ghost_name_key === nameKey,
+      );
+      this._claimBusy.add(key);
+      this._patchClaim(key, "busy");
+      try {
+        await write();
+      } catch (e) {
+        this._claimBusy.delete(key);
+        this._patchClaim(key, null, row);
+        if (typeof showToast === "function") showToast(e.message || failMsg, "error");
+        return;
+      }
+      this._claimBusy.delete(key);
+      this._claimResolved.set(key, verb);
+      window.GhostClaim.settleSuggestion(key);
+      this._patchClaim(key, verb);
     }
 
     // The rail itself lives in ui/buddy-suggestion-rail.js — the Buddies

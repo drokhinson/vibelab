@@ -4125,6 +4125,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    would stack on top of that gap and float the heading between the two days
    it is meant to label. Zero them out here and let the gap do the spacing. */
 .feed-cards > .day-divider { margin: 0.35rem 0.2rem -0.25rem; }
+/* "Is this you?" heads the stream, so there is no section above it to rule
+   off — the gap does the spacing. */
+.feed-cards > .ghost-claim-section { border-top: none; padding: 0; }
 
 /* ── Feed sidebar (tablet + wide) ───────────────────────────────────────────
    views/feed-view.js lifts the hot-games and suggested-buddies rails out of
