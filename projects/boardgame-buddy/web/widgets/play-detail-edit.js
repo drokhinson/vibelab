@@ -200,7 +200,7 @@
         ${renderEditExpansions(d)}
 
         ${hasRoundGrid(d.players, "roundScores", d.scoring_template) ? `
-          <section class="play-detail__section">
+          <section class="play-detail__section" data-kp-round>
             <h3 class="play-detail__section-title">
               <i data-icon="layers" class="w-4 h-4"></i> Rounds
             </h3>
@@ -222,17 +222,21 @@
           <h3 class="play-detail__section-title">
             <i data-icon="users" class="w-4 h-4"></i> Players
           </h3>
-          <ul class="play-detail__edit-players">
+          <ul class="play-detail__edit-players" data-score-pad-group>
             ${d.players.map((pl, i) => `
-              <li class="play-detail__edit-player">
-                <span class="play-detail__edit-player-name">${escapeHtml(window.Buddy.nameFor(pl.user_id, pl.name))}</span>
+              <li class="play-detail__edit-player" data-score-pad-row>
+                <span class="play-detail__edit-player-name" data-score-pad-name>${escapeHtml(window.Buddy.nameFor(pl.user_id, pl.name))}</span>
                 ${hasRoundGrid(d.players, "roundScores", d.scoring_template)
                   ? `<span class="play-detail__edit-score-readout">${escapeHtml(playerTotal(pl, d.players))}</span>`
-                  : `<input type="number" class="input input-bordered input-sm play-detail__edit-score"
-                            id="play-popup-score-${i}"
-                            placeholder="Score"
-                            value="${escapeAttr(pl.score)}"
-                            oninput="window.PlayDetailPopup._setPlayerScore(${i}, this.value)" />`}
+                  : `<span class="score-pad-field">
+                      <input type="text" inputmode="${scoreInputMode()}" autocomplete="off" data-score-pad
+                             class="input input-bordered input-sm play-detail__edit-score"
+                             id="play-popup-score-${i}"
+                             placeholder="Score"
+                             aria-label="${escapeAttr(`Score for ${window.Buddy.nameFor(pl.user_id, pl.name)}`)}"
+                             value="${escapeAttr(pl.score == null ? "" : pl.score)}"
+                             oninput="window.PlayDetailPopup._setPlayerScore(${i}, this.value)" />
+                    </span>`}
                 <label class="play-detail__edit-winner">
                   <input type="checkbox" ${pl.is_winner ? "checked" : ""}
                          onchange="window.PlayDetailPopup._setPlayerWinner(${i}, this.checked)" />
@@ -447,8 +451,24 @@
   function setPlayerWinner(i, checked) {
     if (state.draft) state.draft.players[i].is_winner = !!checked;
   }
+  // A whole-play score, typed on the score pad (widgets/score-keypad.js) on a
+  // touch screen. Kept as the sanitized string, like a round cell, so a
+  // half-typed "-" or "12." survives until the next key; written back to the
+  // field when a hardware keyboard typed something the sanitizer drops.
   function setPlayerScore(i, value) {
-    if (state.draft) state.draft.players[i].score = value;
+    if (!state.draft) return;
+    const clean = window.sanitizeRoundScore(value);
+    state.draft.players[i].score = clean;
+    const input = /** @type {HTMLInputElement|null} */ (document.getElementById(`play-popup-score-${i}`));
+    if (input && input.value !== clean) {
+      input.value = clean;
+      try { input.setSelectionRange(clean.length, clean.length); } catch (_) {}
+    }
+  }
+
+  // The system keyboard stays down where the score pad does the typing.
+  function scoreInputMode() {
+    return window.ScoreKeypad && window.ScoreKeypad.custom ? "none" : "decimal";
   }
   function removePlayer(i) {
     if (!state.draft) return;
@@ -572,7 +592,7 @@
       // doesn't lose data when opting in.
       const initial = existing.length === 1
         ? existing[0]
-        : (p.score === "" || p.score == null ? null : Number(p.score));
+        : window.parseRoundScore(p.score);
       p.roundScores = [initial, null];
     }
     resyncScores(state.draft.players);
@@ -1017,7 +1037,7 @@
           : null;
         const score = gridActive
           ? playerScoreForSave(p, state.draft.players)
-          : (p.score === "" || p.score == null ? null : Number(p.score));
+          : window.parseRoundScore(p.score);
         return {
           name: p.name,
           is_winner: !!p.is_winner,
@@ -1061,6 +1081,20 @@
   }
 
 
+
+  // The score pad's + Round on the edit grid: add the round and move into its
+  // first cell in the same tap, so the pad stays up. The render is
+  // synchronous, so the new row is there to focus.
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("scorekeypad:round", (e) => {
+      const t = e.target;
+      if (!state.draft || !(t instanceof Element) || !t.closest('[data-round-grid="PlayDetailPopup"]')) return;
+      addRound();
+      const rows = document.querySelectorAll('[data-round-grid="PlayDetailPopup"] .scoring-table--body tbody tr');
+      const cell = rows.length ? rows[rows.length - 1].querySelector("input.scoring-cell") : null;
+      if (cell) cell.focus();
+    });
+  }
 
   window.PlayDetailEdit = {
     init,

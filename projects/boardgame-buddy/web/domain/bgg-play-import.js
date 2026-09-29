@@ -722,7 +722,7 @@
      */
     setScore(playId, who, value) {
       const raw = String(value == null ? "" : value).trim();
-      const score = raw === "" ? null : Math.trunc(Number(raw));
+      const score = raw === "" ? null : Math.round(Number(raw) * 100) / 100;
       if (score != null && !Number.isFinite(score)) return false;
       return this._editRow(playId, (seats) => seats.map((s) => (
         BggPlayImport.whoOf(s) === who ? { ...s, score } : s

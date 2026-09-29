@@ -37,6 +37,7 @@ counting the marks themselves.
 """
 
 import logging
+import math
 from datetime import date
 from typing import Any
 
@@ -49,7 +50,7 @@ from ..constants import (
     MAX_REPEAT_COUNT,
 )
 from ..dependencies import APP_NAME
-from ..models import ParsedPlay, ParsedPlayer
+from ..models import ParsedPlay, ParsedPlayer, tidy_score
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +211,7 @@ def _clean_name(value: Any) -> str | None:
     return name or None
 
 
-def _coerce_score(value: Any) -> int | None:
+def _coerce_int(value: Any) -> int | None:
     if isinstance(value, bool) or value is None:
         return None
     if isinstance(value, int):
@@ -223,6 +224,23 @@ def _coerce_score(value: Any) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def _coerce_score(value: Any) -> int | float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+    elif isinstance(value, str):
+        try:
+            number = float(value.strip())
+        except ValueError:
+            return None
+    else:
+        return None
+    if not math.isfinite(number):
+        return None
+    return tidy_score(number)
 
 
 def _coerce_date(value: Any) -> date | None:
@@ -283,7 +301,7 @@ def _coerce(data: dict) -> tuple[list[ParsedPlay], list[str]]:
         if not game or not players:
             continue
 
-        count = _coerce_score(item.get("count")) or 1
+        count = _coerce_int(item.get("count")) or 1
         count = max(1, min(count, MAX_REPEAT_COUNT))
         if expanded + count > MAX_IMPORT_PLAYS:
             remaining = MAX_IMPORT_PLAYS - expanded

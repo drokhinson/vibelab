@@ -267,7 +267,7 @@
       const s = this.shotFor(id);
       if (!s) return false;
       const raw = String(value == null ? "" : value).trim();
-      const score = raw === "" ? null : Math.trunc(Number(raw));
+      const score = raw === "" ? null : Math.round(Number(raw) * 100) / 100;
       if (score != null && !Number.isFinite(score)) return false;
       for (const p of s.players) {
         if (PhotoImport.whoOf(p) === who) p.score = score;

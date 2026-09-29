@@ -228,7 +228,7 @@
               extraClass: "imp-seat__badge",
             })}
             <span class="imp-seat__name">${escapeHtml(seat.name)}</span>
-            <input class="imp-seat__score-input" type="number" step="1" inputmode="numeric"
+            <input class="imp-seat__score-input" type="number" step="any" inputmode="decimal"
                    value="${seat.score == null ? "" : seat.score}"
                    placeholder="—" ${multi ? "disabled" : ""}
                    aria-label="${escapeAttr(`Score for ${seat.name}`)}"

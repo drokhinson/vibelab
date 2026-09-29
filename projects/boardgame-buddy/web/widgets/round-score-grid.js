@@ -451,7 +451,7 @@
     for (let r = 0; r < n; r++) {
       total += parseRoundScore(roundGridColumnValue(col, r, getCell)) || 0;
     }
-    return total;
+    return roundScoreSum(total);
   }
 
   // Which seats does the cell on seat `i` write to?
@@ -661,16 +661,18 @@
 
   // One editable cell.
   //
-  // `type="text"` with `inputmode="numeric"`: the iOS 10-key pad, big keys
-  // and digits only. The sign it lacks, and a key to move on, ride on the bar
-  // widgets/score-keypad.js docks on top of it. Text rather than number so a
-  // half-typed "-" reads back as "-" instead of as "" with badInput set; the
-  // host sanitizes what arrives (sanitizeRoundScore) and writes it back.
+  // `type="text"`, so a half-typed "-" reads back as "-" instead of as "" with
+  // badInput set; the host sanitizes what arrives (sanitizeRoundScore) and
+  // writes it back. On a touch screen `inputmode="none"` keeps the system
+  // keyboard down and the app's score pad (widgets/score-keypad.js) does the
+  // typing; elsewhere it is plain keyboard entry, numeric where a soft
+  // keyboard exists.
   function renderEditableCell(rawValue, i, r, host, label) {
     const val = rawValue == null ? "" : String(rawValue);
     const neg = val.charAt(0) === "-";
+    const mode = window.ScoreKeypad && window.ScoreKeypad.custom ? "none" : "numeric";
     return `<div class="scoring-cell-wrap${neg ? " is-neg" : ""}">
-      <input type="text" inputmode="numeric" enterkeyhint="next" autocomplete="off"
+      <input type="text" inputmode="${mode}" enterkeyhint="next" autocomplete="off"
              id="rg-${host}-${i}-${r}" data-score-cell="${i}-${r}"
              class="scoring-cell"
              aria-label="${escapeAttr(label || "Score")}"
@@ -747,7 +749,7 @@
     for (let r = 0; r < n; r++) {
       total += parseRoundScore(resolve(player, r)) || 0;
     }
-    return total;
+    return roundScoreSum(total);
   }
 
   // Did anyone actually type into this player's row? Blank cells sum to 0 in
@@ -839,24 +841,39 @@
   }
 
   // ── Score value helpers (shared by every grid host) ──────────────────────
-  // Cells are stored as STRINGS ("", "-5", "12") so a leading minus survives
-  // the round trip through the draft. A lone "-" (a half-typed negative) is
-  // read back by parseRoundScore as empty rather than as NaN. These helpers
-  // convert to a clean string for storage /
-  // display and to a number|null for math.
+  // Cells are stored as STRINGS ("", "-5", "12", "7.5") so a leading minus
+  // and a half-typed decimal survive the round trip through the draft. A lone
+  // "-" or "." (a number still being typed) is read back by parseRoundScore as
+  // empty rather than as NaN. These helpers convert to a clean string for
+  // storage / display and to a number|null for math.
 
-  // Strip anything that isn't a digit or a leading minus.
+  // Scores carry at most this many decimal places, as the API stores them.
+  const SCORE_DECIMALS = 2;
+
+  // Keep digits, one leading minus and one decimal point with at most
+  // SCORE_DECIMALS digits after it.
   function sanitizeRoundScore(raw) {
-    return String(raw == null ? "" : raw)
-      .replace(/[^0-9-]/g, "")
+    const s = String(raw == null ? "" : raw)
+      .replace(/[^0-9.-]/g, "")
       .replace(/(?!^)-/g, "");
+    const dot = s.indexOf(".");
+    if (dot < 0) return s;
+    return s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, "").slice(0, SCORE_DECIMALS);
   }
 
-  // "" / "-" / null → null ; otherwise the integer value.
+  // "" / "-" / "." / "-." / null → null ; otherwise the number.
   function parseRoundScore(v) {
-    if (v == null || v === "" || v === "-") return null;
-    const n = Number(v);
+    if (v == null) return null;
+    const t = String(v);
+    if (t === "" || t === "-" || t === "." || t === "-.") return null;
+    const n = Number(t);
     return Number.isFinite(n) ? n : null;
+  }
+
+  // A sum of scores at SCORE_DECIMALS places, so 0.1 + 0.2 reads 0.3.
+  function roundScoreSum(n) {
+    const f = Math.pow(10, SCORE_DECIMALS);
+    return Math.round(n * f) / f;
   }
 
   // ── Horizontal continuity, and the new round ───────────────────────
@@ -1076,6 +1093,7 @@
   window.roundGridHasAnyScore = roundGridHasAnyScore;
   window.sanitizeRoundScore = sanitizeRoundScore;
   window.parseRoundScore = parseRoundScore;
+  window.roundScoreSum = roundScoreSum;
   window.RoundGridScroll = RoundGridScroll;
   window.RoundGridNames = RoundGridNames;
   window.RoundGridNotes = RoundGridNotes;
