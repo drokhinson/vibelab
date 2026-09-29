@@ -347,6 +347,9 @@
       if (prev.phase !== next.phase) return true;
       if (prev.finalized_play_id !== next.finalized_play_id) return true;
       if (prev.game_id !== next.game_id) return true;
+      // The host picking, changing or clearing the template relabels the grid.
+      if (JSON.stringify(prev.scoring_template || null)
+          !== JSON.stringify(next.scoring_template || null)) return true;
       return false;
     }
 
@@ -405,11 +408,18 @@
       if (!this._session || !this._session.id) return;
       this._phaseOff = await window.SessionPhase.subscribe(
         this._session.id,
-        async (phase) => {
+        async (phase, row) => {
           const prevPhase = this._session && this._session.phase;
           // Patch the cached session in place so render() picks up the new
-          // phase without waiting on the slow poll.
-          if (this._session) this._session = { ...this._session, phase };
+          // phase without waiting on the slow poll. The same UPDATE carries
+          // the host's scoring template, which is the only copy of the row
+          // labels a spectator has — their own guide may not hold that grid.
+          if (this._session) {
+            this._session = { ...this._session, phase };
+            if (row && "scoring_template" in row) {
+              this._session.scoring_template = row.scoring_template;
+            }
+          }
           this.render();
           this._handlePhaseSideEffects(this._session);
           // Scroll the joiner to the new section now that the phase has
@@ -770,6 +780,16 @@
       return window.renderGameInfoBar({
         game: (s && s.game) || null,
         code: (s && s.code) || this._code || null,
+        openAction: s && s.game_id ? "window.sessionViewerView._openGameDetails()" : "",
+      });
+    }
+
+    _openGameDetails() {
+      const s = this._session;
+      if (!s || !s.game_id) return;
+      window.router.go("game-detail", {
+        gameId: s.game_id,
+        gameName: (s.game && s.game.name) || "",
       });
     }
 

@@ -67,6 +67,8 @@
    * @param {GameInfoBarState} [opts.state]     Defaults to "ready".
    * @param {string} [opts.note]                Extra line under the strip (e.g. a replaced code).
    * @param {boolean} [opts.noteAccent]         Render that line in the accent ink.
+   * @param {string} [opts.openAction]          Inline handler that opens the game's
+   *   details. When set (and a game is named), the thumb and name become one button.
    * @returns {string}
    */
   function renderGameInfoBar(opts) {
@@ -90,8 +92,18 @@
     return `
       <section class="cascade-gamebar cascade-gamebar--${escapeAttr(state)}">
         <div class="cascade-gamebar__row">
-          ${thumb}
-          <span class="cascade-gamebar__name">${escapeHtml(name)}</span>
+          ${game && o.openAction ? `
+            <button type="button" class="cascade-gamebar__game"
+                    onclick="${escapeAttr(o.openAction)}"
+                    aria-label="Open ${escapeAttr(name)} details">
+              ${thumb}
+              <span class="cascade-gamebar__name">${escapeHtml(name)}</span>
+              <i data-icon="chevron-right" class="w-3.5 h-3.5 cascade-gamebar__go"></i>
+            </button>
+          ` : `
+            ${thumb}
+            <span class="cascade-gamebar__name">${escapeHtml(name)}</span>
+          `}
           ${renderCodeSlot(state, code)}
         </div>
         ${notes.map((n) => `

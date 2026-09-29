@@ -4264,7 +4264,12 @@
       return changed;
     }
 
-    _removeRoundAt(r) {
+    /** Does any player have a number in round `r`? */
+    _roundHasScores(r) {
+      return this._ps.players.some((p) => this._resolvedScore(p, r) != null);
+    }
+
+    async _removeRoundAt(r) {
       const n = this._maxRoundCount();
       if (!(r >= 0 && r < n)) return;
       // The grid always has a Round 1 (_ensureOpeningRound), so the last
@@ -4279,6 +4284,19 @@
       // punched in the middle of a labelled grid would leave every label below
       // it describing the wrong numbers.
       if (r < this._lockedRowCount()) return;
+      if (this._roundHasScores(r)) {
+        const ok = await window.PolaroidPopup.confirm({
+          title: "Delete this row?",
+          body: "The scores entered in it will be removed.",
+          confirmLabel: "Delete row",
+          cancelLabel: "Keep row",
+          destructive: true,
+        });
+        if (!ok) return;
+        // The grid may have changed shape while the dialog was up (a live
+        // round added or removed), so the row is re-checked before the splice.
+        if (!(r >= 0 && r < this._maxRoundCount()) || r < this._lockedRowCount()) return;
+      }
       this._normalizeRoundArrays();
       for (const p of this._ps.players) p.roundScores.splice(r, 1);
       this._ps.persist();

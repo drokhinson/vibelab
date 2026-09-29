@@ -12053,6 +12053,30 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   align-items: center;
   gap: 10px;
 }
+/* The thumb and name as one tappable button, spanning both leading columns
+   and repeating the row's own track layout inside them. */
+.cascade-gamebar__game {
+  grid-column: 1 / 3;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cascade-gamebar__game:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.cascade-gamebar__go { color: var(--polaroid-muted); }
 .cascade-gamebar__thumb {
   width: 30px;
   height: 30px;
