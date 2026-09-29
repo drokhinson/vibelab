@@ -173,7 +173,7 @@ class _FakeSupabase:
         raise AssertionError(
             "account deletion must go through bgb_delete_account_rows, not a "
             f"direct table write ({name}). The handover and the profile delete "
-            "have to be one transaction — see migration 051."
+            "have to be one transaction."
         )
 
 

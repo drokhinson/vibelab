@@ -206,7 +206,7 @@ def main() -> None:
         print("every image URL in the database resolves on R2")
         return
 
-    print(f"\n{len(missing)} MISSING — do not run migration 036 until this is 0:")
+    print(f"\n{len(missing)} MISSING — do not run the URL rewrite until this is 0:")
     for where, target, status in missing[:40]:
         print(f"  [{status or 'no response'}] {where}  {target}")
     if len(missing) > 40:

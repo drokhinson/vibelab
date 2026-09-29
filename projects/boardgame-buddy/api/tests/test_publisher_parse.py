@@ -7,10 +7,9 @@ publisher name twice under two different ids; and the list runs to 30+ entries
 for anything popular, which is a paragraph of company names in a UI that shows
 one.
 
-The empty case matters as much as the full one. `publishers` is nullable with
-no default precisely so NULL can mean "never synced", so a game
-BGG credits to nobody must come back as [] — which the backfill writes, and the
-row leaves the queue — rather than as None, which would leave it there forever.
+The empty case matters as much as the full one. NULL `publishers` means "not
+synced yet" and '{}' means "BGG credits nobody", so a game with no publishers
+must come back as [] rather than None: readers show the two differently.
 
 A pure Element -> list function, so no Supabase fake and no network.
 """
