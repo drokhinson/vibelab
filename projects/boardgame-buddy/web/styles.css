@@ -9584,102 +9584,192 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 .scoring-cell:focus { outline: none; border-color: var(--accent-ink); }
 
-/* The bar widgets/score-keypad.js docks on the number pad while a score cell
-   has focus: (−) to flip its sign, Prev and Next to move between cells.
-   Body-level and edge to edge like the keyboard it sits on, and shown only
-   while ui/viewport-lock.js reports a software keyboard up — a hardware
-   keyboard has its own minus key, and Enter / Shift+Enter do what Next / Prev
-   do.
+/* The score pad (widgets/score-keypad.js): the app's own number keys for a
+   score cell on a touch screen, standing in for the system keyboard. Docked
+   along the bottom edge, or along the right edge on the `land` tier, where a
+   phone on its side has width to spare and no height.
 
    z-index 105: above the modal/sheet rung (100–102), because the play-detail
    popup's edit grid is a cell inside a modal; below the import toasts (111)
-   and the error toast (120). It only exists while a cell is focused, and it
-   sits on the keyboard, so it never contends with a sheet's own controls.
+   and the error toast (120). The Sum spotlight sits one under it (104).
 
    Ground tokens rather than the --polaroid-* aliases: it floats over whatever
-   surface the grid is on (paper scorepad, chrome popup), and reads as part of
-   the keyboard, which is chrome in both themes. */
-.score-keypad {
+   surface the grid is on (paper scorepad, chrome popup) and reads as a
+   keyboard, which is chrome in both themes. */
+.score-pad {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: var(--bgb-kb-inset, 0px);
+  bottom: 0;
   z-index: 105;
   box-sizing: border-box;
-  display: none;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  background: var(--bg-2);
+  padding: 8px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg-1);
   border-top: 1px solid var(--line-strong);
   font-family: var(--font-sans);
-}
-:root.bgb-kb-open .score-keypad:not([hidden]) { display: flex; }
-/* iOS 26+ (widgets/score-keypad.js#liftsOverAssistant): Safari's ⌃ ⌄ ✓ bar
-   floats as a glass pill over the bottom of the visible viewport instead of
-   riding on the keyboard, so a bar docked at the keyboard's edge sits under
-   it. Lift clear of the pill and float like it does — inset from the edges,
-   rounded, on a shadow rather than a top rule. 78px is measured off an iPhone
-   screenshot: the pill's top sits ~74pt above the viewport's bottom edge, plus
-   a small gap. */
-.score-keypad.score-keypad--lifted {
-  bottom: calc(var(--bgb-kb-inset, 0px) + 78px);
-  left: 8px;
-  right: 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
-  box-shadow: var(--sh-2);
-}
-.score-keypad__key,
-.score-keypad__nav {
-  height: 44px;
-  min-width: 56px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: var(--r-sm);
-  touch-action: manipulation;
+  transform: translateY(100%);
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
   -webkit-user-select: none;
   user-select: none;
+}
+.score-pad.is-open { transform: none; }
+.score-pad[hidden] { display: none; }
+.score-pad__keys {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  max-width: 520px;
+  margin-inline: auto;
+}
+.score-pad__key {
+  height: 50px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--ink);
+  font: 400 24px/1 var(--font-sans);
+  box-shadow: var(--sh-1);
+  display: grid;
+  place-items: center;
+  touch-action: manipulation;
   cursor: pointer;
 }
-.score-keypad__key {
-  background: var(--bg-1);
-  color: var(--ink);
-  font: 500 20px/1 var(--font-score);
-  box-shadow: 0 1px 0 var(--shadow-c);
-}
-.score-keypad__key:active { background: var(--bg-0); }
-.score-keypad__nav {
-  min-width: 76px;
-  font-size: 17px;
-  font-weight: 600;
-}
-/* Prev is the secondary move, so it takes the key's plain face; Next keeps the
-   solid accent as the move a scorer makes forty times a night. Its auto margin
-   holds (−) at the left edge and the moves at the right. */
-.score-keypad__prev {
-  margin-left: auto;
-  background: var(--bg-1);
-  color: var(--ink);
-  box-shadow: 0 1px 0 var(--shadow-c);
-}
-.score-keypad__prev:active { background: var(--bg-0); }
-.score-keypad__prev:disabled { color: var(--ink-faint); box-shadow: none; cursor: default; }
-.score-keypad__next {
-  background: var(--accent-fill);
-  color: var(--on-accent);
-}
-.score-keypad__next:active { filter: brightness(0.92); }
-/* + Round: the Play step's "Next round", which the docked bar would offer if the
-   keypad were not sitting where it goes. Outlined in the accent rather than
-   filled, so Next stays the one solid key. */
-.score-keypad__round {
+.score-pad__key:active { filter: brightness(1.2); }
+.score-pad__key--fn { background: var(--bg-0); }
+.score-pad__key--sign { font: 500 19px/1 var(--font-score); }
+.score-pad__key--blank { background: transparent; box-shadow: none; pointer-events: none; }
+.score-pad__key--nav { background: var(--bg-0); font-size: 16px; font-weight: 600; }
+.score-pad__key--nav:disabled { color: var(--ink-faint); box-shadow: none; cursor: default; }
+.score-pad__key--next { background: var(--accent-fill); color: var(--on-accent); font-size: 17px; font-weight: 600; }
+/* Σ Sum and + Round: outlined in the accent so Next stays the one solid key.
+   + Round is the Play step's "Next round" and shows only there
+   ([data-kp-round]); without it Σ Sum takes the whole row. */
+.score-pad__key--tool {
+  grid-column: 1 / -1;
+  height: 44px;
   background: transparent;
   color: var(--accent);
   box-shadow: inset 0 0 0 1.5px var(--accent);
+  font-size: 15px;
+  font-weight: 600;
 }
-.score-keypad__round:active { background: var(--accent-quiet); }
-.score-keypad__round[hidden] { display: none; }
+.score-pad__key--round { display: none; }
+.score-pad.has-round .score-pad__key--sumkey { grid-column: 1 / 3; }
+.score-pad.has-round .score-pad__key--round { display: grid; grid-column: 3 / -1; }
+.score-pad.is-summing .score-pad__key--sumkey { background: var(--accent-quiet); }
+.score-pad__key--op { background: var(--accent-quiet); color: var(--accent); font: 600 26px/1 var(--font-score); box-shadow: none; }
+.score-pad__key--eq { background: var(--accent-fill); color: var(--on-accent); }
+.score-pad__key--op.is-armed { box-shadow: inset 0 0 0 2px var(--accent); }
+.score-pad:not(.is-summing) .score-pad__sum,
+.score-pad.is-summing .score-pad__plain { display: none; }
+
+/* Sum mode's tape: the numbers stacked so far, one chip each. A chip is a
+   button — tap it to reopen that number, × to drop it. */
+.score-pad__tape { display: none; align-items: center; gap: 6px; max-width: 520px; margin: 0 auto 8px; }
+.score-pad.is-summing .score-pad__tape { display: flex; }
+.score-pad__terms {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.score-pad__terms::-webkit-scrollbar { display: none; }
+.score-pad__chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--ink);
+  font: 600 15px/1.2 var(--font-score);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.score-pad__chip.is-fresh { animation: score-pad-rise 260ms cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+.score-pad__chip.is-minus { color: var(--rust); }
+.score-pad__chip.is-open { background: var(--accent-quiet); box-shadow: inset 0 0 0 2px var(--accent); }
+.score-pad__chip--entry { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line-strong); cursor: default; }
+.score-pad__chip--entry.is-live { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.score-pad__ph { color: var(--ink-faint); font-weight: 400; }
+.score-pad__chip-del {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: -4px;
+  border-radius: 50%;
+  background: var(--rust);
+  color: var(--bg-1);
+  font: 700 14px/1 var(--font-sans);
+}
+.score-pad__cancel {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font: 500 14px var(--font-sans);
+  cursor: pointer;
+}
+@keyframes score-pad-rise { from { transform: translateY(44px) scale(1.25); opacity: 0; } }
+
+/* A phone on its side: the pad docks on the right edge, full height, and
+   slides in from there. The keys stretch to share the height. */
+.score-pad.score-pad--side {
+  left: auto;
+  top: 0;
+  width: min(42vw, 360px);
+  display: flex;
+  flex-direction: column;
+  padding: 8px calc(8px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) 8px;
+  border-top: 0;
+  border-left: 1px solid var(--line-strong);
+  transform: translateX(100%);
+}
+.score-pad.score-pad--side.is-open { transform: none; }
+.score-pad.score-pad--side[hidden] { display: none; }
+.score-pad--side .score-pad__tape { width: 100%; margin-bottom: 6px; }
+.score-pad--side .score-pad__keys { flex: 1 1 auto; min-height: 0; width: 100%; gap: 5px; grid-template-rows: repeat(5, minmax(0, 1fr)); }
+.score-pad--side .score-pad__key { height: auto; font-size: 20px; }
+.score-pad--side .score-pad__key--nav,
+.score-pad--side .score-pad__key--next { font-size: 15px; }
+.score-pad--side .score-pad__key--tool { font-size: 14px; }
+.score-pad--side .score-pad__chip { padding: 4px 9px; font-size: 13px; }
+
+/* Sum mode's spotlight (widgets/score-sum.js): the screen dimmed around the
+   cell, its column's header and its row's label. */
+.score-sum-spot {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 104;
+  pointer-events: none;
+}
+.score-sum-spot[hidden] { display: none; }
+.score-sum-spot path { fill: var(--shadow-c); fill-rule: evenodd; }
+@media (prefers-reduced-motion: reduce) {
+  .score-pad { transition: none; }
+  .score-pad__chip.is-fresh { animation: none; }
+}
+
+/* The side-docked pad covers the right edge, so the page gives it that room:
+   the document column, the Play step pinned over the visible viewport, and the
+   play-detail popup. */
+:root.bgb-pad-side body { padding-right: var(--bgb-pad-right, 0px); }
+:root.bgb-pad-side .play-detail-popup__backdrop { right: var(--bgb-pad-right, 0px); }
 
 /* The strip above the grid: which scorepad the table is built on, and which
    expansions are appending rows to it. Absent entirely
@@ -10065,11 +10155,8 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   background: var(--rust-soft);
   color: var(--rust);
 }
-/* The cell and the one thing wrapping it still does: carry `is-neg` so a
-   negative score reads in rust. It used to hold a +/− sign button beside the
-   input as well; the sign now lives on the keypad bar that docks on the number
-   pad (widgets/score-keypad.js), so the button and the preference that turned
-   it on are gone.
+/* The cell's wrapper carries `is-neg` so a negative score reads in rust, and
+   `is-summing` while the score pad's Σ Sum is building its value.
 
    --rust-ink, not --rust: this ink only ever lands on paper, which is light in
    every theme, and the chrome block lifts --rust to #E87B63 for the espresso
@@ -10077,6 +10164,18 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-cell-wrap { display: flex; align-items: center; min-width: 0; }
 .scoring-cell-wrap .scoring-cell { flex: 1 1 auto; min-width: 0; }
 .scoring-cell-wrap.is-neg .scoring-cell { color: var(--rust-ink); }
+.scoring-cell-wrap.is-summing { position: relative; }
+.scoring-cell-wrap.is-summing .scoring-cell { font-weight: 700; border-color: var(--accent-ink); }
+.scoring-cell-wrap.is-summing::before {
+  content: "\03A3";
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 600 0.7rem/1 var(--font-sans);
+  color: var(--polaroid-muted);
+  pointer-events: none;
+}
 .scoring-total.is-neg { color: var(--rust-ink); }
 
 /* The totals band, as a wash of the surface's own hairline rather than the
@@ -11803,14 +11902,18 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 :root.bgb-kb-open:is([data-bgb-layout="wide"], [data-bgb-layout="land"]):has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) #screen-play .play-pager :is(.play-pager__page--players, .play-pager__page--guide, .play-side-bar) {
   display: none;
 }
-/* A score cell has the keyboard: the keypad bar (widgets/score-keypad.js) sits
-   on it with + Round, exactly where the docked CTA would, so the CTA goes and
-   the screen ends at the keypad's 57px instead of the CTA's 76px. */
+/* A score cell has the keyboard or the score pad (widgets/score-keypad.js),
+   which carries + Round where the docked CTA would sit, so the CTA goes and
+   the screen ends at the pad's edge. On the land tier the pad docks on the
+   right, so the pinned screen stops short of it there. */
 :root.bgb-kb-open:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager):has(#screen-play input.scoring-cell:focus) #screen-play .cascade-cta-wrap {
   display: none;
 }
 :root.bgb-kb-open:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager):has(#screen-play input.scoring-cell:focus) #screen-play {
-  padding-bottom: 57px;
+  padding-bottom: 0;
+}
+:root.bgb-kb-open.bgb-pad-side:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) #screen-play {
+  right: var(--bgb-pad-right, 0px);
 }
 
 /* ── Players page: standings (widgets/play-standings.js) ──────────────────

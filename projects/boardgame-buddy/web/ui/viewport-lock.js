@@ -28,9 +28,20 @@
   // .bgb-kb-open means "a keyboard is up", not "the URL bar retracted".
   const KB_OPEN_PX = 120;
   let started = false;
+  // The app's own score pad (widgets/score-keypad.js), which stands in for the
+  // system keyboard on a score cell: its height when docked at the bottom, its
+  // width when docked on the right. It counts as a keyboard in everything
+  // published here, so whatever makes room for one makes room for the pad.
+  let padBottom = 0;
+  let padRight = 0;
 
   function sync() {
-    if (!vv) return; // no data → the CSS fallback ladder wins
+    if (!vv && !padBottom && !padRight) {
+      // No data → the CSS fallback ladder wins, so take back anything the pad set.
+      ["--bgb-vv-h", "--bgb-vv-top", "--bgb-kb-inset", "--bgb-pad-right"].forEach((p) => ROOT.style.removeProperty(p));
+      ROOT.classList.remove("bgb-kb-open", "bgb-pad-side");
+      return;
+    }
     // A pinch-zoomed page reports a shrunken visual viewport that has nothing
     // to do with the keyboard. Hold the last good box until the user zooms out
     // rather than sizing a shell from numbers in zoomed CSS pixels. This is a
@@ -41,14 +52,31 @@
     // on maxTouchPoints, can fail to load offline, and rides on WebKit
     // continuing to honour gesturestart cancellation. So this stays as the last
     // line of defence.
-    if (vv.scale && vv.scale > 1.01) return;
-    const h = Math.round(vv.height);
-    const top = Math.round(vv.offsetTop || 0);
-    const inset = Math.max(0, Math.round(window.innerHeight - h - top));
-    ROOT.style.setProperty("--bgb-vv-h", h + "px");
+    if (vv && vv.scale && vv.scale > 1.01) return;
+    const h = Math.round(vv ? vv.height : window.innerHeight);
+    const top = Math.round(vv ? vv.offsetTop || 0 : 0);
+    const inset = Math.max(0, Math.round(window.innerHeight - h - top)) + padBottom;
+    const pad = padBottom > 0 || padRight > 0;
+    ROOT.style.setProperty("--bgb-vv-h", (h - padBottom) + "px");
     ROOT.style.setProperty("--bgb-vv-top", top + "px");
     ROOT.style.setProperty("--bgb-kb-inset", inset + "px");
-    ROOT.classList.toggle("bgb-kb-open", inset > KB_OPEN_PX);
+    ROOT.style.setProperty("--bgb-pad-right", padRight + "px");
+    ROOT.classList.toggle("bgb-kb-open", inset > KB_OPEN_PX || pad);
+    ROOT.classList.toggle("bgb-pad-side", padRight > 0);
+  }
+
+  /**
+   * The score pad is up (or down, with 0, 0).
+   * @param {number} bottom px it covers along the bottom edge
+   * @param {number} right  px it covers along the right edge
+   */
+  function setPad(bottom, right) {
+    const b = Math.max(0, Math.round(bottom || 0));
+    const r = Math.max(0, Math.round(right || 0));
+    if (b === padBottom && r === padRight) return;
+    padBottom = b;
+    padRight = r;
+    sync();
   }
 
   // Idempotent — init.js calls this once on boot and the listeners live for the
@@ -71,6 +99,7 @@
   window.BgbViewport = {
     start,
     sync,
+    setPad,
     supported: !!vv,
   };
 })();

@@ -661,16 +661,18 @@
 
   // One editable cell.
   //
-  // `type="text"` with `inputmode="numeric"`: the iOS 10-key pad, big keys
-  // and digits only. The sign it lacks, and a key to move on, ride on the bar
-  // widgets/score-keypad.js docks on top of it. Text rather than number so a
-  // half-typed "-" reads back as "-" instead of as "" with badInput set; the
-  // host sanitizes what arrives (sanitizeRoundScore) and writes it back.
+  // `type="text"`, so a half-typed "-" reads back as "-" instead of as "" with
+  // badInput set; the host sanitizes what arrives (sanitizeRoundScore) and
+  // writes it back. On a touch screen `inputmode="none"` keeps the system
+  // keyboard down and the app's score pad (widgets/score-keypad.js) does the
+  // typing; elsewhere it is plain keyboard entry, numeric where a soft
+  // keyboard exists.
   function renderEditableCell(rawValue, i, r, host, label) {
     const val = rawValue == null ? "" : String(rawValue);
     const neg = val.charAt(0) === "-";
+    const mode = window.ScoreKeypad && window.ScoreKeypad.custom ? "none" : "numeric";
     return `<div class="scoring-cell-wrap${neg ? " is-neg" : ""}">
-      <input type="text" inputmode="numeric" enterkeyhint="next" autocomplete="off"
+      <input type="text" inputmode="${mode}" enterkeyhint="next" autocomplete="off"
              id="rg-${host}-${i}-${r}" data-score-cell="${i}-${r}"
              class="scoring-cell"
              aria-label="${escapeAttr(label || "Score")}"
