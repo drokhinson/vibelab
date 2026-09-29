@@ -183,6 +183,57 @@ console.log("Release notices — every exit means the same thing");
   ok("closing on slide one still marks the WHOLE batch", early.seen[0] === NEWEST);
 }
 
+/**
+ * The deck's own last-slide button, as the markup renders it: a target whose
+ * closest() answers from the button's real attributes, so the check fails if
+ * the button carries nothing the shell or the deck acts on.
+ */
+function renderedButton(html, cls) {
+  const tag = (html.match(new RegExp(`<button[^>]*class="${cls}"[^>]*>`)) || [])[0] || "";
+  const attrs = {};
+  for (const [, k, v] of tag.matchAll(/([\w-]+)="([^"]*)"/g)) attrs[k] = v;
+  const self = {
+    nodeType: 1,
+    dataset: Object.fromEntries(
+      Object.entries(attrs)
+        .filter(([k]) => k.startsWith("data-"))
+        .map(([k, v]) => [k.slice(5).replace(/-(\w)/g, (_, c) => c.toUpperCase()), v]),
+    ),
+  };
+  const matches = (sel) => {
+    const cls1 = sel.match(/^\.([\w-]+)$/);
+    if (cls1) return (attrs.class || "").split(/\s+/).includes(cls1[1]);
+    const attr = sel.match(/^\[([\w-]+)(?:="([^"]*)")?\]$/);
+    if (attr) return attr[1] in attrs && (attr[2] == null || attrs[attr[1]] === attr[2]);
+    return false;
+  };
+  self.closest = (sel) => {
+    if (sel === CARD) return {};
+    return sel.split(",").some((part) => matches(part.trim())) ? self : null;
+  };
+  return { tag, target: self };
+}
+
+/** Open a batch, click the last slide's primary button, report the outcome. */
+function finishVia(batch) {
+  const { win, document } = buildSandbox({ pathFor: () => "/discover" });
+  const seen = [];
+  win.ReleaseNotices = { markSeen: (t) => { seen.push(t); return Promise.resolve(); } };
+  win.ReleaseNoticeDeck.open(batch);
+  const root = document.body._last;
+  root._card = {};
+  const { tag, target: t } = renderedButton(root.innerHTML, "rel-deck__next");
+  root._click({ target: t });
+  return { tag, seen, open: win.ReleaseNoticeDeck.isOpen() };
+}
+
+{
+  const one = finishVia([NOTICES[2]]);
+  ok("a single notice renders its Got it button", one.tag !== "");
+  ok("Got it on a single notice closes it", one.open === false);
+  ok("...and marks it seen", one.seen[0] === NEWEST);
+}
+
 {
   const inside = dismissVia({ target: target({ inCard: true }) });
   ok("a tap inside the card does NOT close it", inside.open === true);

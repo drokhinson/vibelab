@@ -77,11 +77,13 @@
     // "Got it" when there is nothing to page through, so a single notice never
     // shows a Next that would be a lie.
     const nextLabel = last ? (_notices.length < 2 ? "Got it" : "Done") : "Next";
-    const nextAct = last ? "close" : "next";
+    // The last button closes through the modal shell's own [data-action=close]
+    // hook, the same close() the x takes, so onClose marks the batch seen.
+    const nextAttr = last ? 'data-action="close"' : 'data-act="next"';
     return `
       <div class="rel-deck__actions">
         ${back}
-        <button class="rel-deck__next" type="button" data-act="${nextAct}">
+        <button class="rel-deck__next" type="button" ${nextAttr}>
           ${escapeHtml(nextLabel)}
         </button>
       </div>

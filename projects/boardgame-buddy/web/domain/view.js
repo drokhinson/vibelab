@@ -253,8 +253,9 @@
           alias: "admin-bgg-data" },
         { name: "admin-publishers",    pattern: /^\/admin\/publishers\/?$/,       build: () => "/admin/publishers",
           alias: "admin-bgg-data" },
+        // Admins write release notices on the What's new screen itself.
         { name: "admin-release-notices", pattern: /^\/admin\/release-notices\/?$/,
-          build: () => "/admin/release-notices" },
+          build: () => "/admin/release-notices", alias: "whats-new" },
         { name: "admin-affiliates",    pattern: /^\/admin\/affiliates\/?$/,       build: () => "/admin/affiliates" },
         // /admin/USAGE, not /admin/stats: that name and that path are already
         // taken above, as the alias for the BGG-stats backfill panel.

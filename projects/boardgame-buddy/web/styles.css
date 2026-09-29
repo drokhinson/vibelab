@@ -17608,6 +17608,8 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .whats-new__date { font-size: 12px; color: var(--ink-faint); }
 .whats-new__title { font-size: 15px; font-weight: 600; line-height: 1.35; }
 .whats-new__body { padding: 2px 0 var(--s-4); }
+.whats-new__date .rel-admin__pill { margin-right: 6px; vertical-align: 1px; }
+.whats-new__admin { margin-top: 0; padding-bottom: var(--s-3); }
 /* Inside the archive the notice is already under a row heading, so its own
    title and date would say the same thing twice. */
 .whats-new__body .rel-note__date,
