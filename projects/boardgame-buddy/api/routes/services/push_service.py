@@ -47,6 +47,7 @@ from ..constants import (
     BGB_VAPID_PRIVATE_KEY,
     BGB_VAPID_PUBLIC_KEY,
     BGB_VAPID_SUBJECT,
+    PUSH_EVENT_TIER,
     PUSH_TIMEOUT_SECONDS,
     PUSH_TTL_SECONDS,
     PushEvent,
@@ -222,7 +223,19 @@ def _dedupe(user_ids: Iterable[str]) -> list[str]:
 # ── Sending ──────────────────────────────────────────────────────────────────
 
 
-def _send_one(sb: Client, sub: dict[str, Any], body: str) -> None:
+def _urgency(event: PushEvent) -> str:
+    """The RFC 8030 Urgency header for an event.
+
+    Without one the push service treats a message as "normal", and FCM holds a
+    normal message for a phone in Doze until the phone next wakes: an invite
+    then lands when the recipient unlocks it, hours after the play was saved.
+    Events waiting on the recipient go "high" so they wake the phone; the
+    pleasant noise stays "normal" and rides the next wake.
+    """
+    return "high" if PUSH_EVENT_TIER.get(event) == PushTier.ACTIONABLE else "normal"
+
+
+def _send_one(sb: Client, sub: dict[str, Any], body: str, urgency: str) -> None:
     """One device. Blocking; runs in a worker thread. Never raises."""
     try:
         webpush(
@@ -238,6 +251,7 @@ def _send_one(sb: Client, sub: dict[str, Any], body: str) -> None:
             # next device's token, which that service would reject.
             vapid_claims={"sub": BGB_VAPID_SUBJECT},
             ttl=PUSH_TTL_SECONDS,
+            headers={"Urgency": urgency},
             timeout=PUSH_TIMEOUT_SECONDS,
         )
     except WebPushException as exc:
@@ -354,8 +368,9 @@ async def send(
             return
 
         body = json.dumps(data)
+        urgency = _urgency(event)
         await asyncio.gather(
-            *(asyncio.to_thread(_send_one, sb, sub, body) for sub in subs)
+            *(asyncio.to_thread(_send_one, sb, sub, body, urgency) for sub in subs)
         )
         # Stamped optimistically for the whole batch rather than per-send: the
         # column is a coarse "this device was reachable recently" for a future

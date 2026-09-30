@@ -243,6 +243,8 @@ def test_the_body_a_browser_receives_decrypts_to_what_was_sent():
         req = svc.received[0]
         assert req["headers"]["content-encoding"] == "aes128gcm"
         assert req["headers"]["authorization"].startswith("vapid ")
+        # BUDDY_ACCEPTED is ALL-tier noise: it rides the phone's next wake.
+        assert req["headers"]["urgency"] == "normal"
 
         plain = http_ece.decrypt(
             req["body"], private_key=key,
@@ -339,6 +341,21 @@ def test_send_never_raises_whatever_happens():
     asyncio.run(P.send(Exploding(), ["u1"], PushEvent.BUDDY_ACCEPTED,
                        P.payload(event=PushEvent.BUDDY_ACCEPTED, title="t", body="b",
                                  url="/", tag="x")))
+
+
+def test_an_event_waiting_on_the_recipient_is_sent_high_urgency():
+    """A push without Urgency is "normal", which FCM holds for a dozing phone
+    until it next wakes — an invite would land when the phone is unlocked."""
+    svc = FakePushService()
+    try:
+        _, sub = _subscription(svc.endpoint)
+        sb = FakeSupabase(tiers={"u1": "actionable"}, subs=[sub])
+        asyncio.run(P.send(sb, ["u1"], PushEvent.PLAY_LINK,
+                           P.payload(event=PushEvent.PLAY_LINK, title="t", body="b",
+                                     url="/", tag="x")))
+        assert svc.received[0]["headers"]["urgency"] == "high"
+    finally:
+        svc.stop()
 
 
 def test_one_person_named_twice_is_notified_once():
