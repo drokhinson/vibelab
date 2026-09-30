@@ -47,7 +47,6 @@ from ..constants import (
     BGB_VAPID_PRIVATE_KEY,
     BGB_VAPID_PUBLIC_KEY,
     BGB_VAPID_SUBJECT,
-    PUSH_EVENT_TIER,
     PUSH_TIMEOUT_SECONDS,
     PUSH_TTL_SECONDS,
     PushEvent,
@@ -226,13 +225,12 @@ def _dedupe(user_ids: Iterable[str]) -> list[str]:
 def _urgency(event: PushEvent) -> str:
     """The RFC 8030 Urgency header for an event.
 
-    Without one the push service treats a message as "normal", and FCM holds a
-    normal message for a phone in Doze until the phone next wakes: an invite
-    then lands when the recipient unlocks it, hours after the play was saved.
-    Events waiting on the recipient go "high" so they wake the phone; the
-    pleasant noise stays "normal" and rides the next wake.
+    FCM holds a "normal" message for a phone in Doze until the phone next
+    wakes. Only a live-lobby invite is worth waking it for: the game is
+    starting now and the tap joins it. Everything else, a saved play included,
+    keeps until the phone is next picked up.
     """
-    return "high" if PUSH_EVENT_TIER.get(event) == PushTier.ACTIONABLE else "normal"
+    return "high" if event == PushEvent.SESSION_INVITE else "normal"
 
 
 def _send_one(sb: Client, sub: dict[str, Any], body: str, urgency: str) -> None:

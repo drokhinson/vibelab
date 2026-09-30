@@ -343,17 +343,21 @@ def test_send_never_raises_whatever_happens():
                                  url="/", tag="x")))
 
 
-def test_an_event_waiting_on_the_recipient_is_sent_high_urgency():
-    """A push without Urgency is "normal", which FCM holds for a dozing phone
-    until it next wakes — an invite would land when the phone is unlocked."""
+@pytest.mark.parametrize("event,urgency", [
+    (PushEvent.SESSION_INVITE, "high"),
+    (PushEvent.PLAY_LINK, "normal"),
+])
+def test_only_a_live_lobby_invite_wakes_a_dozing_phone(event, urgency):
+    """FCM holds a "normal" push for a dozing phone until it next wakes. The
+    lobby is starting now; a saved play can wait for the phone to be picked up."""
     svc = FakePushService()
     try:
         _, sub = _subscription(svc.endpoint)
         sb = FakeSupabase(tiers={"u1": "actionable"}, subs=[sub])
-        asyncio.run(P.send(sb, ["u1"], PushEvent.PLAY_LINK,
-                           P.payload(event=PushEvent.PLAY_LINK, title="t", body="b",
+        asyncio.run(P.send(sb, ["u1"], event,
+                           P.payload(event=event, title="t", body="b",
                                      url="/", tag="x")))
-        assert svc.received[0]["headers"]["urgency"] == "high"
+        assert svc.received[0]["headers"]["urgency"] == urgency
     finally:
         svc.stop()
 
