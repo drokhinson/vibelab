@@ -16255,6 +16255,10 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
 }
 .bgb-spoke-screen .spoke-head__title { color: var(--accent-ink); }
+/* A title-only head (Notifications has no back button) still holds the 44px
+   control row, so the pinned head is --bgb-spoke-head-height tall and a band
+   pinned under it at that offset meets its bottom rule with no seam. */
+.bgb-spoke-screen > .spoke-head .spoke-head__title { min-height: 44px; }
 .bgb-spoke-screen .spoke-head__count { color: var(--sheet-ink-muted); }
 
 /* Buddies-view header reuses .search-topbar instead of .spoke-head — match
@@ -20902,7 +20906,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   top: calc(var(--bgb-header-height) + var(--bgb-spoke-head-height));
   z-index: 15;
   margin: 4px -1rem 0;
-  padding: 0.4rem 1rem 0.45rem;
+  padding: 0.55rem 1rem 0.6rem;
   background: oklch(var(--b1) / 0.95);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -20911,7 +20915,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
      have to draw the same hairline. */
   border-bottom: 1px solid oklch(var(--b3));
   font-family: var(--font-display);
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
