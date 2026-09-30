@@ -641,8 +641,9 @@
     }
 
     _renderPlaySession(card) {
-      // Header reads "You and Sam played 3 games" / "Bill played Catan". The
-      // date is not here — render() emits it once per day above the group.
+      // Header reads "You and Sam" over "played 3 games" / "Bill" over
+      // "played Catan". The date is not here — render() emits it once per
+      // day above the group.
       // Names are clickable: viewer's own name → profile-self, others →
       // profile-other. Each play inside the rail still reuses
       // renderPlayCard so flip / no-flip subtrees / state map keep
@@ -661,7 +662,7 @@
       const gameNameForSingle = (playCount === 1 && firstPlay && firstPlay.game)
         ? firstPlay.game.name
         : null;
-      const title = formatSessionTitleHtml({
+      const title = formatSessionTitle({
         participants: card.participants || [],
         viewer,
         loggerFallback: firstPlay && firstPlay.user,
@@ -707,23 +708,19 @@
       });
     }
 
-    // Title and "Good game" share one row: who played on the left, the
-    // reaction under it and its control on the right. The title and node are
-    // kept on the session so a reaction repaint can rebuild the row without
-    // recomputing them.
+    // Title and "Good game" share one row: who played over what they played
+    // on the left, the reaction control on the right. Each line truncates on
+    // its own, so a long roster can never push the count off the screen. The title and node are kept on the session so a reaction
+    // repaint can rebuild the row without recomputing them.
     _renderSessionHeader(card, title, node) {
-      card._titleHtml = title;
+      card._title = title;
       card._nodeHtml = node;
-      const { count, mine, faces } = this._sessionReactions(card);
-      const who = (count || this._reactableIds(card).length)
-        ? `<span class="play-session__gg-who">${this._reactionSentence(count, mine, faces)}</span>`
-        : "";
       return `
         <header class="play-session__header">
           ${node}
           <div class="play-session__heading">
-            <span class="play-session__title">${title}</span>
-            ${who}
+            <span class="play-session__title">${title.who}</span>
+            <span class="play-session__what">${title.what}</span>
           </div>
           ${this._renderSessionGG(card)}
         </header>
@@ -767,50 +764,57 @@
         .map((p) => p.play_id);
     }
 
+    // Tap says (or takes back) good game; press and hold opens who said it.
+    // An all-mine night has nothing to react to, so its slot is the tally of
+    // good games it received: the same mark and number, and a tap opens the
+    // list too. With none received and nothing to react to, there is no slot.
     _renderSessionGG(card) {
       const ids = this._reactableIds(card);
       const { count, mine } = this._sessionReactions(card);
+      if (!ids.length && !count) return "";
       const mark = `<i data-icon="handshake" class="w-4 h-4"></i>`;
-      // An all-mine night has nothing to react to, so the slot is the tally of
-      // good games it received: the same mark and number as the button, but
-      // not a control. With none received there is nothing to show.
+      const k = escapeAttr(jsStr(sessionKey(card.plays[0])));
+      const hold = `() => window.feedView._showReactors('${k}', this)`;
+      const press = count
+        ? `onpointerdown="BgbLongPress.start(event, ${hold})"
+           onpointermove="BgbLongPress.move(event)"
+           onpointerup="BgbLongPress.end()" onpointercancel="BgbLongPress.end()"
+           oncontextmenu="BgbLongPress.contextmenu(event, ${hold})"`
+        : "";
+      const n = `${count} good game${count === 1 ? "" : "s"}`;
       if (!ids.length) {
-        if (!count) return "";
         return `
-          <span class="play-session__gg play-session__gg--tally"
-                aria-label="${count} good game${count === 1 ? "" : "s"}">
+          <button class="play-session__gg play-session__gg--tally" type="button"
+                  aria-haspopup="dialog" aria-label="${n}, see who"
+                  ${press}
+                  onclick="window.feedView._showReactors('${k}', this)">
             ${mark}<span>${count}</span>
-          </span>
+          </button>
         `;
       }
-      const key = sessionKey(card.plays[0]);
-      const nav = `window.feedView._toggleReaction('${escapeAttr(jsStr(key))}')`;
-      // The sentence beside it already says "Be the first to say good game",
-      // so an empty night's button is the bare mark.
+      const label = mine ? "Take back your good game" : "Say good game";
       return `
         <button class="play-session__gg${mine ? " is-mine" : ""}" type="button"
                 aria-pressed="${mine ? "true" : "false"}"
-                aria-label="${mine ? "Take back your good game" : "Say good game"}"
-                onclick="${nav}">
+                aria-label="${count ? `${label}. ${n}, hold to see who` : label}"
+                ${press}
+                onclick="window.feedView._toggleReaction('${k}')">
           ${mark}${count ? `<span>${count}</span>` : ""}
         </button>
       `;
     }
 
-    // "Be the first to say good game" / "Priya and 2 others said good game".
-    // The viewer, when they are in the set, always leads — you read your own
-    // name first everywhere else in this app.
-    _reactionSentence(count, mine, faces) {
-      if (!count) return "Be the first to say good game";
+    _showReactors(key, trigger) {
+      const card = this._sessionByKey(key);
+      if (!card) return;
+      const { count, faces } = this._sessionReactions(card);
       const me = window.store && window.store.get && window.store.get("user");
-      const lead = mine
-        ? "You"
-        : escapeHtml(
-            (faces[0] && window.Buddy.nameFor(faces[0].user_id, faces[0].display_name)) || "Someone"
-          );
-      const others = count - 1;
-      if (others <= 0) return `${lead} said good game`;
-      return `${lead} and ${others} other${others === 1 ? "" : "s"} said good game`;
+      window.BgbGoodGameSheet.open({
+        count,
+        reactors: faces,
+        viewerId: (me && me.id) || null,
+        returnFocus: trigger || null,
+      });
     }
 
     /**
@@ -882,7 +886,7 @@
       const section = host.querySelector(`.play-session[data-session-key="${esc}"]`);
       const header = section && section.querySelector(".play-session__header");
       if (!header) return;
-      header.outerHTML = this._renderSessionHeader(card, card._titleHtml || "", card._nodeHtml || "");
+      header.outerHTML = this._renderSessionHeader(card, card._title || { who: "", what: "" }, card._nodeHtml || "");
       window.BgbIcons.render(section);
     }
 
@@ -1243,7 +1247,7 @@
 
   // ── Session header ────────────────────────────────────────────────────────
 
-  function formatSessionTitleHtml({ participants, viewer, loggerFallback, gameCount, gameNameForSingle, verb }) {
+  function formatSessionTitle({ participants, viewer, loggerFallback, gameCount, gameNameForSingle, verb }) {
     // Build a "name token" list. Each token has { html, isViewer } where
     // html is the already-escaped, possibly-anchored name span. We rotate
     // "You" to position 0 when the viewer is among the participants.
@@ -1285,10 +1289,10 @@
     // count games. The session header is the only place either appears:
     // the card front carries no "User played Game" line.
     const word = verb || "played";
-    const trailing = gameNameForSingle
+    const what = gameNameForSingle
       ? `${word} ${escapeHtml(gameNameForSingle)}`
       : `${word} ${gameCount} games`;
-    return `${who} ${trailing}`;
+    return { who, what };
   }
 
   function nameLinkHtml(participant, viewer) {

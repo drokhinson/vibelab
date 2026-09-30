@@ -139,13 +139,14 @@
   ];
 
   /**
-   * The Good game footer, in one of the three states the real one has.
+   * The Good game footer, in one of three states.
    *
-   * `views/feed-view.js#_reactionSentence` builds the line, and the shapes it
-   * can produce are the only ones used here: "Be the first to say good game"
-   * at zero, "<name> said good game" at one, and "You and N other(s) said
-   * good game" once the viewer is in the set — the viewer always leads and
-   * the others are COUNTED, never named.
+   * The real feed shows only the handshake and a count, and lists who said it
+   * in a sheet on press-and-hold (`widgets/good-game-sheet.js`). A tour cannot
+   * hold a button, so the vignette spells the list out as a sentence: "Be the
+   * first to say good game" at zero, "<name> said good game" at one, and "You
+   * and N other(s) said good game" once the viewer is in the set — the viewer
+   * always leads and the others are COUNTED, never named.
    *
    * ONE DELIBERATE DIVERGENCE: the real pill drops the words for a bare count
    * the moment anyone reacts (`count ? String(count) : "Good game"`). This
