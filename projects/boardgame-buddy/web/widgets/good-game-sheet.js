@@ -40,8 +40,9 @@
     const name = isMe
       ? "You"
       : window.Buddy.nameFor(r.user_id, r.display_name) || "Someone";
+    const me = isMe && window.store && window.store.get && window.store.get("user");
     const badge = window.BgbBadge.render({
-      avatar: r.avatar || null,
+      avatar: r.avatar || (me && me.avatar) || window.Buddy.avatarFor(r.user_id),
       // The real name, so the viewer's own badge carries their initials
       // rather than "YO".
       displayName: isMe ? (r.display_name || name) : name,

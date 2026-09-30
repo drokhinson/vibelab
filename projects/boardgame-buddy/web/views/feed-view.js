@@ -701,11 +701,30 @@
           : null);
       if (!lead) return "";
       return window.BgbBadge.render({
-        avatar: lead.avatar || null,
+        avatar: this._avatarFor(lead.user_id, card, viewer),
         displayName: window.Buddy.nameFor(lead.user_id, lead.display_name) || "",
         size: "sm",
         extraClass: "play-session__node",
       });
+    }
+
+    // Feed participants carry no avatar, so find the one this person chose
+    // wherever the page already has it: the viewer's own profile, the play's
+    // logger, the night's reactors, then the buddy list. Null falls back to
+    // initials.
+    _avatarFor(userId, card, viewer) {
+      if (!userId) return null;
+      if (viewer && userId === viewer.id) {
+        const me = window.store && window.store.get && window.store.get("user");
+        if (me && me.avatar) return me.avatar;
+      }
+      for (const p of card.plays || []) {
+        if (p.user && p.user.id === userId && p.user.avatar) return p.user.avatar;
+        for (const r of p.reactors || []) {
+          if (r && r.user_id === userId && r.avatar) return r.avatar;
+        }
+      }
+      return window.Buddy.avatarFor(userId);
     }
 
     // Title and "Good game" share one row: who played over what they played

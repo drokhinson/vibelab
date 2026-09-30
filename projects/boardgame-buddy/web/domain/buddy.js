@@ -238,6 +238,19 @@
       return Buddy.aliasFor(userId) || realName || "";
     }
 
+    /**
+     * The avatar a buddy chose, from the cached partner bundle, or null when
+     * they are not a buddy or the bundle has not loaded. For payloads that
+     * name a person without their avatar.
+     * @param {string|null|undefined} userId
+     * @returns {any}
+     */
+    static avatarFor(userId) {
+      if (!userId) return null;
+      const hit = Buddy._accountFor(userId);
+      return (hit && hit.other_avatar) || null;
+    }
+
     /** The cached partner bundle's account row for a user, or null. */
     static _accountFor(userId) {
       const bundle = window.bgbCache && window.bgbCache.peek(CACHE_NS, ALL_KEY);
