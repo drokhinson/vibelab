@@ -1221,6 +1221,10 @@ class PlayPlayerResponse(BaseModel):
     # this model validates are not all re-emitted — one that omits the key must
     # still parse.
     team: str | None = None
+    # An invited seat: `user_id` names the account, which has not accepted, so
+    # the play does not count for them yet. Every viewer sees the seat as that
+    # account; only the invitee's own client acts on the flag.
+    pending: bool = False
 
 
 class PlayResponse(BaseModel):
@@ -2035,6 +2039,13 @@ class NotificationsResponse(BaseModel):
     next_cursor: datetime | None = None
     next_cursor_key: str | None = None
     unread: int = 0
+    # Every unanswered play invite, oldest first, on the first page only.
+    # They are not in `items`, which pages by time: the bell lists them above
+    # everything else until they are answered.
+    invites: list[Notification] = []
+    # Things waiting on an answer: invite entries plus buddy requests
+    # received. The bell's number. Reading the bell does not lower it.
+    pending: int = 0
 
 
 class NotificationsSeenRequest(BaseModel):
@@ -2054,6 +2065,13 @@ class NotificationsSeenResponse(BaseModel):
 
     seen_at: datetime
     unread: int = 0
+
+
+class PlayInvitesAcceptRequest(BaseModel):
+    """The plays whose invites to accept: one play, or every play in a grouped
+    invite entry (its `play_ids`)."""
+
+    play_ids: list[str] = Field(min_length=1, max_length=500)
 
 
 class LinkUnlinkRequest(BaseModel):
@@ -2135,6 +2153,17 @@ class SessionParticipantResponse(BaseModel):
     # without it a team night looks like six identical columns to everyone
     # but the host.
     team: str | None = None
+    # True when this account said the game counts for them: they joined it
+    # themselves, or accepted on the spectator screen. A seat saved while this
+    # is False is written to the play as an invite.
+    accepted: bool = False
+
+
+class SessionSeatAnswer(BaseModel):
+    """The seated account's answer on the spectator screen. False is "Not
+    me": the seat stays at the table as a guest with the same name."""
+
+    accept: bool
 
 
 class SessionScoreRow(BaseModel):

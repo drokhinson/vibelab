@@ -45,6 +45,7 @@ from .models import (
     SessionReorderParticipantsBody,
     SessionResponse,
     SessionScoringTemplateUpdate,
+    SessionSeatAnswer,
     SessionUpdateBody,
 )
 from .services import push_notify, session_service
@@ -143,6 +144,28 @@ async def watch_session(
     """
     return await asyncio.to_thread(
         session_service.watch_session, get_supabase(), code, viewer_id=user.user_id
+    )
+
+
+@router.post(
+    "/sessions/{code}/seat",
+    response_model=SessionResponse,
+    status_code=200,
+    summary="Accept or decline your seat in a live game",
+)
+async def answer_seat(
+    body: SessionSeatAnswer,
+    code: str = Path(..., description="Session code"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SessionResponse:
+    """The host seated this account. Accept counts the game for them when it
+    is saved; declining leaves the seat as a guest with their name."""
+    return await asyncio.to_thread(
+        session_service.answer_seat,
+        get_supabase(),
+        code,
+        user_id=user.user_id,
+        accept=body.accept,
     )
 
 

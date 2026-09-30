@@ -28,7 +28,7 @@ can call the same two. One destination, one pair of routes.
 import asyncio
 from datetime import datetime
 
-from fastapi import Depends, Query
+from fastapi import BackgroundTasks, Depends, Query
 
 from db import get_supabase
 
@@ -39,9 +39,10 @@ from .models import (
     NotificationsResponse,
     NotificationsSeenRequest,
     NotificationsSeenResponse,
+    PlayInvitesAcceptRequest,
     PlayLeaveResponse,
 )
-from .services import notification_service, played_with_service
+from .services import notification_service, played_with_service, push_notify
 
 
 @router.get(
@@ -113,4 +114,28 @@ async def unlink_from_plays(
             batch_ids=payload.import_batch_ids,
         )
     )
+    return PlayLeaveResponse(rows_updated=n)
+
+
+@router.post(
+    "/notifications/invites/accept",
+    response_model=PlayLeaveResponse,
+    status_code=200,
+    summary="Accept the invites on one or more plays",
+)
+async def accept_play_invites(
+    payload: PlayInvitesAcceptRequest,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayLeaveResponse:
+    """Count these plays for the caller. Declining goes through
+    /notifications/unlink, which also clears an invite."""
+    sb = get_supabase()
+    n = await asyncio.to_thread(
+        notification_service.accept_invites, sb, user.user_id, payload.play_ids
+    )
+    if n:
+        # Accepting is when a play starts counting, so it is when a badge can
+        # unlock.
+        background_tasks.add_task(push_notify.achievements_after_play, sb, [user.user_id])
     return PlayLeaveResponse(rows_updated=n)

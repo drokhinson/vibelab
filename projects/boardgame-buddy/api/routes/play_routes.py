@@ -32,7 +32,7 @@ from .models import (
     PlayUpdate,
 )
 from .dependencies import CurrentUser, get_current_user
-from .services import buddy_service, played_with_service, push_notify
+from .services import buddy_service, notification_service, played_with_service, push_notify
 from .services._helpers import raise_for_rpc_error
 
 logger = logging.getLogger(__name__)
@@ -95,7 +95,8 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
 
     Reads player_user_id / player_display_name directly: real-account players
     resolve their display name from their profile, and free-text ghost players
-    use player_display_name.
+    use player_display_name. An invited seat (pending_user_id) reads as its
+    account, marked `pending`.
     """
     players_by_play: dict[str, list[PlayPlayerResponse]] = {pid: [] for pid in play_ids}
     if not play_ids:
@@ -104,15 +105,19 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
     pps = (
         sb.table("boardgamebuddy_play_players")
         .select(
-            "play_id, player_user_id, player_display_name, is_winner, score, "
-            "round_scores, team"
+            "play_id, player_user_id, pending_user_id, player_display_name, "
+            "is_winner, score, round_scores, team"
         )
         .in_("play_id", play_ids)
         .execute()
     )
     rows = pps.data or []
 
-    profile_ids = [r["player_user_id"] for r in rows if r.get("player_user_id")]
+    profile_ids = [
+        r.get("player_user_id") or r.get("pending_user_id")
+        for r in rows
+        if r.get("player_user_id") or r.get("pending_user_id")
+    ]
     profile_lookup: dict[str, dict] = {}
     if profile_ids:
         prof = (
@@ -124,7 +129,7 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
         profile_lookup = {p["id"]: p for p in (prof.data or [])}
 
     for row in rows:
-        uid = row.get("player_user_id")
+        uid = row.get("player_user_id") or row.get("pending_user_id")
         prof_row = profile_lookup.get(uid) if uid else None
         name = (
             (prof_row.get("display_name") if prof_row else None)
@@ -140,6 +145,7 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
                 score=row.get("score"),
                 round_scores=row.get("round_scores"),
                 team=row.get("team"),
+                pending=bool(row.get("pending_user_id")),
             )
         )
     # Sorted to match what the feed RPC already promises
@@ -223,8 +229,9 @@ def load_play_response(sb, play_id: str, viewer_id: str) -> PlayResponse:
     )
 
 
-def _read_linked_at(sb, play_id: str) -> dict[str, str]:
-    """Existing `linked_at` per seated account, for the edit path to carry over.
+def _read_linked_at(sb, play_id: str) -> dict[str, tuple[str, bool]]:
+    """Existing `linked_at` and invite state per seated account, for the edit
+    path to carry over.
 
     PUT /plays/{id} full-replaces the nested lists — it deletes every
     play_players row and re-inserts them — so without this every edit stamps a
@@ -233,26 +240,29 @@ def _read_linked_at(sb, play_id: str) -> dict[str, str]:
     just been added to a play they have been in for two years.
 
     Only account seats are keyed: a ghost has no id to carry a timestamp for,
-    and nothing notifies about one.
+    and nothing notifies about one. The flag is True for a seat that is still
+    an invite, so an edit neither accepts it nor re-invites an accepted one.
     """
     res = (
         sb.table("boardgamebuddy_play_players")
-        .select("player_user_id, linked_at")
+        .select("player_user_id, pending_user_id, linked_at")
         .eq("play_id", play_id)
         .execute()
     )
-    return {
-        r["player_user_id"]: r["linked_at"]
-        for r in (res.data or [])
-        if r.get("player_user_id") and r.get("linked_at")
-    }
+    out: dict[str, tuple[str, bool]] = {}
+    for r in res.data or []:
+        uid = r.get("player_user_id") or r.get("pending_user_id")
+        if uid and r.get("linked_at"):
+            out[uid] = (r["linked_at"], bool(r.get("pending_user_id")))
+    return out
 
 
 def _write_play_players(
     sb,
     play_id: str,
     players: list,
-    linked_at_by_user: dict[str, str] | None = None,
+    owner_id: str,
+    linked_at_by_user: dict[str, tuple[str, bool]] | None = None,
 ) -> list[PlayPlayerResponse]:
     """Insert the play_players rows for a play in ONE bulk statement.
 
@@ -263,7 +273,9 @@ def _write_play_players(
     `linked_at_by_user` is the edit path's carry-over (see _read_linked_at). A
     player already on the play keeps the timestamp they were first seated at;
     one who is genuinely new to it is stamped now and is notified, which is the
-    whole point.
+    whole point. It also carries whether the seat is still an invite. A new
+    account other than `owner_id` is written as an invite, as bgb_log_play
+    writes one.
 
     EVERY ROW CARRIES `linked_at`, including the ghosts that have no carry-over
     to look up. It cannot be left off for some rows and set on others, because
@@ -284,8 +296,8 @@ def _write_play_players(
     on most rows of most plays. Setting it only where there is a side would put
     the batch back into mixed key sets — a different column, the same 500. The
     column is nullable, so an explicit NULL is both harmless and correct.
-    `player_user_id` is the one key that IS conditional, which is safe for the
-    narrower reason that a ghost genuinely has none.
+    `player_user_id` and `pending_user_id` are unconditional too: an account
+    seat sets exactly one of them and the other goes as an explicit NULL.
 
     The roster itself is already checked by the time it gets here: this is only
     reached from PUT /plays/{id}, whose PlayUpdate validator refuses an empty
@@ -305,17 +317,22 @@ def _write_play_players(
         # PlayerEntry has already turned "" into None (an untagged seat is NULL,
         # never an empty tag everyone shares), so this rides through as-is.
         team = getattr(p, "team", None)
+        linked_at, was_pending = carried.get(player_uid) or (seated_now, None)
+        if was_pending is None:
+            pending = bool(player_uid) and player_uid != owner_id
+        else:
+            pending = was_pending
         row: dict = {
             "play_id": play_id,
             "is_winner": p.is_winner,
             "score": p.score,
             "player_display_name": p.name,
             "round_scores": round_scores,
-            "linked_at": carried.get(player_uid) or seated_now,
+            "linked_at": linked_at,
             "team": team,
+            "player_user_id": None if pending else player_uid,
+            "pending_user_id": player_uid if pending else None,
         }
-        if player_uid:
-            row["player_user_id"] = player_uid
         rows.append(row)
         out.append(PlayPlayerResponse(
             user_id=player_uid,
@@ -324,6 +341,7 @@ def _write_play_players(
             score=p.score,
             round_scores=round_scores,
             team=team,
+            pending=pending,
         ))
     sb.table("boardgamebuddy_play_players").insert(rows).execute()
     return out
@@ -599,7 +617,7 @@ def _update_play_sync(sb: Client, play_id: str, user_id: str, body: PlayUpdate) 
     carried = _read_linked_at(sb, play_id)
     sb.table("boardgamebuddy_play_players").delete().eq("play_id", play_id).execute()
     sb.table("boardgamebuddy_play_expansions").delete().eq("play_id", play_id).execute()
-    _write_play_players(sb, play_id, body.players, linked_at_by_user=carried)
+    _write_play_players(sb, play_id, body.players, user_id, linked_at_by_user=carried)
     # Every expansion row names a game in the OLD base game's tree, so a pivot
     # drops the lot whatever the body asked for. The client clears its own list
     # when the user picks a new game; this is the half that can't be skipped,
@@ -818,3 +836,26 @@ async def leave_play(
     return await asyncio.to_thread(_leave_play_sync, sb, play_id, user.user_id)
 
 
+
+
+@router.post(
+    "/plays/{play_id}/accept",
+    response_model=PlayLeaveResponse,
+    status_code=200,
+    summary="Accept your invite to a play",
+)
+async def accept_play(
+    background_tasks: BackgroundTasks,
+    play_id: str = Path(..., description="Play UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayLeaveResponse:
+    """Count a play you were invited to. Declining is POST /plays/{id}/leave,
+    which leaves the seat as a guest with your name."""
+    sb = get_supabase()
+    n = await asyncio.to_thread(
+        notification_service.accept_invites, sb, user.user_id, [play_id]
+    )
+    if n == 0:
+        raise HTTPException(status_code=404, detail="No invite to accept on this play")
+    background_tasks.add_task(push_notify.achievements_after_play, sb, [user.user_id])
+    return PlayLeaveResponse(rows_updated=n)

@@ -68,7 +68,7 @@ SEATED_AT = "2024-01-01T00:00:00+00:00"
 
 def _write(players, carried=None):
     sb = _FakeSb()
-    out = _write_play_players(sb, "play-1", players, linked_at_by_user=carried)
+    out = _write_play_players(sb, "play-1", players, HOST, linked_at_by_user=carried)
     return sb.rows, out
 
 
@@ -76,19 +76,19 @@ def test_every_row_in_a_mixed_batch_carries_linked_at():
     """The field case: a carried-over host seat beside a ghost with none."""
     rows, _ = _write(
         [_Seat("Me", user_id=HOST), _Seat("Sean D")],
-        carried={HOST: SEATED_AT},
+        carried={HOST: (SEATED_AT, False)},
     )
     assert len(rows) == 2
     assert all("linked_at" in r for r in rows)
     assert all(r["linked_at"] is not None for r in rows)
     # One statement, one column list: differing key sets are the bug itself.
-    assert len({frozenset(r) - {"player_user_id"} for r in rows}) == 1
+    assert len({frozenset(r) for r in rows}) == 1
 
 
 def test_a_returning_seat_keeps_its_timestamp_and_a_new_one_is_stamped_now():
     rows, _ = _write(
         [_Seat("Me", user_id=HOST), _Seat("Buddy", user_id=BUDDY), _Seat("Sean D")],
-        carried={HOST: SEATED_AT},
+        carried={HOST: (SEATED_AT, False)},
     )
     by_name = {r["player_display_name"]: r for r in rows}
     assert by_name["Me"]["linked_at"] == SEATED_AT
@@ -98,11 +98,32 @@ def test_a_returning_seat_keeps_its_timestamp_and_a_new_one_is_stamped_now():
     assert by_name["Buddy"]["linked_at"] == by_name["Sean D"]["linked_at"]
 
 
-def test_a_ghost_has_no_player_user_id_key():
-    """The other conditional key, which is fine: nullable, and NULL is correct."""
+def test_a_ghost_has_no_account_on_either_column():
     rows, _ = _write([_Seat("Sean D")])
-    assert "player_user_id" not in rows[0]
+    assert rows[0]["player_user_id"] is None
+    assert rows[0]["pending_user_id"] is None
     assert rows[0]["player_display_name"] == "Sean D"
+
+
+def test_a_new_account_seat_is_an_invite_and_the_owner_is_not():
+    rows, out = _write([_Seat("Me", user_id=HOST), _Seat("Buddy", user_id=BUDDY)])
+    by_name = {r["player_display_name"]: r for r in rows}
+    assert by_name["Me"]["player_user_id"] == HOST
+    assert by_name["Me"]["pending_user_id"] is None
+    assert by_name["Buddy"]["player_user_id"] is None
+    assert by_name["Buddy"]["pending_user_id"] == BUDDY
+    assert [o.pending for o in out] == [False, True]
+
+
+def test_an_edit_keeps_each_seat_as_accepted_or_invited_as_it_was():
+    accepted = _write(
+        [_Seat("Buddy", user_id=BUDDY)], carried={BUDDY: (SEATED_AT, False)}
+    )[0][0]
+    invited = _write(
+        [_Seat("Buddy", user_id=BUDDY)], carried={BUDDY: (SEATED_AT, True)}
+    )[0][0]
+    assert accepted["player_user_id"] == BUDDY and accepted["pending_user_id"] is None
+    assert invited["pending_user_id"] == BUDDY and invited["player_user_id"] is None
 
 
 def test_the_create_path_with_no_carry_over_still_stamps_every_row():
@@ -114,5 +135,5 @@ def test_the_create_path_with_no_carry_over_still_stamps_every_row():
 
 def test_an_empty_roster_writes_nothing():
     sb = _FakeSb()
-    assert _write_play_players(sb, "play-1", []) == []
+    assert _write_play_players(sb, "play-1", [], HOST) == []
     assert sb.rows is None
