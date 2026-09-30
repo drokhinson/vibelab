@@ -316,6 +316,12 @@
      */
     _onMessage(ev) {
       const msg = ev && ev.data;
+      if (msg && msg.type === "bgb:push-received") {
+        const view = window.notificationsView;
+        if (view && view._mounted) view._refresh();
+        else if (window.NotificationFeed) window.NotificationFeed.refreshBell();
+        return;
+      }
       if (!msg || msg.type !== "bgb:push-nav" || !msg.url) return;
       try {
         const url = new URL(msg.url, window.location.origin);

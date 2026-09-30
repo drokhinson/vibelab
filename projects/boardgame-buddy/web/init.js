@@ -935,7 +935,7 @@
   // inside their fresh window so this is cheap to call freely. Debounced so
   // OS focus-flapping doesn't fan out into a refresh storm.
   let _lastFocusRefresh = 0;
-  document.addEventListener("visibilitychange", () => {
+  const onResume = () => {
     if (document.visibilityState !== "visible") return;
     if (!window.store.get("user")) return;
     const now = Date.now();
@@ -957,7 +957,11 @@
     // have returned without an `online` event firing (the OS suspended the
     // page across the transition). Cheap: flush() no-ops when offline or empty.
     if (window.Outbox) window.Outbox.flush();
-  });
+  };
+  document.addEventListener("visibilitychange", onResume);
+  // A page restored from the back-forward cache comes back without a
+  // visibilitychange on some browsers, iOS standalone among them.
+  window.addEventListener("pageshow", (e) => { if (e.persisted) onResume(); });
 
   document.addEventListener("DOMContentLoaded", () => {
     // Start publishing the visible-viewport box as CSS custom properties. Every

@@ -91,6 +91,12 @@
         }
       });
 
+      // An app left open on this screen shows the list it was mounted with, so
+      // coming back to it re-pulls page one.
+      this.listenDom("visibilitychange", () => {
+        if (document.visibilityState === "visible") this._refresh();
+      });
+
       const warm = window.NotificationFeed.peekConfirmed();
       if (warm) this._takePage(warm);
       this.render();
@@ -103,6 +109,11 @@
         await this._load({ initial: true });
       }
       this._attachPull();
+    }
+
+    /** The bell (or a tapped push) routed here while already open. */
+    onParamsChange() {
+      return this._refresh();
     }
 
     async onUnmount() {

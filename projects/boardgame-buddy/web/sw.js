@@ -157,6 +157,22 @@ async function showPush(event) {
     renotify: !!data.tag && !(await isQuietUpdate(data, tag)),
     data: { url: data.url || "/notifications" },
   });
+  await tellClients();
+}
+
+/**
+ * An open app learns of the push here. The bell is otherwise refreshed only
+ * on boot and on focus, and an app already in the foreground gets neither.
+ */
+async function tellClients() {
+  const clients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  for (const client of clients) {
+    if (new URL(client.url).origin !== self.location.origin) continue;
+    try { client.postMessage({ type: "bgb:push-received" }); } catch (_) {}
+  }
 }
 
 /**
