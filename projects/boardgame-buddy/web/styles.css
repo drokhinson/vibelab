@@ -447,6 +447,7 @@
      .buddy-qr-sheet,
      .ghost-claim-sheet,
      .alias-sheet,
+     .gg-sheet,
      .ghost-name-sheet,
      .chapter-import-sheet,
      .tmpl-sheet,
@@ -503,6 +504,7 @@
      .buddy-qr-sheet,
      .ghost-claim-sheet,
      .alias-sheet,
+     .gg-sheet,
      .ghost-name-sheet,
      .chapter-import-sheet,
      .tmpl-sheet,
@@ -4859,7 +4861,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--ink-muted);
   letter-spacing: -0.005em;
 }
-.play-session__gg-who {
+/* What they played, on its own line under who, so the count never shares a
+   line with a roster long enough to truncate it. */
+.play-session__what {
   min-width: 0;
   font-size: 12px;
   /* --ink-faint is 4.2:1 on the ground; this line is read, not decoration. */
@@ -4890,6 +4894,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+  /* Press and hold opens who said good game (ui/long-press.js); without these
+     iOS answers the same hold with its text-selection callout. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
   transition: background 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
 }
 .play-session__gg::before { content: ""; position: absolute; inset: -4px; }
@@ -4909,16 +4918,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border-color: transparent;
   color: var(--on-accent);
 }
-/* Your own night's tally: read-only, so the quiet wash rather than the fill a
-   control takes. */
+/* Your own night's tally: it opens who said good game rather than saying it,
+   so the quiet wash rather than the fill a reaction takes. */
 .play-session__gg.play-session__gg--tally {
-  cursor: default;
   background: var(--accent-quiet);
   border-color: transparent;
   color: var(--accent);
 }
-.play-session__gg.play-session__gg--tally::before { content: none; }
-.play-session__gg.play-session__gg--tally:active { transform: none; }
 .play-session__name {
   font-weight: 600;
   color: var(--ink);
@@ -7968,6 +7974,17 @@ html.bgb-ptr-armed body {
   cursor: pointer;
 }
 .alias-sheet__remove:active { transform: scale(0.99); }
+
+/* ── Good game sheet ──────────────────────────────────────────────────────
+   Rows are .bgb-sheet__opt with a badge leading; named in the re-point list
+   above, so the surface family resolves to chrome in both themes. */
+.gg-sheet__row > .user-badge { flex: 0 0 auto; }
+.gg-sheet__more {
+  flex: none;
+  margin: 6px 10px 2px;
+  font-size: 0.82rem;
+  color: var(--polaroid-muted);
+}
 
 /* ── The alias pencil ─────────────────────────────────────────────────────
    One control, three surfaces (the Buddies row, a Gather seat, a play-detail
