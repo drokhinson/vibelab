@@ -2074,6 +2074,18 @@ class PlayInvitesAcceptRequest(BaseModel):
     play_ids: list[str] = Field(min_length=1, max_length=500)
 
 
+class PlayInviteItem(BaseModel):
+    """One play in a grouped invite, for reviewing it play by play."""
+
+    play_id: str
+    game_name: str | None = None
+    played_at: date | None = None
+
+
+class PlayInviteItemsResponse(BaseModel):
+    items: list[PlayInviteItem]
+
+
 class LinkUnlinkRequest(BaseModel):
     """What to remove yourself from — plays, runs, or whole imports.
 
@@ -2157,11 +2169,14 @@ class SessionParticipantResponse(BaseModel):
     # themselves, or accepted on the spectator screen. A seat saved while this
     # is False is written to the play as an invite.
     accepted: bool = False
+    # True when this account said "not me" on the spectator screen. The seat
+    # keeps its account on the lobby, and the saved play keeps it as a guest.
+    declined: bool = False
 
 
 class SessionSeatAnswer(BaseModel):
     """The seated account's answer on the spectator screen. False is "Not
-    me": the seat stays at the table as a guest with the same name."""
+    me": the saved play keeps the seat as a guest with the same name."""
 
     accept: bool
 

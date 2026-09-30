@@ -159,7 +159,7 @@ async def answer_seat(
     user: CurrentUser = Depends(get_current_user),
 ) -> SessionResponse:
     """The host seated this account. Accept counts the game for them when it
-    is saved; declining leaves the seat as a guest with their name."""
+    is saved; declining saves the seat as a guest with their name."""
     return await asyncio.to_thread(
         session_service.answer_seat,
         get_supabase(),

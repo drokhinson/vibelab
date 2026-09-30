@@ -548,6 +548,24 @@
     }
 
     /**
+     * Answer the seat the host gave this account in `code`'s lobby.
+     *
+     * `accept: true` makes the seat count: the host's save files it as this
+     * account's play rather than as an invite. `accept: false` is "Not me" —
+     * the seat keeps its column on the host's grid, and the host's save files
+     * it as a guest under the same display name.
+     *
+     * Rejects with a 404 when this account holds no seat there.
+     *
+     * @param {string} code
+     * @param {boolean} accept
+     * @returns {Promise<Object>} the same session bundle fetchLobby returns
+     */
+    static answerSeat(code, accept) {
+      return window.api.post(`/sessions/${code}/seat`, { accept: !!accept });
+    }
+
+    /**
      * Adopt a session bundle as THIS device's host draft, and publish it.
      *
      * The host re-entering their own session — from the code box, the joinable

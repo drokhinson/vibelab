@@ -138,6 +138,7 @@
 --            country_code TEXT, reaction_count INT, viewer_reacted BOOLEAN,
 --            reactors JSONB, import_batch_id UUID, scoring_template JSONB)
 --   Defined in: db/migrations/003_baseline_functions_social.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/services/feed_service.py
 --   Purpose:    Visible plays for the Feed: any play where the viewer or
@@ -314,6 +315,7 @@
 -- bgb_game_detail_bundle(game_uuid UUID, viewer UUID, plays_limit INT DEFAULT 5)
 --   → JSONB
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/game_routes.py
 --               (GET /games/{game_id}/bundle)
@@ -342,6 +344,7 @@
 --                    plays_per_page INT DEFAULT 10)
 --   → JSONB
 --   Defined in: db/migrations/003_baseline_functions_social.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/profile_routes.py
 --               (GET /profile/bundle)
@@ -437,6 +440,7 @@
 --     expires_at, finalized_play_id, scoring_template }
 --     or {"error": "not_found"}
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/services/session_service.py
 --               (_build_response — the response builder for every session
@@ -489,6 +493,7 @@
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
 --     "guest_name_required"}
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/services/session_service.py
 --               (join_session — POST /sessions/{code}/join)
@@ -549,6 +554,7 @@
 --     BoardGameGeek play they already have — the caller re-reads that row.
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
 --   Defined in: db/migrations/062_decimal_scores.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by
@@ -612,6 +618,7 @@
 --     when the payload's client_key is one bgb_log_play already stored, or
 --     {"error": "not_found" | "expired" | "forbidden" | "game_not_found"}
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/services/session_service.py
 --               (finalize_session — POST /sessions/{code}/finalize)
@@ -636,6 +643,7 @@
 --   → JSONB { plays: [models.PlayResponse-shaped...], total }
 --   `players` entries carry `team`, same roster shape as bgb_feed_plays.
 --   Defined in: db/migrations/003_baseline_functions_social.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/play_routes.py
 --               (list_plays — GET /plays).
@@ -874,6 +882,7 @@
 --   → JSONB { "accounts": [BuddyEdgeResponse…], "pending": [PendingBuddyEdge…],
 --             "ghosts": [GhostPlayer…], "recent": [PlayedWithUser…] }
 --   Defined in: db/migrations/003_baseline_functions_social.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/services/played_with_service.py
 --               (fetch_play_partners — GET /play-partners; fetch_played_with
@@ -1005,6 +1014,7 @@
 -- bgb_link_ghost(p_viewer UUID, p_display_name TEXT, p_target UUID)
 --   → JSONB { "updated": INT } | { "error": "not_found" }
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  services/played_with_service.link_ghost (POST /ghost-players/link)
 --   Purpose:    Stamp a real account onto every ghost row matching a name in
@@ -1020,6 +1030,7 @@
 -- bgb_merge_ghosts(p_viewer UUID, p_source TEXT, p_target TEXT)
 --   → JSONB { "updated": INT }
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  services/played_with_service.merge_ghosts (POST /ghost-players/merge)
 --   Purpose:    Collapse two spellings of one ghost. Same query-string cliff as
@@ -1111,6 +1122,7 @@
 -- bgb_link_ghost_rows(p_owner UUID, p_name_key TEXT, p_target UUID)
 --   → INT (rows moved)
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  bgb_link_ghost, bgb_accept_ghost_claim (SQL only — no route)
 --   Purpose:    THE ghost→account merge, shared so the owner-initiated link
@@ -1122,6 +1134,7 @@
 --   → JSONB { exists, play_count, last_played_at, last_game_name,
 --             ghost_display_name, collides, visible }
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   sql
 --   Called by:  bgb_ghost_claim_detail, bgb_create_ghost_claim,
 --               bgb_accept_ghost_claim, bgb_dismiss_ghost_claim (SQL only)
@@ -1139,6 +1152,7 @@
 --              ghost_display_name, ghost_name_key, play_count, last_played_at,
 --              last_game_name, match_score, claim_status, claim_id} ]
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  services/ghost_claim_service.fetch_suggestions
 --               (GET /ghost-claims/suggestions)
@@ -1170,6 +1184,7 @@
 -- bgb_ghost_claims(p_viewer UUID)
 --   → JSONB { incoming: [...], outgoing: [...] }
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  services/ghost_claim_service.list_claims (GET /ghost-claims)
 --   Purpose:    Both sides of the request list, mirroring GET /buddies/requests.
@@ -1482,6 +1497,7 @@
 --                        p_batch_ids UUID[] DEFAULT '{}')
 --   → INT (rows moved)
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/063_play_invites.sql
 --   Language:   plpgsql
 --   Called by:  services/played_with_service.ghost_out_of_plays
 --               (POST /notifications/unlink, and POST /plays/{id}/leave
@@ -1561,3 +1577,43 @@
 --               "links made" wants. Play origin is derived in a CASE whose
 --               ORDER is load-bearing: a BGG or BGA play carries an
 --               import_batch_id too, so the batch arm has to come last.
+
+-- bgb_accept_play_invites(p_viewer UUID, p_play_ids UUID[])
+--   → INT (seats moved)
+--   Defined in: db/migrations/063_play_invites.sql
+--   Language:   plpgsql
+--   Called by:  services/notification_service.accept_invites
+--               (POST /plays/{id}/accept, POST /notifications/invites/accept)
+--   Purpose:    Accept the viewer's invites on these plays: pending_user_id
+--               moves to player_user_id, and the plays start counting for
+--               them. linked_at is left as the invite's. Declining is
+--               bgb_ghost_out_of_plays.
+
+-- bgb_play_invites(p_viewer UUID, p_limit INT DEFAULT 100)
+--   → TABLE shaped like bgb_notifications, kind 'play_invite'
+--   Defined in: db/migrations/063_play_invites.sql
+--   Language:   sql
+--   Called by:  services/notification_service.fetch_invites (first page of
+--               GET /notifications, and /bootstrap through it)
+--   Purpose:    Every unanswered invite, grouped by import batch, run or act
+--               like bgb_notifications' play rows, oldest first. The bell's
+--               "Needs an answer" section.
+
+-- bgb_notifications_pending(p_viewer UUID)
+--   → INT
+--   Defined in: db/migrations/063_play_invites.sql
+--   Language:   sql
+--   Called by:  services/notification_service.pending_count
+--   Purpose:    The number on the bell: invite entries plus buddy requests
+--               received. Reading the bell does not lower it.
+
+-- bgb_answer_session_seat(p_code TEXT, p_user UUID, p_accept BOOLEAN)
+--   → JSONB session bundle (bgb_session_bundle), or {"error": "not_found"} /
+--     {"error": "not_seated"}
+--   Defined in: db/migrations/063_play_invites.sql
+--   Language:   plpgsql
+--   Called by:  services/session_service.answer_seat (POST /sessions/{code}/seat)
+--   Purpose:    The seated account answers on the spectator screen: accept
+--               stamps accepted_at, "not me" stamps declined_at.
+--               bgb_finalize_session saves the first as counted and the
+--               second as a guest.

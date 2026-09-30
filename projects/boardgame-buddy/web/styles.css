@@ -448,6 +448,7 @@
      .ghost-claim-sheet,
      .alias-sheet,
      .gg-sheet,
+     .invite-sheet,
      .ghost-name-sheet,
      .chapter-import-sheet,
      .tmpl-sheet,
@@ -505,6 +506,7 @@
      .ghost-claim-sheet,
      .alias-sheet,
      .gg-sheet,
+     .invite-sheet,
      .ghost-name-sheet,
      .chapter-import-sheet,
      .tmpl-sheet,
@@ -3778,6 +3780,23 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   box-sizing: content-box;
 }
 .bgb-global-header__dot[hidden] { display: none; }
+/* Something waits on an answer: the dot grows into a count. Shared by the
+   header bell and its rail copy (.bgb-nav__dot). */
+.bgb-global-header__dot.is-count,
+.bgb-nav__dot.is-count {
+  width: auto;
+  min-width: 8px;
+  height: 14px;
+  padding: 0 4px;
+  top: -7px;
+  right: -8px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ── Left rail (wide tier) ──────────────────────────────────────────────────
    Same element, stood on its end. On a screen wide enough (≥ 1024px, or
@@ -6070,8 +6089,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    rules live once and both families name them. The markup stays each screen's
    own — only the presentation is shared. */
 .bgg-flow__nav,
-.imp-nav,
-.bgbnotif-bar {
+.imp-nav {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
   /* Pinned to the content column, not the viewport — the same recipe as
@@ -6090,8 +6108,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   pointer-events: none;
 }
 .bgg-flow__nav > *,
-.imp-nav > *,
-.bgbnotif-bar > * { pointer-events: auto; }
+.imp-nav > * { pointer-events: auto; }
 .bgg-flow__nav-back,
 .bgg-flow__nav-next,
 .imp-nav__back,
@@ -6668,6 +6685,43 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--paper-ink);
   background: color-mix(in srgb, var(--team-tint) 16%, var(--polaroid-bg));
   box-shadow: inset 3px 0 0 var(--team-tint);
+}
+/* The viewer's own seat: the Accept / Not me strip, then the chip that
+   replaces it. The mount is a stable host with no box of its own, so an empty
+   one adds no gap to the cascade screen's flex column. */
+.session-viewer__seat-mount { display: contents; }
+.session-viewer__seat {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-color: var(--accent-ink);
+}
+.session-viewer__seat-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.session-viewer__seat-text strong { font-weight: 700; }
+.session-viewer__seat-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* ≥44px hit area (WCAG 2.5.5) — DaisyUI's btn-sm is 32px. */
+.session-viewer__seat-btn { min-height: 44px; min-width: 88px; }
+.session-viewer__seat-chip {
+  flex: none;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
 }
 .session-viewer__guide-mount { margin-top: 0.25rem; }
 /* Edit mode */
@@ -13145,6 +13199,19 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   line-height: 1.35;
   color: var(--polaroid-muted);
 }
+/* Session-viewer wrap-up only: the joiner's own seat counted toward their stats. */
+.polaroid-popup__seat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
 /* Doubled class so this beats the base `.polaroid-popup__actions` rule (same
    single-class specificity, later in the file) that right-aligns the
    confirm/alert footers. The wrap-up card carries one full-width CTA, not a
@@ -14879,6 +14946,31 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 .play-detail__game-moved i { flex-shrink: 0; margin-top: 0.1rem; }
 .play-detail__game-moved strong { color: var(--polaroid-accent, var(--accent)); }
+/* The invitee's answer banner: their seat on this play is an invite until
+   they accept it. Paper surface, so it reads the polaroid family; the accent
+   wash marks it as the one thing on the card waiting on an answer. */
+.play-detail__invite {
+  display: flex; flex-direction: column; gap: 0.45rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid color-mix(in oklab, var(--accent-ink) 35%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--accent-ink) 8%, var(--polaroid-bg));
+  color: var(--polaroid-ink);
+}
+.play-detail__invite-tag {
+  align-self: flex-start;
+  font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent-ink);
+}
+.play-detail__invite-text {
+  margin: 0;
+  font-size: 0.85rem; line-height: 1.45;
+  color: var(--polaroid-muted);
+}
+.play-detail__invite-text strong { color: var(--polaroid-ink); font-weight: 600; }
+.play-detail__invite-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+.play-detail__invite-btn { flex: 1 1 0; min-height: 44px; }
 
 /* Quiet ghost chrome for the two expansion affordances, matching
    .play-detail__init-rounds — both are opt-ins, not primary actions. */
@@ -20790,13 +20882,11 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
    not photographs, and every colour below reads from the chrome column
    (--polaroid-bg / --polaroid-ink / --polaroid-muted / --card-border /
    --accent-ink) rather than oklch(var(--b*)), which would invert on paper.
-   .bgbnotif-bar's geometry lives with the other docked footers above.
    ══════════════════════════════════════════════════════════════════════════ */
 .bgbnotif-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* Clear the docked bar while something is ticked; harmless otherwise. */
   padding-bottom: 8px;
 }
 
@@ -20845,10 +20935,6 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
    avatar and a thumbnail, and a third small circle in that cluster reads as
    another piece of data instead of as state. */
 .bgbnotif-row.is-unread { border-left: 3px solid var(--alert-fill); }
-.bgbnotif-row.is-selected {
-  border-color: var(--accent);
-  background: var(--accent-quiet);
-}
 
 .bgbnotif-row__main {
   flex: 1 1 auto;
@@ -20859,9 +20945,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   /* 56px, not 44: rows sit flush against each other, so a slightly-off thumb
      lands on the neighbour. */
   min-height: 56px;
-  /* The circle owns the leading gutter on a play row, so the body starts
-     tight against it; .bgbnotif-row--buddy pays the 12px back. */
-  padding: 10px 8px 10px 4px;
+  padding: 10px 8px 10px 12px;
   background: none;
   border: none;
   text-align: left;
@@ -20923,31 +21007,6 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   place-items: center;
 }
 
-/* The select circle. Its own button beside .bgbnotif-row__main rather than
-   nested inside it, so selecting and opening cannot fight over one target.
-   36px visible for a calm row, padded to a 44px hit area by the ::before —
-   .claude/rules/mobile-web.md §5 — which also puts ~8px of clear space between
-   its zone and the row body's. */
-.bgbnotif-row__pick {
-  position: relative;
-  flex: none;
-  width: 36px;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 0 0 8px;
-  border: none;
-  background: none;
-  color: var(--polaroid-muted);
-  cursor: pointer;
-}
-.bgbnotif-row__pick::before { content: ""; position: absolute; inset: -4px; }
-.bgbnotif-row__pick[aria-checked="true"] { color: var(--accent-ink); }
-.bgbnotif-row__pick:active:not(:disabled) { background: oklch(var(--bc) / 0.1); }
-.bgbnotif-row__pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
-.bgbnotif-row__pick:disabled { opacity: 0.45; cursor: not-allowed; }
-
 /* Answering a buddy request where it is read. Stacked rather than inline so
    both controls clear 44px on a narrow phone without squeezing the name beside
    them; neither is --rust-ink, because declining a request loses none of the
@@ -20987,42 +21046,71 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .bgbnotif-row__accept:focus-visible,
 .bgbnotif-row__decline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* A buddy row has no thumbnail to lead with, so its mark sits in the art slot
-   and the row keeps the same rhythm as a play row beside it. */
-.bgbnotif-row--buddy .bgbnotif-row__main { padding-left: 12px; }
+/* Waiting on an answer. The accent rail marks it as a question rather than as
+   news, and holds after the bell is read, which the unread rail does not. */
+.bgbnotif-row--owed { border-left: 3px solid var(--accent-fill); }
 
-.bgbnotif-bar {
+.bgbnotif-day__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-family: var(--font-sans, inherit);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  vertical-align: 1px;
+}
+
+/* ── Invite review sheet ──────────────────────────────────────────────────
+   One play per row with its own Decline; the foot accepts the rest. Named in
+   the re-point list above. */
+.invite-sheet__row {
+  flex: none;
+  display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--polaroid-line);
 }
-.bgbnotif-bar__clear {
-  min-height: 52px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--rounded-btn, 0.6rem);
-  background: var(--bg-1);
-  color: var(--ink);
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.bgbnotif-bar__clear:disabled { opacity: 0.5; cursor: not-allowed; }
-.bgbnotif-bar__go {
-  flex: 1 1 auto;
-  min-height: 52px;
-  border: 0;
-  border-radius: var(--rounded-btn, 0.6rem);
-  /* --rust-ink, not --rust: this button is the dangerous one and has to read
-     that way on a surface that is light in both themes. */
-  background: var(--rust-ink);
-  color: var(--on-rust);
+.invite-sheet__row.is-declined .invite-sheet__what { opacity: 0.5; }
+.invite-sheet__what { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.invite-sheet__game {
+  color: var(--polaroid-ink);
   font-weight: 700;
-  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.invite-sheet__date { color: var(--polaroid-muted); font-size: 0.8rem; }
+.invite-sheet__decline {
+  flex: none;
+  min-height: 36px;
+  min-width: 84px;
+  padding: 0 12px;
+  border: 1px solid var(--polaroid-line);
+  border-radius: var(--rounded-btn, 0.6rem);
+  background: none;
+  color: var(--polaroid-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
   cursor: pointer;
 }
-.bgbnotif-bar__go:disabled { opacity: 0.5; cursor: not-allowed; }
-.bgbnotif-bar__clear:focus-visible,
-.bgbnotif-bar__go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.invite-sheet__decline:disabled { opacity: 0.55; cursor: not-allowed; }
+.invite-sheet__decline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.invite-sheet__done { flex: none; color: var(--polaroid-muted); font-size: 0.82rem; }
+.invite-sheet__note {
+  flex: none;
+  margin: 12px 10px;
+  color: var(--polaroid-muted);
+  font-size: 0.88rem;
+}
 
 .bgbnotif-state { padding: 40px 24px; text-align: center; }
 .bgbnotif-state__art { width: 120px; height: 120px; margin: 0 auto 12px; opacity: 0.55; }
@@ -22611,7 +22699,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 /* The "Rank your games" card docks above the bottom nav rather than sitting
    in the flow: it arrives after the shelf has painted (ranks load second), and
    in the flow it shoved the whole collection down when it did. Docked-footer
-   recipe and z-index as .bgbnotif-bar; the view's bottom padding grows while
+   recipe and z-index as .imp-nav; the view's bottom padding grows while
    it is up so the last row of tiles can still scroll clear of it. */
 .rank-banner {
   position: fixed;

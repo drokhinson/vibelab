@@ -63,6 +63,12 @@
       this._sideMin = window.BgbPlaySide ? window.BgbPlaySide.load() : false;
       // The phase the last render() drew, so arriving on Play lands on the grid.
       this._renderedPhase = null;
+      // The seat answer in flight ("accept" | "decline"), or null. Read by the
+      // seat strip to disable its buttons, and by the poll to hold its read.
+      this._seatBusy = null;
+      // Bumped by every seat answer. A poll read that started before one
+      // carries the seat as it was and is dropped rather than adopted.
+      this._seatWrites = 0;
     }
 
     async onMount() {
@@ -140,6 +146,7 @@
       this._realtimeDead = false;
       this._renderedRounds = 0;
       this._renderedPhase = null;
+      this._seatBusy = null;
     }
 
     _extractCode(params) {
@@ -294,8 +301,13 @@
       if (this._liveScores && this._session && this._session.phase === "play") {
         await this._liveScores.refresh();
       }
+      const seatWrites = this._seatWrites;
       try {
         const next = await window.PlaySession.fetchLobby(this._code);
+        // A seat answer in flight, or one sent while this read was out,
+        // brings its own bundle back; this read has the seat as it stood
+        // before the answer.
+        if (this._seatBusy || seatWrites !== this._seatWrites) return;
         // Same hand-off as _load. A first read that failed leaves this screen
         // on its error state with the poll as its only way back, so the answer
         // to "whose session is this?" has to be re-asked on whichever read
@@ -307,37 +319,51 @@
           window.router.go("play-flow");
           return;
         }
-        const prev = this._session;
-        const prevPhase = prev && prev.phase;
-        const structural = this._structuralDiff(prev, next);
-        const participantsOnly = !structural && this._participantsDiff(prev, next);
-        this._session = next;
-        // Every poll carries a fresh grid snapshot. For a late spectator this
-        // is the only thing that moves their scoreboard, which is why the
-        // play/settle gating above keeps letting a fetch through for them.
-        this._seedLiveScores(next);
-        if (structural) {
-          this.render();
-        } else if (participantsOnly) {
-          // At a 2s cadence we cannot afford a full innerHTML rebuild of the
-          // whole cascade on every roster change — it would yank the joiner's
-          // scroll position every poll. Patch just the participant surfaces in
-          // place instead.
-          this._patchParticipants();
-        }
-        if (next.phase !== prevPhase) {
-          this._handlePhaseSideEffects(next);
-          // A phase change the poll caught (rather than Realtime) still moves
-          // the spectator to the matching section, and still brings the score
-          // channel up on the way into Play / down on the way out. The winner
-          // popup reads the live totals, so this runs after the side effects
-          // above, not before.
-          this._scrollToCurrentPhase(next.phase);
-          if (next.phase === "play") await this._maybeStartLiveScores();
-          else await this._maybeStopLiveScores();
-        }
+        await this._adoptSession(next);
       } catch (_) {
         // Best-effort; let Realtime handle the bulk of updates.
+      }
+    }
+
+    /**
+     * Take a fresher bundle into the screen — a poll read, or the one a seat
+     * answer returns — repainting only as much as changed.
+     *
+     * @param {Object} next a session bundle
+     */
+    async _adoptSession(next) {
+      const prev = this._session;
+      const prevPhase = prev && prev.phase;
+      const structural = this._structuralDiff(prev, next);
+      const participantsOnly = !structural && this._participantsDiff(prev, next);
+      const seatOnly = !structural && !participantsOnly
+        && this._seatState(prev) !== this._seatState(next);
+      this._session = next;
+      // Every poll carries a fresh grid snapshot. For a late spectator this
+      // is the only thing that moves their scoreboard, which is why the
+      // play/settle gating in _poll keeps letting a fetch through for them.
+      this._seedLiveScores(next);
+      if (structural) {
+        this.render();
+      } else if (participantsOnly) {
+        // At a 2s cadence we cannot afford a full innerHTML rebuild of the
+        // whole cascade on every roster change — it would yank the joiner's
+        // scroll position every poll. Patch just the participant surfaces in
+        // place instead.
+        this._patchParticipants();
+      } else if (seatOnly) {
+        this._patchSeat();
+      }
+      if (next.phase !== prevPhase) {
+        this._handlePhaseSideEffects(next);
+        // A phase change the poll caught (rather than Realtime) still moves
+        // the spectator to the matching section, and still brings the score
+        // channel up on the way into Play / down on the way out. The winner
+        // popup reads the live totals, so this runs after the side effects
+        // above, not before.
+        this._scrollToCurrentPhase(next.phase);
+        if (next.phase === "play") await this._maybeStartLiveScores();
+        else await this._maybeStopLiveScores();
       }
     }
 
@@ -548,7 +574,12 @@
         // they dismiss. If the popup never opened (e.g. they refreshed
         // post-save), route straight to the saved play.
         if (this._popupShown && session.finalized_play_id) {
-          if (window.PolaroidPopup) window.PolaroidPopup.update({ playId: session.finalized_play_id });
+          if (window.PolaroidPopup) {
+            window.PolaroidPopup.update({
+              playId: session.finalized_play_id,
+              seatNote: this._seatCounts(session) ? "Added to your stats" : null,
+            });
+          }
         } else if (session.finalized_play_id) {
           // Pop the saved play in-place; the user stays on the session viewer
           // (or whatever surface they were on) until they close the modal.
@@ -576,7 +607,159 @@
         gameName: game.name || "Game over",
         game: game,
         winnerName: winner,
+        // Settle comes before the save, so an accepted seat is still a promise
+        // here; the finalize update above turns it into the saved fact. An
+        // unaccepted seat says nothing — the save files it as an invite, and
+        // the invite reaches the viewer's notification bell.
+        seatNote: this._seatCounts(session) ? "Counts for you" : null,
       });
+    }
+
+    // ── The viewer's own seat ───────────────────────────────────────────────
+    //
+    // A host can seat a buddy's account without that person joining. Such a
+    // seat is an invite until its owner answers it, and the host's save files
+    // it that way — so the answer belongs on the screen the seated person is
+    // watching the game from, while the game is still on.
+
+    /**
+     * The participant row this account sits in, when someone else hosts.
+     * @param {Object|null} s session bundle
+     * @returns {Object|null}
+     */
+    _mySeat(s) {
+      const me = window.store.get("user");
+      if (!me || !s || s.host_user_id === me.id) return null;
+      return (s.participants || []).find((p) => p.user_id === me.id) || null;
+    }
+
+    /** Is this account's seat one the host's save counts for it? */
+    _seatCounts(s) {
+      const seat = this._mySeat(s);
+      return !!(seat && seat.accepted === true);
+    }
+
+    /**
+     * What the seat strip shows: "ask" (Accept / Not me), "counted" (the
+     * chip) or "none". Only while the game is on: at Settle Up the wrap-up
+     * card carries the answer instead. A seat that said "not me", or a bundle
+     * with no `accepted` on the row, shows nothing.
+     *
+     * @param {Object|null} s session bundle
+     * @returns {"ask"|"counted"|"none"}
+     */
+    _seatState(s) {
+      const seat = this._mySeat(s);
+      const phase = (s && s.phase) || "gather";
+      if (!seat || seat.declined || (phase !== "gather" && phase !== "play")) return "none";
+      if (seat.accepted === true) return "counted";
+      if (seat.accepted === false) return "ask";
+      return "none";
+    }
+
+    /**
+     * The seat strip's stable host. Gather and Play each carry one, so a seat
+     * answer repaints both in place (_patchSeat) without touching the grid.
+     * @param {Object} s session bundle
+     */
+    _renderSeatMount(s) {
+      return `<div class="session-viewer__seat-mount">${this._renderSeat(s)}</div>`;
+    }
+
+    _renderSeat(s) {
+      const state = this._seatState(s);
+      if (state === "counted") {
+        return `
+          <div class="session-viewer__seat-chip">
+            <i data-icon="check" class="w-3.5 h-3.5"></i>
+            <span>Counts for you</span>
+          </div>
+        `;
+      }
+      if (state !== "ask") return "";
+      const host = (s.participants || []).find((p) => p.user_id === s.host_user_id);
+      const hostName = host
+        ? window.Buddy.nameFor(host.user_id, host.display_name)
+        : "The host";
+      const busy = this._seatBusy;
+      const off = busy ? "disabled" : "";
+      return `
+        <section class="cascade-card session-viewer__seat" role="group" aria-label="Your seat">
+          <p class="session-viewer__seat-text">
+            <strong>${escapeHtml(hostName)} seated you in this game.</strong>
+            Count it toward your stats when it's saved?
+          </p>
+          <div class="session-viewer__seat-actions">
+            <button type="button" class="btn btn-ghost btn-sm session-viewer__seat-btn" ${off}
+                    onclick="window.sessionViewerView._declineSeat()">${busy === "decline" ? "Working…" : "Not me"}</button>
+            <button type="button" class="btn btn-primary btn-sm session-viewer__seat-btn" ${off}
+                    onclick="window.sessionViewerView._acceptSeat()">${busy === "accept" ? "Working…" : "Accept"}</button>
+          </div>
+        </section>
+      `;
+    }
+
+    /** Repaint every seat strip in place from the session held now. */
+    _patchSeat() {
+      if (!this._session || !this.container) return;
+      const html = this._renderSeat(this._session);
+      this.container.querySelectorAll(".session-viewer__seat-mount").forEach((m) => {
+        m.innerHTML = html;
+        this.refreshIcons(m);
+      });
+    }
+
+    _acceptSeat() {
+      return this._answerSeat(true);
+    }
+
+    async _declineSeat() {
+      if (this._seatBusy) return;
+      const seat = this._mySeat(this._session);
+      if (!seat) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Not you?",
+        body: `It won't count for you. The seat stays at the table as a guest named ${seat.display_name || "Guest"}.`,
+        confirmLabel: "Not me",
+        cancelLabel: "Cancel",
+        destructive: true,
+      });
+      if (!ok) return;
+      await this._answerSeat(false);
+    }
+
+    /**
+     * Send the seat answer and take the bundle it returns through the same
+     * path a poll read takes, so the strip, the lobby and the grid all follow
+     * the server's copy of the seat.
+     * @param {boolean} accept
+     */
+    async _answerSeat(accept) {
+      if (this._seatBusy || !this._code) return;
+      const code = this._code;
+      this._seatBusy = accept ? "accept" : "decline";
+      this._seatWrites++;
+      this._patchSeat();
+      let next = null;
+      let failure = null;
+      try {
+        next = await window.PlaySession.answerSeat(code, accept);
+      } catch (e) {
+        failure = e;
+      }
+      // The viewer moved on to another session while this was out.
+      if (code !== this._code) return;
+      this._seatBusy = null;
+      if (failure) {
+        this._patchSeat();
+        showToast(escapeHtml(failure.message || "That didn't go through"), "error");
+        return;
+      }
+      await this._adoptSession(next);
+      // A returned seat that reads the same as the one held repaints nothing
+      // above, which would leave the strip on "Working…".
+      this._patchSeat();
+      if (!accept) showToast("It won't count for you", "info");
     }
 
     _guessWinnerName(session) {
@@ -806,6 +989,7 @@
       // _renderGather): game and code left, the lobby right on the tablet and
       // wide tiers; display:contents on a phone.
       return `
+        ${this._renderSeatMount(s)}
         <div class="cascade-cols">
         <div class="cascade-col">
         ${this._renderGameCard(s)}
@@ -866,7 +1050,10 @@
 
     _renderPlay(s) {
       if (!s.game_id) {
-        return `<section class="cascade-card"><p class="text-sm opacity-70">Waiting on the host…</p></section>`;
+        return `
+          ${this._renderSeatMount(s)}
+          <section class="cascade-card"><p class="text-sm opacity-70">Waiting on the host…</p></section>
+        `;
       }
       // The host's Play step, seen from another phone — the same markup and
       // the same pager (play-flow-view.js _renderPlay). On a phone the three
@@ -885,6 +1072,7 @@
       const off = (i) => (paged && i !== page ? ` inert aria-hidden="true"` : "");
       return `
         ${this._renderGameInfoBar(s)}
+        ${this._renderSeatMount(s)}
         <div class="play-pager${this._sideMin ? " is-side-min" : ""}">
         ${window.BgbPlaySide ? window.BgbPlaySide.renderBar("sessionViewerView") : ""}
         <div class="play-pager__page play-pager__page--players" data-pp-page="${PLAY_PAGE_PLAYERS}"
@@ -1070,6 +1258,9 @@
      * whose host's client doesn't write it, which reads as a play with no
      * sides — the plain per-seat grid.
      *
+     * `accepted` is the bundle's answer to "has this seat's account taken
+     * it?" (see _seatState). The grid draws a seat the same either way.
+     *
      * Cell values come from the live-scores overlay, never from here, so the
      * roundScores array is deliberately empty.
      */
@@ -1081,6 +1272,7 @@
         user_id: p.user_id,
         avatar: p.avatar,
         team: p.team || null,
+        accepted: p.accepted,
         roundScores: [],
       }));
     }

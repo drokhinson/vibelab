@@ -128,7 +128,6 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "claim_not_found": (404, "Claim not found"),
     # bgb_answer_session_seat.
     "not_seated": (404, "You are not seated in this game"),
-    "guest_name_taken": (409, "A guest with your name is already at this table"),
     "not_pending": (409, "That request is no longer pending"),
     "already_linked": (409, "That ghost is already linked to your account"),
     "already_seated": (409, "You're already a player on one of those plays"),

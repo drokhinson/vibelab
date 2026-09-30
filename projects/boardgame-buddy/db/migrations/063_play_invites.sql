@@ -12,9 +12,10 @@
 --    An invited seat has player_user_id NULL, so every reader that counts a
 --    person's plays by player_user_id leaves it out with no change of its own.
 --    boardgamebuddy_play_session_participants.accepted_at records a lobby seat
---    accepted while the game is on (or joined by the person themselves).
+--    accepted while the game is on (or joined by the person themselves), and
+--    declined_at one its account said "not me" to.
 -- 2. bgb_log_play writes invites. The logger's own seat, and lobby seats that
---    were accepted, count at once. Imports go through the same function, so an
+--    were accepted, count at once; lobby seats that were declined are guests. Imports go through the same function, so an
 --    import that seats a buddy invites them too.
 -- 3. Live sessions: bgb_join_session marks the joiner accepted,
 --    bgb_session_bundle reports each seat's `accepted`, bgb_answer_session_seat
@@ -64,13 +65,18 @@ COMMENT ON COLUMN public.boardgamebuddy_play_players.pending_user_id IS
 ALTER TABLE public.boardgamebuddy_play_session_participants
   ADD COLUMN IF NOT EXISTS accepted_at timestamp with time zone;
 
--- Seats in lobbies open during the deploy keep counting, as they would have.
+-- A seat already in an open lobby counts, so no game under way changes here.
 UPDATE public.boardgamebuddy_play_session_participants
    SET accepted_at = joined_at
  WHERE user_id IS NOT NULL AND accepted_at IS NULL;
 
+ALTER TABLE public.boardgamebuddy_play_session_participants
+  ADD COLUMN IF NOT EXISTS declined_at timestamp with time zone;
+
 COMMENT ON COLUMN public.boardgamebuddy_play_session_participants.accepted_at IS
   'When this account said the game counts for them: by joining, or by accepting on the spectator screen. NULL means the saved play invites them.';
+COMMENT ON COLUMN public.boardgamebuddy_play_session_participants.declined_at IS
+  'When this account said "not me" on the spectator screen. The saved play keeps the seat as a guest with the same name.';
 
 -- ── 2. bgb_log_play: other people's seats are written as invites ──────────
 
@@ -97,6 +103,7 @@ DECLARE
   v_bga_table   BIGINT;
   v_bgg_play_id BIGINT;
   v_accepted    UUID[];
+  v_declined    UUID[];
 BEGIN
   -- Empty string and absent both mean "no key" — the client omits the field
   -- entirely for live writes, but a serializer that emits "" must not be read
@@ -129,13 +136,18 @@ BEGIN
   -- above.
   v_bgg_play_id := NULLIF(p_payload->>'bgg_play_id', '')::BIGINT;
 
-  -- Accounts that already said yes: set only by bgb_finalize_session, from
-  -- the lobby seats accepted while the game was on. The API never passes a
-  -- client's own copy of this key through.
+  -- Accounts that already answered: set only by bgb_finalize_session, from
+  -- the lobby seats accepted or declined while the game was on. The API never
+  -- passes a client's own copy of either key through.
   v_accepted := ARRAY(
     SELECT a::UUID
       FROM jsonb_array_elements_text(
              COALESCE(p_payload->'accepted_user_ids', '[]'::JSONB)) AS a
+  );
+  v_declined := ARRAY(
+    SELECT d::UUID
+      FROM jsonb_array_elements_text(
+             COALESCE(p_payload->'declined_user_ids', '[]'::JSONB)) AS d
   );
 
   IF v_client_key IS NOT NULL THEN
@@ -282,6 +294,7 @@ BEGIN
     CASE WHEN pl.user_id = p_user OR pl.user_id = ANY(v_accepted)
          THEN pl.user_id END,
     CASE WHEN pl.user_id <> p_user AND NOT (pl.user_id = ANY(v_accepted))
+              AND NOT (pl.user_id = ANY(v_declined))
          THEN pl.user_id END,
     -- An invited seat always carries a name, so a decline can leave it as a
     -- guest without tripping bgb_play_players_identity_chk.
@@ -331,7 +344,8 @@ BEGIN
              -- client has to read back the value that actually landed.
              'team',         NULLIF(btrim(pl.team), ''),
              'pending',      COALESCE(pl.user_id <> p_user
-                                      AND NOT (pl.user_id = ANY(v_accepted)), false)
+                                      AND NOT (pl.user_id = ANY(v_accepted))
+                                      AND NOT (pl.user_id = ANY(v_declined)), false)
            ) ORDER BY pl.ord
          ), '[]'::JSONB)
     INTO v_players
@@ -430,7 +444,13 @@ BEGIN
          FROM boardgamebuddy_play_session_participants sp
         WHERE sp.session_id = v_session.id
           AND sp.user_id IS NOT NULL
-          AND sp.accepted_at IS NOT NULL)
+          AND sp.accepted_at IS NOT NULL),
+      'declined_user_ids',
+      (SELECT COALESCE(jsonb_agg(sp.user_id), '[]'::JSONB)
+         FROM boardgamebuddy_play_session_participants sp
+        WHERE sp.session_id = v_session.id
+          AND sp.user_id IS NOT NULL
+          AND sp.declined_at IS NOT NULL)
     )
   );
 
@@ -493,7 +513,7 @@ BEGIN
       );
       -- Joining a lobby the host already seated you in is saying yes to it.
       UPDATE boardgamebuddy_play_session_participants
-         SET accepted_at = now()
+         SET accepted_at = now(), declined_at = NULL
        WHERE session_id = v_id AND user_id = p_user AND accepted_at IS NULL;
     ELSE
       v_guest_name := btrim(COALESCE(p_guest_display_name, ''));
@@ -560,7 +580,8 @@ BEGIN
            'joined_at', pp.joined_at,
            'avatar', pr.avatar,
            'team', pp.team,
-           'accepted', pp.accepted_at IS NOT NULL
+           'accepted', pp.accepted_at IS NOT NULL,
+           'declined', pp.declined_at IS NOT NULL
          ) ORDER BY pp.position NULLS LAST, pp.joined_at), '[]'::jsonb)
     INTO v_participants
     FROM boardgamebuddy_play_session_participants pp
@@ -613,20 +634,12 @@ BEGIN
     RETURN jsonb_build_object('error', 'not_seated');
   END IF;
 
-  IF p_accept THEN
-    UPDATE boardgamebuddy_play_session_participants
-       SET accepted_at = COALESCE(accepted_at, now())
-     WHERE session_id = v_id AND user_id = p_user;
-  ELSE
-    -- "Not me": the seat stays at the table under the same name, as a guest.
-    BEGIN
-      UPDATE boardgamebuddy_play_session_participants
-         SET user_id = NULL, accepted_at = NULL
-       WHERE session_id = v_id AND user_id = p_user;
-    EXCEPTION WHEN unique_violation THEN
-      RETURN jsonb_build_object('error', 'guest_name_taken');
-    END;
-  END IF;
+  -- "Not me" keeps the account on the lobby row, so the host's screen is not
+  -- disturbed mid-game; bgb_finalize_session saves the seat as a guest.
+  UPDATE boardgamebuddy_play_session_participants
+     SET accepted_at = CASE WHEN p_accept THEN COALESCE(accepted_at, now()) END,
+         declined_at = CASE WHEN p_accept THEN NULL ELSE COALESCE(declined_at, now()) END
+   WHERE session_id = v_id AND user_id = p_user;
 
   RETURN bgb_session_bundle(v_id);
 END;

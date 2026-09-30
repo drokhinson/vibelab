@@ -11,8 +11,8 @@
 --      in the feed and one entry in "Needs an answer".
 --   4. Accepting moves the seat to player_user_id and it counts.
 --   5. Declining (bgb_ghost_out_of_plays) leaves a guest named Priya.
---   6. A lobby seat accepted during the game is saved as counted; one that was
---      not is saved as an invite. "Not me" leaves a guest.
+--   6. A lobby seat accepted during the game is saved as counted, one left
+--      unanswered is saved as an invite, and one declined is saved as a guest.
 --   7. bgb_link_ghost invites the account it links, unless it is the caller.
 --
 -- SAFE TO RUN ANYWHERE: one transaction ending in ROLLBACK, touching only rows
@@ -123,8 +123,8 @@ BEGIN
   ASSERT (SELECT (p->>'accepted')::boolean FROM jsonb_array_elements(res->'participants') p
            WHERE p->>'user_id' = sam::text), 'Sam''s lobby seat should read accepted';
   res := bgb_answer_session_seat(code, jo, false);
-  ASSERT NOT EXISTS (SELECT 1 FROM boardgamebuddy_play_session_participants
-                      WHERE session_id = sess AND user_id = jo), '"Not me" should unseat Jo''s account';
+  ASSERT (SELECT (p->>'declined')::boolean FROM jsonb_array_elements(res->'participants') p
+           WHERE p->>'user_id' = jo::text), '"Not me" should mark Jo''s lobby seat declined';
 
   res := bgb_finalize_session(dana, code, jsonb_build_object(
     'game_id', game, 'played_at', '2026-09-28',
@@ -132,7 +132,7 @@ BEGIN
       jsonb_build_object('user_id', dana,  'name', 'Dana',  'score', 3),
       jsonb_build_object('user_id', sam,   'name', 'Sam',   'score', 2),
       jsonb_build_object('user_id', priya, 'name', 'Priya', 'score', 1),
-      jsonb_build_object('name', 'Jo', 'score', 0)
+      jsonb_build_object('user_id', jo, 'name', 'Jo', 'score', 0)
     )));
   play2 := (res->>'id')::uuid;
   ASSERT play2 IS NOT NULL, 'finalize failed: ' || res::text;
@@ -142,6 +142,10 @@ BEGIN
   SELECT count(*) INTO n FROM boardgamebuddy_play_players
    WHERE play_id = play2 AND pending_user_id = priya;
   ASSERT n = 1, 'a seat not answered during the game should be saved as an invite';
+  SELECT count(*) INTO n FROM boardgamebuddy_play_players
+   WHERE play_id = play2 AND player_user_id IS NULL AND pending_user_id IS NULL
+     AND player_display_name = 'Jo';
+  ASSERT n = 1, 'a seat declined during the game should be saved as a guest';
 
   -- ── 7. linking a ghost ─────────────────────────────────────────────────────
   res := bgb_link_ghost(dana, 'Jo', jo);

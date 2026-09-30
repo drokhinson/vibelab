@@ -39,6 +39,7 @@ from .models import (
     NotificationsResponse,
     NotificationsSeenRequest,
     NotificationsSeenResponse,
+    PlayInviteItemsResponse,
     PlayInvitesAcceptRequest,
     PlayLeaveResponse,
 )
@@ -139,3 +140,22 @@ async def accept_play_invites(
         # unlock.
         background_tasks.add_task(push_notify.achievements_after_play, sb, [user.user_id])
     return PlayLeaveResponse(rows_updated=n)
+
+
+@router.post(
+    "/notifications/invites/plays",
+    response_model=PlayInviteItemsResponse,
+    status_code=200,
+    summary="The plays in a grouped invite",
+)
+async def list_invite_plays(
+    payload: PlayInvitesAcceptRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayInviteItemsResponse:
+    """Which of these plays still wait on the caller, with the game and date,
+    so an imported batch can be reviewed before accepting the rest. A POST
+    because a batch's ids do not fit in a query string."""
+    rows = await asyncio.to_thread(
+        notification_service.invite_items, get_supabase(), user.user_id, payload.play_ids
+    )
+    return PlayInviteItemsResponse(items=rows)

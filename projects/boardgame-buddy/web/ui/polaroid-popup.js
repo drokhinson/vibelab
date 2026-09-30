@@ -55,6 +55,9 @@
    *           button to "Retry".
    * @property {string=} warning — muted advisory line (e.g. the photo
    *           upload failed but the play itself saved).
+   * @property {string|null=} seatNote — a joiner's line about their own seat
+   *           ("Counts for you", "Added to your stats"), drawn as a check chip
+   *           under the winner. Session-viewer only; null draws nothing.
    * @property {() => void=} onDismiss — override the default feed redirect
    *           used by the backdrop tap and the corner X.
    * @property {() => void=} onClose — override what the corner X does on its
@@ -328,6 +331,12 @@
     const warning = opts.warning
       ? `<div class="polaroid-popup__warning">${escapeHtml(opts.warning)}</div>`
       : "";
+    const seatNote = opts.seatNote
+      ? `<div class="polaroid-popup__seat">
+           <i data-icon="check" class="w-3.5 h-3.5"></i>
+           <span>${escapeHtml(opts.seatNote)}</span>
+         </div>`
+      : "";
     // The host's wrap-up card carries the save state; the joiner's splash
     // (session-viewer) passes none of these and keeps its X-only chrome.
     //
@@ -371,6 +380,7 @@
         ${photo}
         <div class="polaroid-popup__title">${gameName}</div>
         ${winner}
+        ${seatNote}
         ${error}
         ${warning}
         ${viewBtn}

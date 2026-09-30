@@ -77,10 +77,11 @@
       // tile and the plays card both read `recent_plays_total`. So the honest
       // repaint is the one the next mount would do, taken now: Play.remove()
       // has already dropped this bundle from the cache, so _loadBundle() comes
-      // back with fresh everything. Both kinds dismiss the popup on their way
-      // out (widgets/play-detail-popup.js), so this is not a teardown under an
-      // open overlay.
-      if (kind === "delete" || kind === "leave") {
+      // back with fresh everything. Delete and leave dismiss the popup on their
+      // way out (widgets/play-detail-popup.js). Accepting an invite is the same
+      // size of change the other way, a play that did not count now does, and
+      // the reload repaints the hub under the popup, which stays open.
+      if (kind === "delete" || kind === "leave" || kind === "accept" || kind === "accept-bulk") {
         this._loadBundle();
         return;
       }

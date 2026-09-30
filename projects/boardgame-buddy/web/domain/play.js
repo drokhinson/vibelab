@@ -553,9 +553,32 @@
     // Self-remove from a play you didn't take part in. The backend turns your
     // player row into a ghost (keeps the play for its owner) rather than
     // deleting it. Busts the same caches as any other play mutation so your
-    // history/stats drop it on next read.
+    // history/stats drop it on next read. The same call declines an invite:
+    // the invited seat becomes a guest carrying the invitee's name.
     static leave(id) {
       return window.api.post(`/plays/${id}/leave`, {}).then((r) => {
+        _invalidatePlayDeps();
+        Play.rememberLastPlay(null);
+        return r;
+      });
+    }
+    /**
+     * Accept the invite on a play another account seated you in, so it counts
+     * toward your stats and achievements. Rejects with a 404 when there is no
+     * invite of yours on it (already answered). Declining is leave() above.
+     *
+     * The flag comes off the feed card before the caches drop, because the
+     * drop repaints the feed from the page it is holding, and a card still
+     * saying `pending` would reseed the popup with the invite on its next open.
+     * The Another Round seed is cleared like leave() clears it: the play that
+     * now counts can be the viewer's most recent one.
+     *
+     * @param {string} id
+     * @returns {Promise<{rows_updated: number}>}
+     */
+    static acceptInvite(id) {
+      return window.api.post(`/plays/${id}/accept`, {}).then((r) => {
+        _clearInviteOnFeedCards(id);
         _invalidatePlayDeps();
         Play.rememberLastPlay(null);
         return r;
@@ -643,6 +666,24 @@
   function _patchFeedReactions(res, sent, reacted) {
     const ids = (res && Array.isArray(res.play_ids) && res.play_ids.length) ? res.play_ids : sent;
     if (window.Feed && window.Feed.applyReaction) window.Feed.applyReaction(ids, reacted);
+  }
+
+  /**
+   * Mark the viewer's seat accepted on every feed card for this play, in place.
+   * The cards' `players` arrays are the ones the seeds project from, so this
+   * reaches the next Play.seedFromFeedCard without a feed refetch.
+   * @param {string} playId
+   */
+  function _clearInviteOnFeedCards(playId) {
+    const me = window.store && window.store.get && window.store.get("user");
+    const page = window.store && window.store.get && window.store.get("feed");
+    if (!me || !me.id || !page || !Array.isArray(page.cards)) return;
+    for (const c of page.cards) {
+      if (!c || c.kind !== "play" || c.play_id !== playId) continue;
+      for (const pl of c.players || []) {
+        if (pl && pl.user_id === me.id && pl.pending) pl.pending = false;
+      }
+    }
   }
 
   // Note: the `play.last` seed is deliberately NOT cleared here. This also runs

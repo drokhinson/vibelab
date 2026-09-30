@@ -127,6 +127,13 @@
       bell: true,
       label: (n) => `${n} new notification${n === 1 ? "" : "s"}`,
     },
+    // Invites and buddy requests waiting on an answer. Also the bell's, and the
+    // one signal the bell shows as a number rather than a dot (init.js).
+    {
+      slot: "notifPending",
+      bell: true,
+      label: (n) => `${n} waiting on your answer`,
+    },
   ];
 
   // Clamped: a slot can hold whatever a caller

@@ -65,6 +65,9 @@ class _Table:
     def in_(self, *_a):
         return self
 
+    def eq(self, *_a):
+        return self
+
     def execute(self):
         return _Res(self.rows)
 
@@ -162,3 +165,15 @@ def test_a_lobby_seat_is_not_accepted_unless_it_says_so():
     row = {"id": "p", "display_name": "Sam", "joined_at": "2026-09-27T18:00:00+00:00"}
     assert SessionParticipantResponse(**row).accepted is False
     assert SessionParticipantResponse(**row, accepted=True).accepted is True
+
+
+def test_the_review_list_is_only_the_plays_still_waiting_newest_first():
+    sb = _Sb(table_rows={
+        "boardgamebuddy_play_players": [{"play_id": "a"}, {"play_id": "b"}],
+        "boardgamebuddy_plays": [
+            {"id": "a", "game_name": "Azul", "played_at": "2024-07-06"},
+            {"id": "b", "game_name": "Wingspan", "played_at": "2024-08-12"},
+        ],
+    })
+    rows = notification_service.invite_items(sb, "sam", ["a", "b", "c"])
+    assert [r["game_name"] for r in rows] == ["Wingspan", "Azul"]

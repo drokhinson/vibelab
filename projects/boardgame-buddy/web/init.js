@@ -849,8 +849,22 @@
     if (!window.BgbNotifications) return;
     syncHeaderDot('[data-toggle="notifications"]',
                   window.BgbNotifications.forBell, "Notifications");
+    syncBellCount();
     syncHeaderDot('[data-toggle="settings"]',
                   window.BgbNotifications.forGear, "Settings");
+  }
+
+  // The bell's dot says "something new"; a number on it says "something waits
+  // on your answer", which reading the bell does not clear. The accessible name
+  // already carries both (syncHeaderDot), so this only changes what is drawn.
+  function syncBellCount() {
+    const n = Math.max(0, Number(window.store.get("notifPending")) || 0);
+    document.querySelectorAll('[data-toggle="notifications"]').forEach((btn) => {
+      const dot = btn.querySelector(".bgb-global-header__dot, .bgb-nav__dot");
+      if (!dot) return;
+      dot.textContent = n ? (n > 9 ? "9+" : String(n)) : "";
+      dot.classList.toggle("is-count", n > 0);
+    });
   }
 
   if (window.BgbNotifications) {

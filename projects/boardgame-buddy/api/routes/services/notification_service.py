@@ -164,6 +164,35 @@ def accept_invites(sb: Client, viewer_id: str, play_ids: list[str]) -> int:
     return int(res.data or 0)
 
 
+def invite_items(sb: Client, viewer_id: str, play_ids: list[str]) -> list[dict]:
+    """The plays among `play_ids` the viewer is still invited to, newest first."""
+    seats = (
+        sb.table("boardgamebuddy_play_players")
+        .select("play_id")
+        .eq("pending_user_id", viewer_id)
+        .in_("play_id", play_ids)
+        .execute()
+        .data
+        or []
+    )
+    ids = [r["play_id"] for r in seats]
+    if not ids:
+        return []
+    plays = (
+        sb.table("boardgamebuddy_plays")
+        .select("id, game_name, played_at")
+        .in_("id", ids)
+        .execute()
+        .data
+        or []
+    )
+    plays.sort(key=lambda p: (p.get("played_at") or "", p["id"]), reverse=True)
+    return [
+        {"play_id": p["id"], "game_name": p.get("game_name"), "played_at": p.get("played_at")}
+        for p in plays
+    ]
+
+
 def mark_seen(
     sb: Client, viewer_id: str, through: datetime | None = None
 ) -> NotificationsSeenResponse:

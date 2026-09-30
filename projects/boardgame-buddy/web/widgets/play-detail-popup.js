@@ -7,10 +7,11 @@
 //
 // This file is the SHELL and the read-only card: the modal, the fetch and
 // its race guards, render() and its byte-identity guard, the view-mode
-// markup, and the two things a non-owner can do to a play (leave it, rename
-// a buddy in it). Everything behind the Edit pill — the draft, the form, the
-// write handlers, save and delete — is widgets/play-detail-edit.js, which
-// loads first and is wired by the init() call at the bottom of this file.
+// markup, and what a non-owner can do to a play (answer an invite to it,
+// leave it, rename a buddy in it). Everything behind the Edit pill — the
+// draft, the form, the write handlers, save and delete — is
+// widgets/play-detail-edit.js, which loads first and is wired by the init()
+// call at the bottom of this file.
 // One popup, one `state`, two files: together they would be several times
 // CLAUDE.md's ~300-line guidance, and view and edit are the one
 // seam that splits this card without cutting through a shared concern.
@@ -44,6 +45,9 @@
     error: null,
     editing: false,
     saving: false,
+    // Which invite answer is in flight ("accept" | "decline"), so the banner
+    // can say which button is working. Set only while `saving` is.
+    answering: null,
     editError: null,
     draft: null,        // working copy while editing
     buddies: [],        // buddy EDGES — alias lookup, and the picker's accounts
@@ -306,6 +310,7 @@
       error: null,
       editing: false,
       saving: false,
+      answering: null,
       editError: null,
       draft: null,
       buddies: [],
@@ -363,6 +368,7 @@
       error: null,
       editing: false,
       saving: false,
+      answering: null,
       editError: null,
       draft: null,
       buddies: [],
@@ -578,10 +584,11 @@
     // Non-owner who nonetheless appears as an account player in this play:
     // offer a self-remove ("I didn't play") that ghosts their row out of the
     // log. The owner never sees this branch (they get Edit above); uninvolved
-    // viewers appear in no player row so the button stays hidden.
+    // viewers appear in no player row so the button stays hidden. An invite
+    // not yet answered gets none either: the banner's Decline is its way off.
     const me = window.store && window.store.get && window.store.get("user");
     const iAmAPlayer = !!(me && (p.players || []).some((pl) => pl.user_id === me.id));
-    if (p && iAmAPlayer) {
+    if (p && iAmAPlayer && !myInviteSeat(p)) {
       return `
         <div class="play-detail-popup__footer">
           <button class="play-detail-popup__edit play-detail-popup__edit--full play-detail__leave-btn" type="button"
@@ -769,6 +776,8 @@
         ${photoSlot}
 
         ${renderGameBubble(p, { editing: false })}
+
+        ${renderInvite(p)}
 
         ${(p.expansions || []).length > 0 ? `
           <section data-morph-key="expansions" class="play-detail__section">
@@ -958,38 +967,175 @@
       + (hadExpansions ? " — pick the new game's below." : ".");
   }
 
-  // Non-owner self-remove. Turns the caller's player row into a ghost so the
-  // play drops out of their history while the owner keeps it. Mirrors
-  // deletePlay's confirm → re-mount → mutate → dismiss shape (that one is the
-  // edit half's, in widgets/play-detail-edit.js — this is the view-mode
-  // footer's only action, so it stays here with the card it belongs to).
-  async function leavePlay() {
-    if (!state.play || !state.play.id) return;
-    const ok = await window.PolaroidPopup.confirm({
-      title: "Remove yourself from this play?",
-      body: "You won't appear in this game log anymore. The player who logged it will still see the game with your name.",
-      confirmLabel: "Remove me",
-      cancelLabel: "Stay",
+  // ── Invites ─────────────────────────────────────────────────────────────
+  //
+  // A seat another account gives you is an invite until you answer it: every
+  // roster marks it `pending`, and only the invitee's own client acts on the
+  // flag. Everyone else sees the seat as an ordinary player row.
+
+  /**
+   * The viewer's own seat on this play while it is still an invite, else null.
+   * Never on the logger's own play: nobody invites themselves.
+   * @param {any} p
+   */
+  function myInviteSeat(p) {
+    const me = window.store && window.store.get && window.store.get("user");
+    if (!p || p.is_own || !me || !me.id) return null;
+    return (p.players || []).find((pl) => pl && pl.user_id === me.id && pl.pending === true) || null;
+  }
+
+  // The answer banner above the scoreboard. It stands in for the footer's
+  // "I didn't play" while the seat is pending, so there is one way off the
+  // play at a time.
+  function renderInvite(p) {
+    if (!myInviteSeat(p)) return "";
+    const logger = window.Buddy.nameFor(p.logged_by_id, p.logged_by_name) || "Someone";
+    const busy = state.saving;
+    const label = (kind, idle) => (busy && state.answering === kind ? "Working…" : idle);
+    return `
+      <section data-morph-key="invite" class="play-detail__invite" role="group" aria-label="Play invite">
+        <span class="play-detail__invite-tag">Waiting on you</span>
+        <p class="play-detail__invite-text">
+          <strong>${escapeHtml(logger)} added you to this play.</strong>
+          It won't count toward your stats or achievements until you accept.
+        </p>
+        <div class="play-detail__invite-actions">
+          <button class="btn btn-ghost play-detail__invite-btn" type="button"
+                  ${busy ? "disabled" : ""}
+                  onclick="window.PlayDetailPopup._leavePlay()">${label("decline", "Decline")}</button>
+          <button class="btn btn-primary play-detail__invite-btn" type="button"
+                  ${busy ? "disabled" : ""}
+                  onclick="window.PlayDetailPopup._acceptInvite()">${label("accept", "Accept")}</button>
+        </div>
+      </section>
+    `;
+  }
+
+  // The bell's "needs an answer" count moves by one for each invite answered
+  // here, and the warm notifications page holding that invite is dropped.
+  function inviteAnswered() {
+    const feed = window.NotificationFeed;
+    if (!feed) return;
+    if (feed.setPending && feed.pendingCount) feed.setPending(feed.pendingCount() - 1);
+    if (feed.invalidate) feed.invalidate();
+  }
+
+  /**
+   * Accept the viewer's invite on the open play. The banner holds, both
+   * buttons disabled, until the server answers: a 404 (the invite was answered
+   * on another device) is an ordinary outcome here, and an optimistic accept
+   * would have to be taken back. On a 404 the play is re-read rather than
+   * guessed at.
+   */
+  async function acceptInvite() {
+    const play = state.play;
+    if (!play || !play.id || state.saving || !myInviteSeat(play)) return;
+    const playId = play.id;
+    state.saving = true;
+    state.answering = "accept";
+    render();
+    try {
+      await window.Play.acceptInvite(playId);
+    } catch (e) {
+      if (state.playId === playId) {
+        state.saving = false;
+        state.answering = null;
+        render();
+      }
+      if (e && e.status === 404) {
+        showToast("Already answered", "info");
+        if (window.NotificationFeed && window.NotificationFeed.invalidate) window.NotificationFeed.invalidate();
+        refetch(playId);
+      } else {
+        showToast((e && e.message) || "Couldn't accept that invite", "error");
+      }
+      return;
+    }
+    const me = window.store.get("user");
+    const accepted = Object.assign({}, play, {
+      players: (play.players || []).map((pl) => (pl && pl.user_id === me.id && pl.pending
+        ? Object.assign({}, pl, { pending: false })
+        : pl)),
     });
+    // After acceptInvite's cache drop, which cleared every seed: a reopen of
+    // this play paints the accepted seat rather than the invite.
+    window.Play.remember(accepted);
+    if (state.playId === playId) {
+      state.play = accepted;
+      state.saving = false;
+      state.answering = null;
+      render();
+    }
+    inviteAnswered();
+    document.dispatchEvent(new CustomEvent("play-changed", { detail: { kind: "accept", playId } }));
+    showToast("Added to your stats", "success");
+  }
+
+  // Re-read one play into the open popup, if it is still the one showing.
+  function refetch(playId) {
+    window.Play.get(playId)
+      .then((fresh) => {
+        window.Play.remember(fresh);
+        if (state.playId !== playId || state.editing) return;
+        state.play = fresh;
+        render();
+      })
+      .catch(() => {});
+  }
+
+  // Non-owner self-remove, and the banner's Decline. Turns the caller's player
+  // row into a ghost so the play drops out of their history while the owner
+  // keeps it. Mirrors deletePlay's confirm → re-mount → mutate → dismiss shape
+  // (that one is the edit half's, in widgets/play-detail-edit.js — this is the
+  // view-mode card's only destructive action, so it stays here with the card
+  // it belongs to).
+  async function leavePlay() {
+    const play = state.play;
+    if (!play || !play.id || state.saving) return;
+    const playId = play.id;
+    const invite = myInviteSeat(play);
+    let ok;
+    if (invite) {
+      const logger = window.Buddy.nameFor(play.logged_by_id, play.logged_by_name) || "the logger";
+      const me = window.store.get("user");
+      const mine = invite.name || (me && me.display_name) || "you";
+      ok = await window.PolaroidPopup.confirm({
+        title: `Decline ${play.game_name || "this play"} with ${logger}?`,
+        body: `You'll come off this play. ${logger} keeps the night, and your seat stays as a guest named ${mine}.`,
+        confirmLabel: "Decline",
+        cancelLabel: "Cancel",
+        destructive: true,
+      });
+    } else {
+      ok = await window.PolaroidPopup.confirm({
+        title: "Remove yourself from this play?",
+        body: "You won't appear in this game log anymore. The player who logged it will still see the game with your name.",
+        confirmLabel: "Remove me",
+        cancelLabel: "Stay",
+      });
+    }
     if (!ok) return;
     state.saving = true;
+    state.answering = invite ? "decline" : null;
     state.editError = null;
     // Re-mount because PolaroidPopup.confirm dismissed our backdrop.
     remount();
     render();
     try {
-      await window.Play.leave(state.play.id);
+      await window.Play.leave(playId);
     } catch (e) {
       // View-mode footer has no inline error slot (that's edit-only), so
       // surface the failure through the global toast and re-enable the button.
-      showToast((e && e.message) || "Failed to remove you from this play", "error");
+      showToast((e && e.message) || (invite ? "Couldn't decline that invite" : "Failed to remove you from this play"), "error");
       state.saving = false;
+      state.answering = null;
       render();
       return;
     }
     if (window.store && window.store.invalidate) window.store.invalidate("feed");
-    document.dispatchEvent(new CustomEvent("play-changed", { detail: { playId: state.play.id, kind: "leave" } }));
-    showToast("Removed you from this play", "info");
+    if (invite) inviteAnswered();
+    document.dispatchEvent(new CustomEvent("play-changed", { detail: { playId, kind: "leave" } }));
+    showToast(invite ? "Declined" : "Removed you from this play", "info");
     dismiss();
   }
 
@@ -1066,5 +1212,6 @@
     _openAlias: openAlias,
     _page: (dir) => { if (_pager && canPage(dir)) _pager.turn(dir); },
     _leavePlay: leavePlay,
+    _acceptInvite: acceptInvite,
   }, window.PlayDetailEdit.handlers);
 })();

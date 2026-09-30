@@ -141,9 +141,9 @@ def answer_seat(sb: Client, code: str, *, user_id: str, accept: bool) -> Session
     """The seated account answers on the spectator screen.
 
     Accepting marks the lobby seat, and bgb_finalize_session writes it to the
-    saved play as counted, so no invite reaches the bell. "Not me" takes the
-    account off the seat and leaves it at the table as a guest with the same
-    name, the way declining an invite does on a saved play.
+    saved play as counted, so no invite reaches the bell. "Not me" marks the
+    seat declined, and the saved play keeps it as a guest with the same name,
+    the way declining an invite does on a saved play.
     """
     data = (
         sb.rpc("bgb_answer_session_seat", {
