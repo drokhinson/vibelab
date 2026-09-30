@@ -536,7 +536,7 @@ def test_a_finalised_session_rewrites_the_invite_it_concludes():
     """
     actor = _actor()
     session = SimpleNamespace(code="ABCD", game=SimpleNamespace(name="Catan"))
-    play = SimpleNamespace(game_name="Catan", players=_seated("guest-1"))
+    play = SimpleNamespace(id="play-9", game_name="Catan", players=_seated("guest-1"))
 
     (invite,) = _pushes(N.session_invite, actor, session, "guest-1")
     (saved,) = _pushes(N.play_logged, actor, play, session_code="abcd")
@@ -545,18 +545,23 @@ def test_a_finalised_session_rewrites_the_invite_it_concludes():
     assert saved["quiet"] == "1"
     # The invite is the first anyone hears of the game: it must always alert.
     assert "quiet" not in invite
-    # And it may not send the recipient to a lobby that no longer exists.
-    assert saved["url"] == "/notifications"
+    # The invite taps into the lobby; the saved play, which outlives it, taps
+    # into its own detail card.
+    assert invite["url"] == "/play/ABCD"
+    assert invite["body"] == "Dave added you to Catan"
+    assert saved["url"] == "/notifications?play=play-9"
+    assert saved["body"] == "Dave recorded a game with you"
 
 
 def test_a_play_logged_outside_a_lobby_is_unchanged():
     """No session, no rewrite. This play was never announced in advance, so it
     keeps the per-actor tag and alerts as usual."""
-    play = SimpleNamespace(game_name="Catan", players=_seated("guest-1"))
+    play = SimpleNamespace(id="play-9", game_name="Catan", players=_seated("guest-1"))
 
     (pushed,) = _pushes(N.play_logged, _actor(), play)
 
     assert pushed["tag"] == "play_link:host-1"
+    assert pushed["url"] == "/notifications?play=play-9"
     assert "quiet" not in pushed
 
 

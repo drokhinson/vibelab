@@ -263,15 +263,16 @@ def play_logged(
 
     `session_code` SAYS THIS PLAY CAME OUT OF A LOBBY, and changes the
     notification rather than adding one. Everybody it is about was told at the
-    start of the night — "Dave added you to Catan", tagged on the session — and
-    the second card an hour later said almost the same sentence about the same
-    game, so a phone nobody had cleared ended up holding two. Reusing the
-    session's tag makes the later one REPLACE the earlier: whoever cleared the
-    invite gets a normal notification, and whoever didn't gets the one they
-    already had, now reading as the conclusion it is. `quiet` keeps that
-    rewrite from buzzing a second time (push_service.payload), and the url
-    moves off the lobby — which no longer exists once the play is written, so
-    the stale invite's tap used to dead-end there.
+    start of the night — "Dave added you to Catan", tagged on the session, a
+    tap into the lobby. Reusing the session's tag makes this push REPLACE that
+    one: whoever cleared the invite gets a normal notification, and whoever
+    didn't finds the card they already had now saying the game was recorded.
+    `quiet` keeps that rewrite from buzzing a second time
+    (push_service.payload).
+
+    Either way the tap opens this play's detail card over the bell
+    (`/notifications?play=<id>`, read by views/notifications-view.js), not the
+    lobby, which no longer exists once the play is written.
 
     The achievement sweep rides along because this is the moment badges become
     earnable — see achievements_after_play.
@@ -279,22 +280,17 @@ def play_logged(
     seated = [p.user_id for p in play.players if p.user_id and p.user_id != user.user_id]
     if not seated:
         return
-    # Same event, same recipients, same destination either way — only the
-    # sentence and what the device does with it turn on where the play came
-    # from, so the branch picks those three and nothing else can drift.
+    # Same event, sentence and destination either way — only the tag and
+    # whether the device buzzes turn on where the play came from.
     if session_code:
-        title = "Final scores are in"
-        body = f"{user.display_name} saved the {play.game_name} game"
         tag, quiet = _session_tag(session_code), True
     else:
-        title = "You were in a game"
-        body = f"{user.display_name} added you to {play.game_name}"
         tag, quiet = f"play_link:{user.user_id}", False
     _queue(
         background_tasks, sb, seated, PushEvent.PLAY_LINK,
-        title=title,
-        body=body,
-        url="/notifications",
+        title=play.game_name or "You were in a game",
+        body=f"{user.display_name} recorded a game with you",
+        url=f"/notifications?play={play.id}",
         tag=tag,
         actor_id=user.user_id,
         quiet=quiet,

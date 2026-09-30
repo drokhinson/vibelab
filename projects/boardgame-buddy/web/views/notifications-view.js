@@ -97,6 +97,8 @@
         if (document.visibilityState === "visible") this._refresh();
       });
 
+      this._openFromParams(this.params);
+
       const warm = window.NotificationFeed.peekConfirmed();
       if (warm) this._takePage(warm);
       this.render();
@@ -112,8 +114,21 @@
     }
 
     /** The bell (or a tapped push) routed here while already open. */
-    onParamsChange() {
+    onParamsChange(params) {
+      this._openFromParams(params);
       return this._refresh();
+    }
+
+    /**
+     * `?play=<id>` is a saved-play push's tap: open that play's card over the
+     * list. The param is dropped from the URL once used, so a refresh or a
+     * later visit to the bell doesn't reopen it.
+     */
+    _openFromParams(params) {
+      const playId = params && params.play;
+      if (!playId) return;
+      window.router.replaceUrl("notifications", {});
+      this._open(playId);
     }
 
     async onUnmount() {
