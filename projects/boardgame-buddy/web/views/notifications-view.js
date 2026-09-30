@@ -512,7 +512,7 @@
         : `<strong>${escapeHtml(who)}</strong> added you to ${escapeHtml(game)}`;
       const sub = many
         ? `${it.game_count > 1 ? `${it.game_count} games · ` : `${escapeHtml(game)} · `}${this._span(it)}`
-        : `${this._span(it)} · not in your stats yet`;
+        : this._span(it);
 
       return `
         <div class="bgbnotif-row bgbnotif-row--owed ${it.is_unread ? "is-unread" : ""}"

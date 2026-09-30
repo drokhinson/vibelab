@@ -20925,8 +20925,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 
 .bgbnotif-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
-  gap: 4px;
+  gap: 0 4px;
   background: var(--polaroid-bg);
   border: 1px solid var(--card-border);
   border-radius: 0.9rem;
@@ -20941,7 +20942,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .bgbnotif-row.is-unread { border-left: 3px solid var(--alert-fill); }
 
 .bgbnotif-row__main {
-  flex: 1 1 auto;
+  /* A zero basis so the row's other inline pieces (the count pill) always fit
+     beside it; only .bgbnotif-row__actions, at a full-width basis, wraps. */
+  flex: 1 1 0;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -21011,25 +21014,24 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   place-items: center;
 }
 
-/* Answering a buddy request where it is read. Stacked rather than inline so
-   both controls clear 44px on a narrow phone without squeezing the name beside
-   them; neither is --rust-ink, because declining a request loses none of the
-   user's own data — it is the polite half of a choice, not a destruction. */
+/* Answering a request or an invite where it is read. The buttons sit on their
+   own line under the row's text, split evenly across its width, so each is a
+   wide 40px target and the name and game beside the art keep the full row.
+   Neither is --rust-ink: declining loses none of the user's own data — it is
+   the polite half of a choice, not a destruction. */
 .bgbnotif-row__actions {
-  flex: none;
+  flex: 1 0 100%;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  padding: 8px 10px 8px 0;
+  gap: 8px;
+  padding: 0 12px 12px;
 }
 .bgbnotif-row__accept,
 .bgbnotif-row__decline {
-  min-height: 32px;
-  min-width: 84px;
+  flex: 1 1 0;
+  min-height: 40px;
   padding: 0 10px;
   border-radius: var(--rounded-btn, 0.6rem);
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
 }
