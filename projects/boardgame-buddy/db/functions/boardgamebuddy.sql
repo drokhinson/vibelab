@@ -548,7 +548,7 @@
 --     Game Arena table they already imported, or p_payload.bgg_play_id is a
 --     BoardGameGeek play they already have — the caller re-reads that row.
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
---   Defined in: db/migrations/002_baseline_functions_play.sql
+--   Defined in: db/migrations/062_decimal_scores.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by

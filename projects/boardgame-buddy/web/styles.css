@@ -4127,6 +4127,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    would stack on top of that gap and float the heading between the two days
    it is meant to label. Zero them out here and let the gap do the spacing. */
 .feed-cards > .day-divider { margin: 0.35rem 0.2rem -0.25rem; }
+/* "Is this you?" heads the stream, so there is no section above it to rule
+   off — the gap does the spacing. */
+.feed-cards > .ghost-claim-section { border-top: none; padding: 0; }
 
 /* ── Feed sidebar (tablet + wide) ───────────────────────────────────────────
    views/feed-view.js lifts the hot-games and suggested-buddies rails out of
@@ -4790,13 +4793,15 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   animation: fadeUp 200ms ease both;
 }
 
-/* ── Play-card reels follow the theme ─────────────────────────────────────
+/* ── Play cards follow the theme ──────────────────────────────────────────
    The feed's sessions and game detail's Recent plays reel cut their polaroids
    from the ground's raised step, not from cream paper, so a reel reads as part
-   of the screen instead of a row of lit rectangles on espresso. These are the
-   places a play card follows the theme; every value is a var(), so light keeps
-   white cards on cream. */
-:is(.play-session, .game-detail__plays-scroll) {
+   of the screen instead of a row of lit rectangles on espresso. The play-detail
+   popup those cards open is cut from the same step, so the card you tap and the
+   card it expands into are one object. Every value is a var(), so light keeps
+   white cards on cream. The popup is body-level, so it is named on the card
+   itself rather than inherited from the reel it was opened from. */
+:is(.play-session, .game-detail__plays-scroll, .play-detail-popup__card) {
   --polaroid-bg:       var(--bg-2);
   --polaroid-bg-soft:  color-mix(in srgb, var(--bg-2) 80%, var(--line-strong));
   --polaroid-ink:      var(--ink);
@@ -4807,7 +4812,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 /* Only what a var() cannot supply (theming.md §7). The play card itself
    declares none of these. */
-:root[data-bgb="dark"] :is(.play-session, .game-detail__plays-scroll) {
+:root[data-bgb="dark"] :is(.play-session, .game-detail__plays-scroll, .play-detail-popup__card) {
   --accent-ink:      var(--accent);   /* the paper gold is 2.6:1 on --bg-2 */
   --polaroid-accent: #E87B63;         /* terracotta is 3.4:1 on --bg-2; this is 5.2:1 */
   --ghost-ink:       #C4A987;
@@ -9598,102 +9603,201 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 .scoring-cell:focus { outline: none; border-color: var(--accent-ink); }
 
-/* The bar widgets/score-keypad.js docks on the number pad while a score cell
-   has focus: (−) to flip its sign, Prev and Next to move between cells.
-   Body-level and edge to edge like the keyboard it sits on, and shown only
-   while ui/viewport-lock.js reports a software keyboard up — a hardware
-   keyboard has its own minus key, and Enter / Shift+Enter do what Next / Prev
-   do.
+/* The score pad (widgets/score-keypad.js): the app's own number keys for a
+   score cell on a touch screen, standing in for the system keyboard. Docked
+   along the bottom edge, or along the right edge on the `land` tier, where a
+   phone on its side has width to spare and no height.
 
    z-index 105: above the modal/sheet rung (100–102), because the play-detail
    popup's edit grid is a cell inside a modal; below the import toasts (111)
-   and the error toast (120). It only exists while a cell is focused, and it
-   sits on the keyboard, so it never contends with a sheet's own controls.
+   and the error toast (120). The Sum spotlight sits one under it (104).
 
    Ground tokens rather than the --polaroid-* aliases: it floats over whatever
-   surface the grid is on (paper scorepad, chrome popup), and reads as part of
-   the keyboard, which is chrome in both themes. */
-.score-keypad {
+   surface the grid is on (paper scorepad, chrome popup) and reads as a
+   keyboard, which is chrome in both themes. */
+.score-pad {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: var(--bgb-kb-inset, 0px);
+  bottom: 0;
   z-index: 105;
   box-sizing: border-box;
-  display: none;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  background: var(--bg-2);
+  padding: 8px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg-1);
   border-top: 1px solid var(--line-strong);
   font-family: var(--font-sans);
-}
-:root.bgb-kb-open .score-keypad:not([hidden]) { display: flex; }
-/* iOS 26+ (widgets/score-keypad.js#liftsOverAssistant): Safari's ⌃ ⌄ ✓ bar
-   floats as a glass pill over the bottom of the visible viewport instead of
-   riding on the keyboard, so a bar docked at the keyboard's edge sits under
-   it. Lift clear of the pill and float like it does — inset from the edges,
-   rounded, on a shadow rather than a top rule. 78px is measured off an iPhone
-   screenshot: the pill's top sits ~74pt above the viewport's bottom edge, plus
-   a small gap. */
-.score-keypad.score-keypad--lifted {
-  bottom: calc(var(--bgb-kb-inset, 0px) + 78px);
-  left: 8px;
-  right: 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
-  box-shadow: var(--sh-2);
-}
-.score-keypad__key,
-.score-keypad__nav {
-  height: 44px;
-  min-width: 56px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: var(--r-sm);
-  touch-action: manipulation;
+  transform: translateY(100%);
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
   -webkit-user-select: none;
   user-select: none;
+}
+.score-pad.is-open { transform: none; }
+.score-pad[hidden] { display: none; }
+.score-pad__keys {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  max-width: 520px;
+  margin-inline: auto;
+}
+.score-pad__key {
+  height: 50px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--ink);
+  font: 400 24px/1 var(--font-sans);
+  box-shadow: var(--sh-1);
+  display: grid;
+  place-items: center;
+  touch-action: manipulation;
   cursor: pointer;
 }
-.score-keypad__key {
-  background: var(--bg-1);
-  color: var(--ink);
-  font: 500 20px/1 var(--font-score);
-  box-shadow: 0 1px 0 var(--shadow-c);
-}
-.score-keypad__key:active { background: var(--bg-0); }
-.score-keypad__nav {
-  min-width: 76px;
-  font-size: 17px;
-  font-weight: 600;
-}
-/* Prev is the secondary move, so it takes the key's plain face; Next keeps the
-   solid accent as the move a scorer makes forty times a night. Its auto margin
-   holds (−) at the left edge and the moves at the right. */
-.score-keypad__prev {
-  margin-left: auto;
-  background: var(--bg-1);
-  color: var(--ink);
-  box-shadow: 0 1px 0 var(--shadow-c);
-}
-.score-keypad__prev:active { background: var(--bg-0); }
-.score-keypad__prev:disabled { color: var(--ink-faint); box-shadow: none; cursor: default; }
-.score-keypad__next {
-  background: var(--accent-fill);
-  color: var(--on-accent);
-}
-.score-keypad__next:active { filter: brightness(0.92); }
-/* + Round: the Play step's "Next round", which the docked bar would offer if the
-   keypad were not sitting where it goes. Outlined in the accent rather than
-   filled, so Next stays the one solid key. */
-.score-keypad__round {
+.score-pad__key:active { filter: brightness(1.2); }
+.score-pad__key--fn { background: var(--bg-0); }
+.score-pad__key--sign { font: 500 19px/1 var(--font-score); }
+.score-pad__key--blank { background: transparent; box-shadow: none; pointer-events: none; }
+.score-pad__key--nav { background: var(--bg-0); font-size: 16px; font-weight: 600; }
+.score-pad__key--nav:disabled { color: var(--ink-faint); box-shadow: none; cursor: default; }
+.score-pad__key--next { background: var(--accent-fill); color: var(--on-accent); font-size: 17px; font-weight: 600; }
+/* Σ Sum and + Round: outlined in the accent so Next stays the one solid key.
+   + Round is the Play step's "Next round" and shows only there
+   ([data-kp-round]); without it Σ Sum takes the whole row. In Sum mode the
+   row is always Σ Sum beside a solid =, which finishes the sum. */
+.score-pad__key--tool {
+  grid-column: 1 / -1;
+  height: 44px;
   background: transparent;
   color: var(--accent);
   box-shadow: inset 0 0 0 1.5px var(--accent);
+  font-size: 15px;
+  font-weight: 600;
 }
-.score-keypad__round:active { background: var(--accent-quiet); }
-.score-keypad__round[hidden] { display: none; }
+.score-pad__key--round { display: none; }
+.score-pad.has-round:not(.is-summing) .score-pad__key--sumkey,
+.score-pad.is-summing .score-pad__key--sumkey { grid-column: 1 / 3; }
+.score-pad.has-round:not(.is-summing) .score-pad__key--round { display: grid; grid-column: 3 / -1; }
+.score-pad.is-summing .score-pad__key--sumkey { background: var(--accent-quiet); }
+.score-pad.is-summing .score-pad__key--eq {
+  grid-column: 3 / -1;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  box-shadow: none;
+  font: 600 24px/1 var(--font-score);
+}
+.score-pad__key--dot { font: 600 26px/1 var(--font-score); }
+.score-pad__key--op { background: var(--accent-quiet); color: var(--accent); font: 600 26px/1 var(--font-score); box-shadow: none; }
+.score-pad__key--op.is-armed { box-shadow: inset 0 0 0 2px var(--accent); }
+.score-pad:not(.is-summing) .score-pad__sum,
+.score-pad.is-summing .score-pad__plain { display: none; }
+
+/* Sum mode's tape: the numbers stacked so far, one chip each. A chip is a
+   button — tap it to reopen that number, × to drop it. */
+.score-pad__tape { display: none; align-items: center; gap: 6px; max-width: 520px; margin: 0 auto 8px; }
+.score-pad.is-summing .score-pad__tape { display: flex; }
+.score-pad__terms {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.score-pad__terms::-webkit-scrollbar { display: none; }
+.score-pad__chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--ink);
+  font: 600 15px/1.2 var(--font-score);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.score-pad__chip.is-fresh { animation: score-pad-rise 260ms cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+.score-pad__chip.is-minus { color: var(--rust); }
+.score-pad__chip.is-open { background: var(--accent-quiet); box-shadow: inset 0 0 0 2px var(--accent); }
+.score-pad__chip--entry { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line-strong); cursor: default; }
+.score-pad__chip--entry.is-live { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.score-pad__ph { color: var(--ink-faint); font-weight: 400; }
+.score-pad__chip-del {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: -4px;
+  border-radius: 50%;
+  background: var(--rust);
+  color: var(--bg-1);
+  font: 700 14px/1 var(--font-sans);
+}
+.score-pad__cancel {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font: 500 14px var(--font-sans);
+  cursor: pointer;
+}
+@keyframes score-pad-rise { from { transform: translateY(44px) scale(1.25); opacity: 0; } }
+
+/* A phone on its side: the pad docks on the right edge, full height, and
+   slides in from there. The keys stretch to share the height. */
+.score-pad.score-pad--side {
+  left: auto;
+  top: 0;
+  width: min(42vw, 360px);
+  display: flex;
+  flex-direction: column;
+  padding: 8px calc(8px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) 8px;
+  border-top: 0;
+  border-left: 1px solid var(--line-strong);
+  transform: translateX(100%);
+}
+.score-pad.score-pad--side.is-open { transform: none; }
+.score-pad.score-pad--side[hidden] { display: none; }
+.score-pad--side .score-pad__tape { width: 100%; margin-bottom: 6px; }
+.score-pad--side .score-pad__keys { flex: 1 1 auto; min-height: 0; width: 100%; gap: 5px; grid-template-rows: repeat(5, minmax(0, 1fr)); }
+.score-pad--side .score-pad__key { height: auto; font-size: 20px; }
+.score-pad--side .score-pad__key--nav,
+.score-pad--side .score-pad__key--next { font-size: 15px; }
+.score-pad--side .score-pad__key--tool { font-size: 14px; }
+.score-pad--side .score-pad__chip { padding: 4px 9px; font-size: 13px; }
+
+/* Sum mode's spotlight (widgets/score-sum.js): the screen dimmed around the
+   cell, its column's header and its row's label. */
+.score-sum-spot {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 104;
+  pointer-events: none;
+}
+.score-sum-spot[hidden] { display: none; }
+.score-sum-spot path { fill: var(--shadow-c); fill-rule: evenodd; }
+@media (prefers-reduced-motion: reduce) {
+  .score-pad { transition: none; }
+  .score-pad__chip.is-fresh { animation: none; }
+}
+
+/* The side-docked pad covers the right edge, so the page gives it that room:
+   the document column, the Play step pinned over the visible viewport, and the
+   play-detail popup. */
+:root.bgb-pad-side body { padding-right: var(--bgb-pad-right, 0px); }
+:root.bgb-pad-side .play-detail-popup__backdrop { right: var(--bgb-pad-right, 0px); }
 
 /* The strip above the grid: which scorepad the table is built on, and which
    expansions are appending rows to it. Absent entirely
@@ -10079,11 +10183,8 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   background: var(--rust-soft);
   color: var(--rust);
 }
-/* The cell and the one thing wrapping it still does: carry `is-neg` so a
-   negative score reads in rust. It used to hold a +/− sign button beside the
-   input as well; the sign now lives on the keypad bar that docks on the number
-   pad (widgets/score-keypad.js), so the button and the preference that turned
-   it on are gone.
+/* The cell's wrapper carries `is-neg` so a negative score reads in rust, and
+   `is-summing` while the score pad's Σ Sum is building its value.
 
    --rust-ink, not --rust: this ink only ever lands on paper, which is light in
    every theme, and the chrome block lifts --rust to #E87B63 for the espresso
@@ -10091,6 +10192,22 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-cell-wrap { display: flex; align-items: center; min-width: 0; }
 .scoring-cell-wrap .scoring-cell { flex: 1 1 auto; min-width: 0; }
 .scoring-cell-wrap.is-neg .scoring-cell { color: var(--rust-ink); }
+/* .score-pad-field is the same wrapper for a score field outside a grid (the
+   play-detail card's whole-play scores). */
+.score-pad-field { display: block; flex: none; position: relative; }
+:is(.scoring-cell-wrap, .score-pad-field).is-summing { position: relative; }
+:is(.scoring-cell-wrap, .score-pad-field).is-summing input { font-weight: 700; border-color: var(--accent-ink); }
+.score-pad-field.is-summing input { padding-left: 1.4rem; }
+:is(.scoring-cell-wrap, .score-pad-field).is-summing::before {
+  content: "\03A3";
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 600 0.7rem/1 var(--font-sans);
+  color: var(--polaroid-muted);
+  pointer-events: none;
+}
 .scoring-total.is-neg { color: var(--rust-ink); }
 
 /* The totals band, as a wash of the surface's own hairline rather than the
@@ -11817,14 +11934,18 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 :root.bgb-kb-open:is([data-bgb-layout="wide"], [data-bgb-layout="land"]):has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) #screen-play .play-pager :is(.play-pager__page--players, .play-pager__page--guide, .play-side-bar) {
   display: none;
 }
-/* A score cell has the keyboard: the keypad bar (widgets/score-keypad.js) sits
-   on it with + Round, exactly where the docked CTA would, so the CTA goes and
-   the screen ends at the keypad's 57px instead of the CTA's 76px. */
+/* A score cell has the keyboard or the score pad (widgets/score-keypad.js),
+   which carries + Round where the docked CTA would sit, so the CTA goes and
+   the screen ends at the pad's edge. On the land tier the pad docks on the
+   right, so the pinned screen stops short of it there. */
 :root.bgb-kb-open:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager):has(#screen-play input.scoring-cell:focus) #screen-play .cascade-cta-wrap {
   display: none;
 }
 :root.bgb-kb-open:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager):has(#screen-play input.scoring-cell:focus) #screen-play {
-  padding-bottom: 57px;
+  padding-bottom: 0;
+}
+:root.bgb-kb-open.bgb-pad-side:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) #screen-play {
+  right: var(--bgb-pad-right, 0px);
 }
 
 /* ── Players page: standings (widgets/play-standings.js) ──────────────────
@@ -14282,7 +14403,8 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 
 /* ── Expanded play-detail popup ──────────────────────────────────────────
-   In-place modal opened by a tap on a polaroid play card.
+   In-place modal opened by a tap on a polaroid play card. Its tokens come
+   from the "Play cards follow the theme" re-point, shared with the feed.
    Holds the full play record + edit form so the user doesn't have to
    navigate away from whichever surface they're on. Reuses the polaroid
    backdrop pattern and the .play-detail__* read/edit styles. */
@@ -14327,7 +14449,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   justify-content: space-between;
   align-items: center;
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--polaroid-line);
   background: var(--polaroid-bg-soft, #F5EEDC);
   min-height: 44px;
 }
@@ -14338,7 +14460,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   padding: 8px 12px;
   min-height: 36px;
   background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
   color: var(--polaroid-ink);
   font-family: var(--font-sans);
@@ -14348,7 +14470,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   transition: background 120ms ease, border-color 120ms ease;
 }
 .play-detail-popup__edit:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--line);
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -14365,7 +14487,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 120ms ease;
 }
-.play-detail-popup__close:hover { background: rgba(0, 0, 0, 0.08); }
+.play-detail-popup__close:hover { background: var(--line); }
 .play-detail-popup__scroll {
   flex: 1;
   min-height: 0;
@@ -14470,9 +14592,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 120ms ease;
 }
-.play-detail-popup__page:active:not(:disabled) { background: rgba(0, 0, 0, 0.08); }
+.play-detail-popup__page:active:not(:disabled) { background: var(--line); }
 @media (hover: hover) {
-  .play-detail-popup__page:hover:not(:disabled) { background: rgba(0, 0, 0, 0.08); }
+  .play-detail-popup__page:hover:not(:disabled) { background: var(--line); }
 }
 .play-detail-popup__page:disabled { opacity: 0.3; cursor: default; }
 .play-detail-popup__page-count {
@@ -14583,11 +14705,10 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 
 /* Polaroid theme overrides for play-detail content inside the popup.
-   The shared .play-detail__* surfaces default to DaisyUI's dark base
-   palette (oklch(var(--b2/b3))). Inside the cream popup card those
-   backgrounds print as inky slabs — re-skin every surface (view rows,
-   edit rows, form controls) in polaroid tokens so the popup reads as
-   one consistent piece of stationery. */
+   The shared .play-detail__* surfaces default to DaisyUI's base palette
+   (oklch(var(--b2/b3))), which is not the card's surface — re-skin every
+   surface (view rows, edit rows, form controls) in polaroid tokens so the
+   popup reads as one consistent piece in either theme. */
 .play-detail-popup__card .play-detail__meta,
 .play-detail-popup__card .play-detail__player,
 .play-detail-popup__card .play-detail__edit-player,
@@ -14608,8 +14729,8 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .play-detail-popup__card .play-detail__player.is-winner .play-detail__player-score {
   color: #C9922A;
 }
-/* --accent is the app's own hue, which reads as a foreign ink on the cream
-   card — the popup's rows take the polaroid accent on hover instead. */
+/* The popup's rows take the polaroid accent on hover, the same ink as the
+   game name in the title, rather than the app's --accent. */
 .play-detail-popup__card .play-detail__player.is-link:hover,
 .play-detail-popup__card .play-detail__player.is-link:focus-visible {
   border-color: var(--polaroid-accent);
@@ -14626,9 +14747,8 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 
 /* DaisyUI input / textarea controls (date picker, score, add-player,
-   notes textarea). Default DaisyUI styling renders them as dark
-   chips against the cream card — re-skin to cream paper with the
-   polaroid hairline border. */
+   notes textarea). DaisyUI paints them from the ground palette — re-skin
+   to the card's own surface with the polaroid hairline border. */
 .play-detail-popup__card .input,
 .play-detail-popup__card .textarea {
   background: var(--polaroid-bg);
@@ -14646,9 +14766,39 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   outline-color: var(--polaroid-accent);
 }
 
-/* The popup's own copy of the .scoring-* re-skin lived here. Deleted with its
-   twin: this card is paper, it declares no --well, and the family resolves
-   against the root paper aliases on its own. */
+/* The score grid is a score sheet, so it stays paper inside the themed card —
+   the same island the Play step's scorepad is (see "Paper islands" near the
+   top of this file). The card declares no --well, so the cells take the
+   var(--well, var(--polaroid-bg)) fallback and resolve against these, and the
+   sheet paints its own ground so paper ink never lands on the dark card. */
+.play-detail-popup__card .rg {
+  background: var(--paper);
+  border-radius: 8px;
+  padding: 4px;
+
+  --polaroid-bg:       var(--paper);
+  --polaroid-bg-soft:  color-mix(in srgb, var(--paper) 92%, var(--paper-line));
+  --polaroid-ink:      var(--paper-ink);
+  --polaroid-ink-soft: color-mix(in srgb, var(--paper-ink) 78%, var(--paper));
+  --polaroid-muted:    var(--paper-muted);
+  --polaroid-line:     var(--paper-line);
+  --polaroid-accent:   var(--win);
+
+  --accent-ink:        var(--accent-on-paper);
+  --ghost-ink:         var(--ghost-ink-paper);
+}
+/* A team band in the player list sits on the card, not the sheet, so in dark
+   its rule needs a lighter hue than the paper-tuned slots: each is lifted 25%
+   toward white, which keeps every 3px rule at >= 3.1:1 against its own wash on
+   --bg-2. Declared on the band itself, where its inline --team-tint resolves. */
+:root[data-bgb="dark"] .play-detail-popup__card .play-detail__team {
+  --team-1: color-mix(in srgb, #2F6FA8 75%, #FFFFFF);
+  --team-2: color-mix(in srgb, #C2562A 75%, #FFFFFF);
+  --team-3: color-mix(in srgb, #2E7D5B 75%, #FFFFFF);
+  --team-4: color-mix(in srgb, #8A4A9C 75%, #FFFFFF);
+  --team-5: color-mix(in srgb, #9E2B3F 75%, #FFFFFF);
+  --team-6: color-mix(in srgb, #5A6370 75%, #FFFFFF);
+}
 
 /* Read-only score readout shown next to a player row when the rounds
    grid is active (score = sum of rounds, no manual override). */
@@ -14703,7 +14853,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 .play-detail-popup__card .play-detail__game-goto:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--line);
   border-color: var(--polaroid-accent);
   color: var(--polaroid-accent);
 }
@@ -14751,7 +14901,7 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   flex-wrap: wrap;
   padding: 10px 14px;
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid var(--polaroid-line);
   background: var(--polaroid-bg-soft, #F5EEDC);
   flex-shrink: 0;
 }

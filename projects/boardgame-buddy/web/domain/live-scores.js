@@ -462,7 +462,7 @@
         if (n != null && (r < 0 || r >= n)) continue;
         total += Number(v) || 0;
       }
-      return total;
+      return window.roundScoreSum ? window.roundScoreSum(total) : total;
     }
 
     /**

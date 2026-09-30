@@ -98,6 +98,24 @@ def _normalize_country(value: str) -> str:
 CountryCode = Annotated[str, AfterValidator(_normalize_country)]
 
 
+def tidy_score(value: int | float | None) -> int | float | None:
+    """A score at two decimal places, and whole numbers as ints.
+
+    Scores may be decimals (12.5). Rounding to two places keeps a sum of
+    rounds such as 0.1 + 0.2 from storing float noise, and returning a whole
+    number as an int keeps 12 reading as 12 rather than 12.0 everywhere a
+    score is shown or compared.
+    """
+    if value is None or isinstance(value, bool) or isinstance(value, int):
+        return value
+    rounded = round(float(value), 2)
+    return int(rounded) if rounded.is_integer() else rounded
+
+
+# One score or one round's score: a whole number or a decimal to two places.
+Score = Annotated[int | float, AfterValidator(tidy_score)]
+
+
 class BackfillPassResponse(BaseModel):
     """Outcome of ONE PASS of an admin catalog backfill.
 
@@ -968,7 +986,7 @@ class CollectionShelfResponse(BaseModel):
 class PlayerEntry(BaseModel):
     name: str
     is_winner: bool = False
-    score: int | None = None
+    score: Score | None = None
     # Real-account player id. Populated when the FE picks this player from
     # the user's accepted-buddy list; None for free-text ghost players.
     # Backend uses it to populate play_players.player_user_id
@@ -977,7 +995,7 @@ class PlayerEntry(BaseModel):
     # Per-round score breakdown. Only sent when more than
     # one round was tracked — the FE drops it for ≤1-round plays so the
     # column stays NULL for the simple-score path.
-    round_scores: list[int | None] | None = None
+    round_scores: list[Score | None] | None = None
     # The side this seat played on, free text as the host typed it.
     # None for every competitive and co-op play. The client
     # caps its own input at 6 characters for column width; this cap is about
@@ -1019,7 +1037,7 @@ class PlayerEntry(BaseModel):
         `score` alone there — the client sends NULL for exactly this case.
         """
         if self.round_scores and any(v is not None for v in self.round_scores):
-            self.score = sum(v or 0 for v in self.round_scores)
+            self.score = tidy_score(sum(v or 0 for v in self.round_scores))
         return self
 
 
@@ -1192,11 +1210,11 @@ class PlayPlayerResponse(BaseModel):
     # their badge — the FE renders the BGB default in both cases.
     avatar: Avatar | None = None
     is_winner: bool
-    score: int | None = None
+    score: Score | None = None
     # Per-round score breakdown. NULL for older plays
     # and for any play with ≤1 rounds — the FE only persists the array
     # when there were multiple rounds.
-    round_scores: list[int | None] | None = None
+    round_scores: list[Score | None] | None = None
     # The side this seat played on. NULL for older plays,
     # every competitive and co-op play, and a team play whose sides
     # were never named. Defaulted rather than required because the roster RPCs
@@ -2124,7 +2142,7 @@ class SessionScoreRow(BaseModel):
 
     participant_id: str
     round_index: int
-    score: int | None = None
+    score: Score | None = None
 
 
 class SessionResponse(BaseModel):
@@ -2777,7 +2795,7 @@ class ParsedPlayer(BaseModel):
 
     name: str
     is_winner: bool = False
-    score: int | None = None
+    score: Score | None = None
 
 
 class ParsedPlay(BaseModel):

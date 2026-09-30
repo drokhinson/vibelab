@@ -656,7 +656,8 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   id UUID DEFAULT gen_random_uuid() NOT NULL,
   play_id UUID NOT NULL,
   is_winner BOOLEAN DEFAULT false,
-  score INTEGER,
+  -- Up to two decimal places; the API returns whole numbers as ints.
+  score NUMERIC,
   player_user_id UUID,
   player_display_name TEXT,
   round_scores JSONB,
@@ -832,7 +833,7 @@ GRANT SELECT ON public.boardgamebuddy_play_session_participants TO boardgamebudd
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_scores (
   session_id UUID NOT NULL,
   round_index SMALLINT NOT NULL,
-  score INTEGER,
+  score NUMERIC,
   participant_id UUID NOT NULL,
   CONSTRAINT boardgamebuddy_play_session_scores_pkey PRIMARY KEY (session_id, participant_id, round_index),
   CONSTRAINT boardgamebuddy_play_session_scores_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES boardgamebuddy_play_session_participants(id) ON DELETE CASCADE,
