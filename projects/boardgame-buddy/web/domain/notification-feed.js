@@ -6,6 +6,11 @@
 // accepted the request you sent. This is the data layer behind the header bell
 // and views/notifications-view.js.
 //
+// A play somebody seated you in starts as an INVITE. Unanswered invites ride
+// the first page as `invites`, outside the paged `items`, and stay there until
+// accepted or declined; `pending` counts them with the buddy requests, and is
+// the number on the bell.
+//
 // NOT A CORE OBJECT, deliberately (.claude/rules/ui-object-design.md §1). A
 // notification shows on exactly one surface and routes to no detail screen of
 // its own — tapping one opens the thing it is ABOUT, through the app's existing
@@ -22,7 +27,7 @@
 /**
  * @typedef {Object} Notification
  * @property {string} entry_key   Stable id for the ENTRY, and the cursor tiebreak
- * @property {"play_link"|"buddy_request"|"buddy_accepted"} kind
+ * @property {"play_link"|"play_invite"|"buddy_request"|"buddy_accepted"|"play_inherited"} kind
  * @property {string} occurred_at
  * @property {boolean} is_unread
  * @property {string|null} actor_id            Whoever did this
@@ -287,8 +292,37 @@
       });
     },
 
+    /**
+     * Accept the invites on these plays: one play, or every play in a grouped
+     * invite entry. Declining is unlink().
+     *
+     * @param {string[]} playIds
+     * @returns {Promise<{rows_updated: number}>}
+     */
+    acceptInvites(playIds) {
+      return window.api.post("/notifications/invites/accept", { play_ids: playIds })
+        .then((r) => {
+          NotificationFeed.invalidate();
+          // The plays now count, so every cached stat, shelf and profile that
+          // counts plays is stale.
+          if (window.Play && window.Play.invalidateDeps) window.Play.invalidateDeps();
+          document.dispatchEvent(new CustomEvent("play-changed", {
+            detail: { kind: "accept-bulk", playIds },
+          }));
+          return r;
+        });
+    },
+
     /** @returns {number} */
     unreadCount() { return window.store.get("notifCount") || 0; },
+
+    /** @returns {number} */
+    pendingCount() { return window.store.get("notifPending") || 0; },
+
+    /** @param {number} n */
+    setPending(n) {
+      window.store.set("notifPending", Math.max(0, Math.floor(Number(n) || 0)));
+    },
 
     /** @param {number} n */
     setUnread(n) {
@@ -313,6 +347,9 @@
     publishUnreadFromBoot(payload) {
       if (!payload) return;
       NotificationFeed.seedFirstPage(payload.notifications_first_page);
+      if (payload.notifications_pending != null) {
+        NotificationFeed.setPending(payload.notifications_pending);
+      }
       const n = payload.notifications_unread;
       if (n == null) return;
       NotificationFeed.setUnread(n);

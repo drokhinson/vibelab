@@ -659,6 +659,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   -- Up to two decimal places; the API returns whole numbers as ints.
   score NUMERIC,
   player_user_id UUID,
+  -- An account invited to this seat that has not accepted. The seat shows as
+  -- that account, but counts for nobody until accepted, when the id moves to
+  -- player_user_id. Declining clears it and leaves a guest with the name.
+  pending_user_id UUID,
   player_display_name TEXT,
   round_scores JSONB,
   -- When this seat happened, NOT the play's created_at: bgb_link_ghost stamps
@@ -676,7 +680,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   CONSTRAINT boardgamebuddy_play_players_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_play_players_play_id_fkey FOREIGN KEY (play_id) REFERENCES boardgamebuddy_plays(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_play_players_player_user_id_fkey FOREIGN KEY (player_user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
+  CONSTRAINT boardgamebuddy_play_players_pending_user_id_fkey FOREIGN KEY (pending_user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
   CONSTRAINT bgb_play_players_identity_chk CHECK (((player_user_id IS NOT NULL) OR (player_display_name IS NOT NULL))),
+  CONSTRAINT bgb_play_players_pending_chk CHECK (player_user_id IS NULL OR pending_user_id IS NULL),
   -- 16, not the 6 the Gather input enforces: that 6 is a layout fact about one
   -- grid column, not a fact about the data.
   CONSTRAINT bgb_play_players_team_len_chk CHECK ((team IS NULL OR char_length(team) <= 16))
@@ -685,6 +691,8 @@ ALTER TABLE public.boardgamebuddy_play_players ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_display_name_trgm ON public.boardgamebuddy_play_players USING gin (player_display_name extensions.gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_play ON public.boardgamebuddy_play_players USING btree (play_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user_play ON public.boardgamebuddy_play_players USING btree (player_user_id, play_id) WHERE (player_user_id IS NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bgb_play_players_play_pending ON public.boardgamebuddy_play_players USING btree (play_id, pending_user_id) WHERE (pending_user_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_bgb_play_players_pending ON public.boardgamebuddy_play_players USING btree (pending_user_id, linked_at DESC) WHERE (pending_user_id IS NOT NULL);
 -- One account, one seat, per play. Ghost seats carry a NULL
 -- here and sit outside the predicate on purpose: two same-named ghosts at one
 -- table is a legitimate roster, where one ACCOUNT twice never is.
@@ -813,6 +821,12 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_participants (
   -- grid columns into sides while the game is still being played, instead of
   -- only once the play is saved.
   team TEXT,
+  -- When this account said the game counts for them: by joining, or by
+  -- accepting on the spectator screen. NULL means the saved play invites them.
+  accepted_at TIMESTAMPTZ,
+  -- When this account said "not me" on the spectator screen. The saved play
+  -- keeps the seat as a guest with the same name.
+  declined_at TIMESTAMPTZ,
   CONSTRAINT boardgamebuddy_play_session_participants_pkey PRIMARY KEY (id),
   CONSTRAINT bgb_play_session_participants_team_len_chk CHECK ((team IS NULL OR char_length(team) <= 16)),
   CONSTRAINT boardgamebuddy_play_session_participants_session_id_fkey FOREIGN KEY (session_id) REFERENCES boardgamebuddy_play_sessions(id) ON DELETE CASCADE,

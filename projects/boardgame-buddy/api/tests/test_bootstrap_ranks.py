@@ -46,7 +46,7 @@ def stubbed(monkeypatch):
         return _Dump({"items": []}, next_cursor=None)
 
     async def notifs(*_a, **_k):
-        return _Dump({"items": []}, unread=0)
+        return _Dump({"items": []}, unread=0, pending=0)
 
     monkeypatch.setattr(B.feed_service, "build_feed_page", feed)
     monkeypatch.setattr(B.notification_service, "list_notifications", notifs)

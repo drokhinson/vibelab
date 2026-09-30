@@ -137,6 +137,24 @@ def watch_session(sb: Client, code: str, *, viewer_id: str) -> SessionResponse:
     return _bundle_to_response(data)
 
 
+def answer_seat(sb: Client, code: str, *, user_id: str, accept: bool) -> SessionResponse:
+    """The seated account answers on the spectator screen.
+
+    Accepting marks the lobby seat, and bgb_finalize_session writes it to the
+    saved play as counted, so no invite reaches the bell. "Not me" marks the
+    seat declined, and the saved play keeps it as a guest with the same name,
+    the way declining an invite does on a saved play.
+    """
+    data = (
+        sb.rpc("bgb_answer_session_seat", {
+            "p_code": code, "p_user": user_id, "p_accept": accept,
+        })
+        .execute()
+        .data
+    )
+    return _bundle_to_response(data)
+
+
 def add_participant(
     sb: Client,
     *,

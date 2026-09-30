@@ -90,7 +90,7 @@ def test_write_carries_the_team_onto_every_row():
         PlayerEntry(name="Ana", user_id="u-a", team="Red"),
         PlayerEntry(name="Bo", user_id="u-b", team="red"),   # same side, any case
         PlayerEntry(name="Cy", team=""),                     # no side
-    ])
+    ], "u-a")
     assert [r["team"] for r in sb.rows] == ["Red", "red", None]
     # ...and the echoed response agrees with what was written, so the client
     # does not have to refetch to learn what landed.
@@ -107,7 +107,7 @@ def test_an_edit_round_trip_does_not_erase_the_sides():
     resent = [PlayerEntry(name=pl.name, user_id=pl.user_id,
                           is_winner=pl.is_winner, team=pl.team) for pl in fetched]
     sb = _WriteSb()
-    P._write_play_players(sb, "play-1", resent)
+    P._write_play_players(sb, "play-1", resent, "u-a")
     assert [r["team"] for r in sb.rows] == ["Red", "Blue"]
 
 

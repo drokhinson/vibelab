@@ -161,6 +161,7 @@ async def get_bootstrap(
     payload["play_partners"] = partners.model_dump(mode="json")
     payload["notifications_first_page"] = notifs.model_dump(mode="json")
     payload["notifications_unread"] = notifs.unread
+    payload["notifications_pending"] = notifs.pending
     payload["release_notices_unseen"] = [
         n.model_dump(mode="json") for n in release_notices
     ]

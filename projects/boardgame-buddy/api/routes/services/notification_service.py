@@ -15,6 +15,13 @@ row would duplicate a column the edge already carries. Deriving it also means
 each kind empties itself by construction: unlinking drops a play row, and
 accepting or declining drops a request row.
 
+A seat somebody else gave you starts as an invite
+(`play_players.pending_user_id`) and is not in this feed: `bgb_play_invites`
+lists the unanswered ones separately, because they stay at the top of the bell
+until answered however old they are. Accepting moves the seat to
+`player_user_id`, and from then on it is an ordinary play row here. Declining
+is the unlink.
+
 The fourth kind is derived the same way, off `plays.inherited_at` — which is
 why the handover stamps a column rather than writing an event: the play row
 already knows it changed hands, and a second source of truth about that would
@@ -31,6 +38,7 @@ called — there is no profile row left to join to).
 """
 
 import asyncio
+import logging
 from supabase import Client
 from datetime import datetime
 
@@ -39,6 +47,8 @@ from ..models import (
     NotificationsResponse,
     NotificationsSeenResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def list_notifications(
@@ -63,9 +73,12 @@ async def list_notifications(
     every other in-flight request in the worker for its whole duration — the
     same reasoning bootstrap_routes.py spells out for its own gather.
     """
-    rows, unread = await asyncio.gather(
+    first_page = before is None
+    rows, unread, invite_rows, pending = await asyncio.gather(
         asyncio.to_thread(fetch_page, sb, viewer_id, limit, before, before_key),
         asyncio.to_thread(unread_count, sb, viewer_id),
+        asyncio.to_thread(fetch_invites, sb, viewer_id) if first_page else _nothing([]),
+        asyncio.to_thread(pending_count, sb, viewer_id),
     )
 
     items = [Notification.model_validate(r) for r in rows]
@@ -82,7 +95,13 @@ async def list_notifications(
         next_cursor=items[-1].occurred_at if full else None,
         next_cursor_key=items[-1].entry_key if full else None,
         unread=unread,
+        invites=[Notification.model_validate(r) for r in invite_rows],
+        pending=pending,
     )
+
+
+async def _nothing(value):
+    return value
 
 
 def fetch_page(
@@ -113,6 +132,65 @@ def unread_count(sb: Client, viewer_id: str) -> int:
     """Everything unread across all three kinds. Counts play ENTRIES, not plays."""
     res = sb.rpc("bgb_notifications_unread", {"p_viewer": viewer_id}).execute()
     return int(res.data or 0)
+
+
+def fetch_invites(sb: Client, viewer_id: str) -> list[dict]:
+    """Every unanswered play invite entry, oldest first. Soft: a failure is an
+    empty list, so the bell still loads."""
+    try:
+        return sb.rpc("bgb_play_invites", {"p_viewer": viewer_id}).execute().data or []
+    except Exception:
+        logger.exception("notifications: play invites read failed")
+        return []
+
+
+def pending_count(sb: Client, viewer_id: str) -> int:
+    """How many things wait on an answer: invite entries and buddy requests.
+    Soft, like fetch_invites."""
+    try:
+        res = sb.rpc("bgb_notifications_pending", {"p_viewer": viewer_id}).execute()
+        return int(res.data or 0)
+    except Exception:
+        logger.exception("notifications: pending count failed")
+        return 0
+
+
+def accept_invites(sb: Client, viewer_id: str, play_ids: list[str]) -> int:
+    """Accept the viewer's invites on these plays. Returns the seats moved;
+    ids that are not an open invite for the viewer are skipped."""
+    res = sb.rpc(
+        "bgb_accept_play_invites", {"p_viewer": viewer_id, "p_play_ids": play_ids}
+    ).execute()
+    return int(res.data or 0)
+
+
+def invite_items(sb: Client, viewer_id: str, play_ids: list[str]) -> list[dict]:
+    """The plays among `play_ids` the viewer is still invited to, newest first."""
+    seats = (
+        sb.table("boardgamebuddy_play_players")
+        .select("play_id")
+        .eq("pending_user_id", viewer_id)
+        .in_("play_id", play_ids)
+        .execute()
+        .data
+        or []
+    )
+    ids = [r["play_id"] for r in seats]
+    if not ids:
+        return []
+    plays = (
+        sb.table("boardgamebuddy_plays")
+        .select("id, game_name, played_at")
+        .in_("id", ids)
+        .execute()
+        .data
+        or []
+    )
+    plays.sort(key=lambda p: (p.get("played_at") or "", p["id"]), reverse=True)
+    return [
+        {"play_id": p["id"], "game_name": p.get("game_name"), "played_at": p.get("played_at")}
+        for p in plays
+    ]
 
 
 def mark_seen(

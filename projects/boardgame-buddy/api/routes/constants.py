@@ -204,6 +204,12 @@ class NotificationKind(StrEnum):
     # `actor_username` and `actor_avatar` are all None. It reuses the PLAY_LINK
     # field block for the play itself, always as a group of exactly one.
     PLAY_INHERITED = "play_inherited"
+    # Somebody seated you in a play and you have not accepted or declined.
+    # Read from bgb_play_invites, never from bgb_notifications: an invite sits
+    # in the bell's "Needs an answer" list until it is answered, and once
+    # accepted the same seat reads as an ordinary PLAY_LINK. Same field block
+    # as PLAY_LINK.
+    PLAY_INVITE = "play_invite"
 
 
 # ── Web Push ─────────────────────────────────────────────────────────────────

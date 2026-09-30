@@ -1,44 +1,37 @@
 // views/notifications-view.js — the things that happened TO you.
 //
-// Three signals, one feed, one read watermark:
+// Two sections. "Needs an answer" sits on top and holds what waits on the
+// user: play invites and buddy requests, oldest first, each with Accept and
+// Decline. Everything else is under it, newest first, by day:
 //
-//   play_link       somebody seated your account in a play they logged
-//   buddy_request   somebody asked to be your buddy
+//   play_link       a play you are in that somebody else logged
 //   buddy_accepted  somebody accepted the request you sent
+//   play_inherited  a play passed to you when its logger deleted their account
 //
-// All three are things done TO the user rather than by them. The bell is the
-// one place that answers "what happened while I was away", so it carries all
-// three.
+// A play somebody seats you in is an INVITE until you answer it: it shows on
+// the play as you, but counts toward nothing of yours. Invites arrive whole on
+// the first page (`invites`), outside the paged list, so an old one never
+// hides three pages down. Answering one moves it: accepted, it becomes an
+// ordinary play_link row below; declined, it is gone.
 //
-// A play_link row is an ENTRY, not a play — one act of linking. The server
-// groups a whole imported batch, a run of identical plays, or a single
-// retroactive ghost-link into one row (see bgb_notifications), so a 214-play
-// import is one line reading "Dana added you to 214 plays" with one tick box,
-// rather than 214 lines the user has to select individually. That grouping is
-// the difference between this screen being usable and being the same chore in
-// a new place.
+// An invite is an ENTRY, not a play. The server groups a whole imported batch
+// or a run of identical plays into one (see bgb_play_invites), so a 214-play
+// import is one row reading "Kim added you to 214 plays" with Accept all and
+// Review. Review lists the plays so single nights can be declined first.
 //
-// SELECTION IS THE ROW'S OWN CIRCLE, and it is the only way out of a play. A
-// second path to the same destructive action — a per-row button that unlinks
-// on the spot, or a header Select toggle — would be two affordances for one
-// destination, the anti-pattern in .claude/rules/ui-object-design.md §3b, and
-// a one-tap unlink is the more dangerous kind. Every play row wears an empty
-// circle, ticking any of them raises the action bar, and the bar is where
-// removal happens.
-//
-// Unlinking hands your seat back as a ghost carrying your name, owned by
-// whoever logged the play: they keep their game night, you leave your own
-// history. It is not reversible from here — the other person would have to
-// link you again — so it goes through the app's one destructive confirm.
+// Declining leaves your seat as a guest carrying your name, owned by whoever
+// logged the play: they keep their game night, and it never counted for you.
+// Leaving a play you already accepted is the play card's "I didn't play —
+// remove me", not this screen's.
 //
 // Buddy rows are answered in place, through the same POST /buddies/{id}/accept
 // and /reject the Buddies screen calls. Same action, same affordance: Decline
-// has no confirm there, so it has none here.
+// has no confirm there, so it has none here, and neither does declining a
+// play invite, which loses nothing that ever counted.
 
 (function () {
   const PAGE = 20;
   const SENTINEL_ID = "bgbnotif-sentinel";
-  const BAR_ID = "bgbnotif-bar-host";
 
   class NotificationsView extends window.View {
     constructor() {
@@ -62,9 +55,8 @@
       this._loading = false;
       this._loaded = false;
       this._error = null;
-      this._selected = new Set();   // entry_key, play_link rows only
-      this._busy = false;           // an unlink is in flight
-      this._answering = new Set();  // edge_ids with an accept/decline in flight
+      this._invites = [];           // unanswered play invites, oldest first
+      this._answering = new Set();  // edge_ids and invite entry_keys with an answer in flight
       this._seq = 0;
     }
 
@@ -89,6 +81,16 @@
       // that it returns null and this falls through to the network. A list of
       // Accept and Remove-me buttons is not a place to
       // paint something old.
+      // A play opened from this list can be answered on its own card. The
+      // invite it stood for is then stale, and so is the list around it.
+      this.listenDom("play-changed", (e) => {
+        const { kind, playId } = e.detail || {};
+        if (kind !== "accept" && kind !== "leave") return;
+        if (this._invites.some((it) => (it.play_ids || [it.play_id]).includes(playId))) {
+          this._load({ initial: true });
+        }
+      });
+
       const warm = window.NotificationFeed.peekConfirmed();
       if (warm) this._takePage(warm);
       this.render();
@@ -188,7 +190,14 @@
       this._takeCursor(data);
       this._loaded = true;
       this._error = null;
+      this._takeInvites(data);
       window.NotificationFeed.setUnread(data.unread || 0);
+    }
+
+    /** The first page's invites and the bell's pending count. */
+    _takeInvites(data) {
+      this._invites = data.invites || [];
+      if (data.pending != null) window.NotificationFeed.setPending(data.pending);
     }
 
     /**
@@ -235,6 +244,7 @@
       if (!tail.length) this._takeCursor(data);
       this._loaded = true;
       this._error = null;
+      this._takeInvites(data);
       window.NotificationFeed.setUnread(data.unread || 0);
       this.render();
       // Whatever arrived is now on screen, so it counts as read — same rule as
@@ -266,19 +276,14 @@
     // ── Render ──────────────────────────────────────────────────────────────
 
     render() {
-      const n = this._items.length;
+      const n = this._items.length + this._invites.length;
       let body;
       if (!n && (!this._loaded || this._loading)) body = this._renderLoader();
       else if (this._error && !n)                 body = this._renderLoadError();
       else if (!n)                                body = this._renderEmpty();
       else                                        body = this._renderList();
 
-      // The bar lives in a host of its own — an empty, unstyled div while
-      // nothing is ticked — so raising, relabelling and dropping it patches one
-      // node instead of rewriting the screen. See _paintBar().
-      this.container.innerHTML =
-        `${this._renderHead()}${body}<div id="${BAR_ID}"></div>`;
-      this._paintBar();
+      this.container.innerHTML = `${this._renderHead()}${body}`;
       this.refreshIcons();
 
       // Re-point every paint: the host's contents are replaced each time, so a
@@ -345,14 +350,22 @@
      */
     _renderList() {
       let i = 0;
-      const rows = this._groups().map((g) => `
-        <h3 class="bgbnotif-day">${escapeHtml(g.label)}</h3>
+      const owed = this._owed();
+      const needs = owed.length ? `
+        <h3 class="bgbnotif-day bgbnotif-day--owed">
+          Needs an answer <span class="bgbnotif-day__count">${owed.length}</span>
+        </h3>
+        ${owed.map((it) => this._renderRow(it, i++)).join("")}
+      ` : "";
+      const groups = this._groups();
+      const rows = groups.map((g, gi) => `
+        <h3 class="bgbnotif-day">${escapeHtml(owed.length && gi === 0 ? `Earlier · ${g.label}` : g.label)}</h3>
         ${g.items.map((it) => this._renderRow(it, i++)).join("")}
       `).join("");
 
       return `
         <div class="bgbnotif-list" aria-label="Notifications">
-          ${rows}
+          ${needs}${rows}
         </div>
         ${window.InfiniteScroll.renderFooter({
           id: SENTINEL_ID,
@@ -375,6 +388,7 @@
     _groups() {
       const out = [];
       for (const it of this._items) {
+        if (it.kind === "buddy_request") continue;   // listed under Needs an answer
         const label = formatRelativeDay(it.occurred_at);
         const last = out[out.length - 1];
         if (last && last.label === label) last.items.push(it);
@@ -383,7 +397,20 @@
       return out;
     }
 
+    /**
+     * What waits on an answer, oldest first: the invites, and the buddy
+     * requests the loaded pages carry. A request is received rarely enough to
+     * sit on the first page, so lifting it out of the day groups is enough to
+     * keep the two kinds of question in one place.
+     */
+    _owed() {
+      const requests = this._items.filter((it) => it.kind === "buddy_request");
+      return this._invites.concat(requests)
+        .sort((a, b) => (a.occurred_at < b.occurred_at ? -1 : a.occurred_at > b.occurred_at ? 1 : 0));
+    }
+
     _renderRow(it, i) {
+      if (it.kind === "play_invite")     return this._renderInviteRow(it, i);
       if (it.kind === "buddy_request")   return this._renderRequestRow(it, i);
       if (it.kind === "buddy_accepted")  return this._renderAcceptedRow(it, i);
       if (it.kind === "play_inherited")  return this._renderInheritedRow(it, i);
@@ -392,12 +419,6 @@
 
     /**
      * A play that passed to you because the account that logged it was deleted.
-     *
-     * NO SELECT CIRCLE, and that is a correctness matter rather than a tidiness
-     * one. The circle feeds the action bar, which takes you OUT of plays — and
-     * this is a play you now own. `POST /plays/{id}/leave` refuses the owner
-     * outright ("You logged this play — edit or delete it instead"), so
-     * offering the tick would offer an action guaranteed to fail.
      *
      * A GHOST BADGE, because the person is not an account any more — the same
      * silhouette their seat on the play now renders as, so the row and the
@@ -413,13 +434,6 @@
       const who = it.actor_display_name || "Someone";
       const game = it.game_name || "a game";
 
-      const art = it.game_thumbnail_url
-        ? `<img class="bgbnotif-row__art" src="${escapeAttr(it.game_thumbnail_url)}"
-                alt="" loading="lazy" />`
-        : `<span class="bgbnotif-row__art bgbnotif-row__art--none" aria-hidden="true">
-             <i data-icon="dices" class="w-4 h-4"></i>
-           </span>`;
-
       const badge = window.BgbBadge.render({
         size: "sm",
         displayName: who,
@@ -433,7 +447,7 @@
           <button class="bgbnotif-row__main" type="button"
                   onclick="window.notificationsView._open('${jsStr(it.play_id)}')">
             ${badge}
-            ${art}
+            ${this._art(it)}
             <span class="bgbnotif-row__body">
               <span class="bgbnotif-row__title">${`<strong>${escapeHtml(who)}</strong> deleted their account — their ${escapeHtml(game)} play is yours now`}</span>
               <span class="bgbnotif-row__sub">${this._span(it)} · yours to edit or delete</span>
@@ -444,14 +458,10 @@
     }
 
     /**
-     * A play someone seated you in.
-     *
-     * The circle and the body are siblings, not nested buttons — the same shape
-     * the Add Games rows use — so the two taps can't fight over one target: the
-     * circle selects, the body opens the play.
+     * A play you are in that somebody else logged, already counted: you
+     * accepted it, or joined it yourself. Opening it is the only action here.
      */
     _renderPlayRow(it, i) {
-      const picked = this._selected.has(it.entry_key);
       const many = (it.group_count || 1) > 1;
       // Under the viewer's private alias — the row is about a play they were
       // both at, so it names them the way the play's own roster does.
@@ -468,30 +478,13 @@
         ? `${it.game_count > 1 ? `${it.game_count} games · ` : `${escapeHtml(game)} · `}${this._span(it)}`
         : this._span(it);
 
-      const what = many ? `these ${it.group_count} plays` : game;
-
-      const art = it.game_thumbnail_url
-        ? `<img class="bgbnotif-row__art" src="${escapeAttr(it.game_thumbnail_url)}"
-                alt="" loading="lazy" />`
-        : `<span class="bgbnotif-row__art bgbnotif-row__art--none" aria-hidden="true">
-             <i data-icon="dices" class="w-4 h-4"></i>
-           </span>`;
-
       return `
-        <div class="bgbnotif-row ${it.is_unread ? "is-unread" : ""} ${picked ? "is-selected" : ""}"
+        <div class="bgbnotif-row ${it.is_unread ? "is-unread" : ""}"
              data-key="${escapeAttr(it.entry_key)}" style="--i:${i}">
-          <button class="bgbnotif-row__pick" type="button"
-                  role="checkbox" aria-checked="${picked}"
-                  ${this._busy ? "disabled" : ""}
-                  data-what="${escapeAttr(what)}"
-                  aria-label="${picked ? "Deselect" : "Select"} ${escapeAttr(what)}"
-                  onclick="window.notificationsView._toggle('${jsStr(it.entry_key)}')">
-            ${this._pickIcon(picked)}
-          </button>
           <button class="bgbnotif-row__main" type="button"
                   onclick="window.notificationsView._open('${jsStr(it.play_id)}')">
             ${this._badge(it)}
-            ${art}
+            ${this._art(it)}
             <span class="bgbnotif-row__body">
               <span class="bgbnotif-row__title">${title}</span>
               <span class="bgbnotif-row__sub">${sub}</span>
@@ -500,6 +493,71 @@
           </button>
         </div>
       `;
+    }
+
+    /**
+     * A play somebody seated you in, waiting on your answer.
+     *
+     * One play: Accept and Decline, answered in place. Several (an import, a
+     * run): Accept all, and Review, which lists the plays so single nights
+     * can be declined before the rest are accepted. The body opens the play
+     * either way, where the same question is asked above the roster.
+     */
+    _renderInviteRow(it, i) {
+      const many = (it.group_count || 1) > 1;
+      const who = window.Buddy.nameFor(it.actor_id, it.actor_display_name) || "Someone";
+      const game = it.game_name || "a game";
+      const title = many
+        ? `<strong>${escapeHtml(who)}</strong> added you to ${it.group_count} plays`
+        : `<strong>${escapeHtml(who)}</strong> added you to ${escapeHtml(game)}`;
+      const sub = many
+        ? `${it.game_count > 1 ? `${it.game_count} games · ` : `${escapeHtml(game)} · `}${this._span(it)}`
+        : `${this._span(it)} · not in your stats yet`;
+
+      return `
+        <div class="bgbnotif-row bgbnotif-row--owed ${it.is_unread ? "is-unread" : ""}"
+             data-key="${escapeAttr(it.entry_key)}" style="--i:${i}">
+          <button class="bgbnotif-row__main" type="button"
+                  onclick="window.notificationsView._open('${jsStr(it.play_id)}')">
+            ${this._badge(it)}
+            ${this._art(it)}
+            <span class="bgbnotif-row__body">
+              <span class="bgbnotif-row__title">${title}</span>
+              <span class="bgbnotif-row__sub">${sub}</span>
+            </span>
+          </button>
+          <span class="bgbnotif-row__actions">${this._renderInviteAnswer(it)}</span>
+        </div>
+      `;
+    }
+
+    /** The invite's two buttons, or the stub that stands in while one is in flight. */
+    _renderInviteAnswer(it) {
+      const many = (it.group_count || 1) > 1;
+      const key = jsStr(it.entry_key);
+      if (this._answering.has(it.entry_key)) {
+        return `<button class="bgbnotif-row__accept" type="button" disabled>Working…</button>`;
+      }
+      return `
+        <button class="bgbnotif-row__accept" type="button"
+                onclick="window.notificationsView._acceptInvite('${key}')">
+          ${many ? "Accept all" : "Accept"}
+        </button>
+        <button class="bgbnotif-row__decline" type="button"
+                onclick="window.notificationsView._${many ? "reviewInvite" : "declineInvite"}('${key}', this)">
+          ${many ? "Review" : "Decline"}
+        </button>
+      `;
+    }
+
+    /** The game's thumbnail, or the dice mark when the play has none. */
+    _art(it) {
+      return it.game_thumbnail_url
+        ? `<img class="bgbnotif-row__art" src="${escapeAttr(it.game_thumbnail_url)}"
+                alt="" loading="lazy" />`
+        : `<span class="bgbnotif-row__art bgbnotif-row__art--none" aria-hidden="true">
+             <i data-icon="dices" class="w-4 h-4"></i>
+           </span>`;
     }
 
     /**
@@ -612,49 +670,17 @@
       return `${formatDate(from)} – ${formatDate(to)}`;
     }
 
-    /**
-     * The action bar, which exists only while something is ticked.
-     *
-     * Two buttons and no third: get out of what you picked, or put it back.
-     * There is no Select all: "select all" on a
-     * list whose only action is destructive is a button whose entire job is to
-     * arm the worst possible version of it.
-     */
-    _renderBar() {
-      const n = this._selected.size;
-      if (!n) return "";
-      return `
-        <div class="bgbnotif-bar">
-          <button class="bgbnotif-bar__clear" type="button" ${this._busy ? "disabled" : ""}
-                  onclick="window.notificationsView._clearSelection()">
-            Clear selection
-          </button>
-          <button class="bgbnotif-bar__go" type="button" ${this._busy ? "disabled" : ""}
-                  onclick="window.notificationsView._unlinkSelected()">
-            ${this._busy ? "Removing…" : `Remove me from ${this._playCount()}`}
-          </button>
-        </div>
-      `;
-    }
-
-    _pickIcon(picked) {
-      return `<i data-icon="${picked ? "check-circle" : "circle"}" class="w-5 h-5"></i>`;
-    }
-
     // ── Surgical paints ─────────────────────────────────────────────────────
     //
-    // Ticking a row is a FIELD change, not a structural one: the same rows in
-    // the same order, one of them wearing a tick. Sending it through render()
-    // rewrites the container, which re-runs the staggered `fadeUp` on all
-    // twenty rows (styles.css .bgbnotif-row), re-hydrates every icon, re-decodes
-    // every thumbnail and destroys the very button the finger is on before
-    // :active can apply — the whole screen visibly reloading between two taps
-    // that changed nothing but a circle. So the three field-only changes on
-    // this screen — the tick, the bar, the in-flight buddy answer — patch their
-    // own node. render() stays for structural changes: a page arriving, a row
-    // leaving, a load failing. See .claude/rules/web-frontend.md
-    // ("Re-render surgically, not the whole screen") and
-    // .claude/rules/overlays.md §6.
+    // An answer going in flight is a FIELD change, not a structural one: the
+    // same rows in the same order, one of them showing "Working…". Sending it
+    // through render() rewrites the container, which re-runs the staggered
+    // `fadeUp` on every row (styles.css .bgbnotif-row), re-hydrates every icon,
+    // re-decodes every thumbnail and destroys the very button the finger is
+    // on. So the in-flight answer patches its own node, and render() stays for
+    // structural changes: a page arriving, a row leaving, a load failing. See
+    // .claude/rules/web-frontend.md ("Re-render surgically, not the whole
+    // screen") and .claude/rules/overlays.md §6.
 
     /** The row element carrying `key`, or null if it isn't painted. */
     _rowEl(key) {
@@ -668,62 +694,15 @@
       return null;
     }
 
-    /** One row's tick: the ring, the circle, and what a screen reader hears. */
-    _paintPick(key) {
-      const row = this._rowEl(key);
-      if (!row) return;
-      const picked = this._selected.has(key);
-      row.classList.toggle("is-selected", picked);
-      const btn = row.querySelector(".bgbnotif-row__pick");
-      if (!btn) return;
-      btn.setAttribute("aria-checked", String(picked));
-      btn.setAttribute("aria-label",
-        `${picked ? "Deselect" : "Select"} ${btn.getAttribute("data-what") || ""}`.trim());
-      btn.innerHTML = this._pickIcon(picked);
-      this.refreshIcons(btn);
-    }
-
-    /** The action bar, raised, relabelled or dropped, in its own host. */
-    _paintBar() {
-      const host = document.getElementById(BAR_ID);
-      if (!host) return;
-      host.innerHTML = this._renderBar();
-      this.refreshIcons(host);
-    }
-
     /** The Accept/Decline pair on one buddy row, in flight or back again. */
     _paintAnswer(key) {
       const row = this._rowEl(key);
       const host = row && row.querySelector(".bgbnotif-row__actions");
-      const it = this._items.find((x) => x.entry_key === key);
+      const invite = this._invites.find((x) => x.entry_key === key);
+      const it = invite || this._items.find((x) => x.entry_key === key);
       if (!host || !it) return;
-      host.innerHTML = this._renderAnswer(it);
+      host.innerHTML = invite ? this._renderInviteAnswer(invite) : this._renderAnswer(it);
       this.refreshIcons(host);
-    }
-
-    /**
-     * The disabled sweep an in-flight unlink puts over its own controls.
-     *
-     * Same reasoning as the tick: the rows do not change, so the list does not
-     * repaint — and this one runs immediately after a destructive confirm, where
-     * a full reload of the screen reads as the action having already happened.
-     */
-    _paintBusy() {
-      const host = this.container;
-      if (host) {
-        for (const btn of host.querySelectorAll(".bgbnotif-row__pick")) {
-          btn.disabled = this._busy;
-        }
-      }
-      this._paintBar();
-    }
-
-    /** Plays, not rows: one ticked import is 214 plays and must say so. */
-    _playCount() {
-      const n = this._items
-        .filter((it) => this._selected.has(it.entry_key))
-        .reduce((sum, it) => sum + (it.group_count || 1), 0);
-      return `${n} ${n === 1 ? "play" : "plays"}`;
     }
 
     // ── Actions ─────────────────────────────────────────────────────────────
@@ -734,22 +713,6 @@
 
     _openProfile(userId) {
       if (userId) window.router.go("profile-other", { userId });
-    }
-
-    _toggle(key) {
-      if (this._busy) return;
-      if (this._selected.has(key)) this._selected.delete(key);
-      else this._selected.add(key);
-      this._paintPick(key);
-      this._paintBar();
-    }
-
-    _clearSelection() {
-      if (this._busy) return;
-      const was = Array.from(this._selected);
-      this._selected.clear();
-      for (const key of was) this._paintPick(key);
-      this._paintBar();
     }
 
     /**
@@ -817,7 +780,6 @@
       const i = this._items.findIndex((x) => x.entry_key === key);
       this._items = this._items.filter((x) => x.entry_key !== key);
       if (i > -1 && i < this._firstPageLen) this._firstPageLen--;
-      this._selected.delete(key);
       // The prefetched page still carries this row, and re-opening the bell
       // inside its confirmed window would offer Accept for a request that is
       // already answered. Patched, not dropped — the rest of the page is still
@@ -826,70 +788,69 @@
       if (window.Buddy && window.Buddy.setPendingCount) {
         window.Buddy.setPendingCount(window.Buddy.pendingCount() - 1);
       }
+      window.NotificationFeed.setPending(window.NotificationFeed.pendingCount() - 1);
     }
 
-    async _unlinkSelected() {
-      const picked = this._items.filter((it) => this._selected.has(it.entry_key));
-      if (picked.length) await this._unlink(picked);
-    }
+    /** @param {string} key */
+    _invite(key) { return this._invites.find((x) => x.entry_key === key) || null; }
 
     /**
-     * The one destructive write this screen performs.
-     *
-     * A batch entry rides as its `import_batch_id` rather than as its expanded
-     * play ids: the server resolves it under the same ownership scoping either
-     * way, and one field beats a request body carrying 214 UUIDs.
+     * Take an answered invite off the screen. Accepted, it comes back as a
+     * play_link row on the next fetch, so the first page is re-pulled in the
+     * background; declined, it is simply gone.
      */
-    async _unlink(entries) {
-      if (this._busy) return;
-      const plays = entries.reduce((s, it) => s + (it.group_count || 1), 0);
-      const me = window.store.get("user");
-      const name = (me && me.display_name) || "your name";
+    _dropInvite(key, { accepted }) {
+      this._invites = this._invites.filter((x) => x.entry_key !== key);
+      window.NotificationFeed.setPending(window.NotificationFeed.pendingCount() - 1);
+      this.render();
+      if (accepted) this._refresh();
+    }
 
-      const ok = await window.PolaroidPopup.confirm({
-        title: plays === 1 ? "Remove yourself from this play?"
-                           : `Remove yourself from ${plays} plays?`,
-        body: `You'll show up as a ghost called "${name}" on them instead, and they'll `
-            + `stop counting towards your stats. Whoever logged them keeps the games. `
-            + `You can't undo this here — they'd have to add you back.`,
-        confirmLabel: "Remove me",
-        cancelLabel: "Keep them",
-        destructive: true,
-      });
-      if (!ok) return;
-
-      this._busy = true;
-      this._paintBusy();
-
-      const sel = { playIds: [], groupIds: [], batchIds: [] };
-      for (const it of entries) {
-        if (it.play_group === "batch" && it.import_batch_id) {
-          sel.batchIds.push(it.import_batch_id);
-        } else {
-          sel.playIds.push(...(it.play_ids || [it.play_id]));
-        }
-      }
-
+    async _acceptInvite(key) {
+      const it = this._invite(key);
+      if (!it || this._answering.has(key)) return;
+      this._answering.add(key);
+      this._paintAnswer(key);
+      const n = it.group_count || 1;
       try {
-        await window.NotificationFeed.unlink(sel);
-        showToast(plays === 1 ? "Removed you from the play"
-                              : `Removed you from ${plays} plays`, "success");
-        this._selected.clear();
-        // Reload from the top rather than splicing: the rows below just moved
-        // up under a cursor that no longer points at what it did, and the
-        // unread count has to come back from the server anyway.
-        await this._load({ initial: true });
+        await window.NotificationFeed.acceptInvites(it.play_ids || [it.play_id]);
+        this._answering.delete(key);
+        this._dropInvite(key, { accepted: true });
+        showToast(n === 1 ? "Added to your stats" : `Added ${n} plays to your stats`, "success");
       } catch (e) {
-        await window.PolaroidPopup.alert({
-          title: "Couldn't remove you",
-          body: (e && e.message) || "Something went wrong. Try again in a moment.",
-        });
-      } finally {
-        this._busy = false;
-        // The success path already reloaded the list; the failure path left it
-        // exactly as it was, still ticked, and only needs its controls back.
-        this._paintBusy();
+        this._answering.delete(key);
+        this._paintAnswer(key);
+        showToast((e && e.message) || "Couldn't accept that play", "error");
       }
+    }
+
+    async _declineInvite(key) {
+      const it = this._invite(key);
+      if (!it || this._answering.has(key)) return;
+      this._answering.add(key);
+      this._paintAnswer(key);
+      try {
+        await window.NotificationFeed.unlink({ playIds: it.play_ids || [it.play_id] });
+        this._answering.delete(key);
+        this._dropInvite(key, { accepted: false });
+        showToast("Declined", "info");
+      } catch (e) {
+        this._answering.delete(key);
+        this._paintAnswer(key);
+        showToast((e && e.message) || "Couldn't decline that play", "error");
+      }
+    }
+
+    /** A grouped invite, play by play. Whatever was answered there reloads the list. */
+    _reviewInvite(key, btn) {
+      const it = this._invite(key);
+      if (!it) return;
+      window.BgbInviteReviewSheet.open({
+        who: window.Buddy.nameFor(it.actor_id, it.actor_display_name) || "Someone",
+        playIds: it.play_ids || [it.play_id],
+        returnFocus: btn || null,
+        onDone: () => this._load({ initial: true }),
+      });
     }
   }
 

@@ -90,6 +90,10 @@
         // ACTS, not plays: one imported batch of 214 is 1 here, which is what
         // the notifications screen shows as one row.
         notifCount: 0,
+        // Things waiting on this account's answer: play invites (an import is
+        // one) and buddy requests received. The bell shows this as a number;
+        // unlike notifCount, reading the bell does not lower it.
+        notifPending: 0,
       };
       // Which slot feeds which nav tab and which hub card is domain/
       // notifications.js's table, not this file's business — store is a signal
@@ -182,6 +186,7 @@
         // that happened TO this account. NotificationFeed re-seeds it from the
         // next boot's bundle.
         notifCount: 0,
+        notifPending: 0,
         // Zeroed too: a comparison is one account's shelf against one BGG
         // handle, and the next person signing in on this device shares
         // neither. BggSyncFlow.reset() drops the saved draft to match.
