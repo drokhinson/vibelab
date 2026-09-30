@@ -243,6 +243,8 @@ def test_the_body_a_browser_receives_decrypts_to_what_was_sent():
         req = svc.received[0]
         assert req["headers"]["content-encoding"] == "aes128gcm"
         assert req["headers"]["authorization"].startswith("vapid ")
+        # BUDDY_ACCEPTED is ALL-tier noise: it rides the phone's next wake.
+        assert req["headers"]["urgency"] == "normal"
 
         plain = http_ece.decrypt(
             req["body"], private_key=key,
@@ -339,6 +341,25 @@ def test_send_never_raises_whatever_happens():
     asyncio.run(P.send(Exploding(), ["u1"], PushEvent.BUDDY_ACCEPTED,
                        P.payload(event=PushEvent.BUDDY_ACCEPTED, title="t", body="b",
                                  url="/", tag="x")))
+
+
+@pytest.mark.parametrize("event,urgency", [
+    (PushEvent.SESSION_INVITE, "high"),
+    (PushEvent.PLAY_LINK, "normal"),
+])
+def test_only_a_live_lobby_invite_wakes_a_dozing_phone(event, urgency):
+    """FCM holds a "normal" push for a dozing phone until it next wakes. The
+    lobby is starting now; a saved play can wait for the phone to be picked up."""
+    svc = FakePushService()
+    try:
+        _, sub = _subscription(svc.endpoint)
+        sb = FakeSupabase(tiers={"u1": "actionable"}, subs=[sub])
+        asyncio.run(P.send(sb, ["u1"], event,
+                           P.payload(event=event, title="t", body="b",
+                                     url="/", tag="x")))
+        assert svc.received[0]["headers"]["urgency"] == urgency
+    finally:
+        svc.stop()
 
 
 def test_one_person_named_twice_is_notified_once():
@@ -519,7 +540,7 @@ def test_a_finalised_session_rewrites_the_invite_it_concludes():
     """
     actor = _actor()
     session = SimpleNamespace(code="ABCD", game=SimpleNamespace(name="Catan"))
-    play = SimpleNamespace(game_name="Catan", players=_seated("guest-1"))
+    play = SimpleNamespace(id="play-9", game_name="Catan", players=_seated("guest-1"))
 
     (invite,) = _pushes(N.session_invite, actor, session, "guest-1")
     (saved,) = _pushes(N.play_logged, actor, play, session_code="abcd")
@@ -528,18 +549,23 @@ def test_a_finalised_session_rewrites_the_invite_it_concludes():
     assert saved["quiet"] == "1"
     # The invite is the first anyone hears of the game: it must always alert.
     assert "quiet" not in invite
-    # And it may not send the recipient to a lobby that no longer exists.
-    assert saved["url"] == "/notifications"
+    # The invite taps into the lobby; the saved play, which outlives it, taps
+    # into its own detail card.
+    assert invite["url"] == "/play/ABCD"
+    assert invite["body"] == "Dave added you to Catan"
+    assert saved["url"] == "/notifications?play=play-9"
+    assert saved["body"] == "Dave recorded a game with you"
 
 
 def test_a_play_logged_outside_a_lobby_is_unchanged():
     """No session, no rewrite. This play was never announced in advance, so it
     keeps the per-actor tag and alerts as usual."""
-    play = SimpleNamespace(game_name="Catan", players=_seated("guest-1"))
+    play = SimpleNamespace(id="play-9", game_name="Catan", players=_seated("guest-1"))
 
     (pushed,) = _pushes(N.play_logged, _actor(), play)
 
     assert pushed["tag"] == "play_link:host-1"
+    assert pushed["url"] == "/notifications?play=play-9"
     assert "quiet" not in pushed
 
 

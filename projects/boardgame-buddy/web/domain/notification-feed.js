@@ -105,9 +105,23 @@
       return window.bgbCache.swr(
         NS,
         FIRST_KEY,
-        () => window.api.get("/notifications", { limit }),
+        // Every first-page fetch lights the bell, whoever asked for it: the
+        // focus re-warm and a push arriving are how new rows reach an app that
+        // is already open, and a page that only filled the cache would leave the
+        // dot dark until the screen itself was visited.
+        () => window.api.get("/notifications", { limit }).then((page) => {
+          NotificationFeed._publishCounts(page);
+          return page;
+        }),
         { freshTtl: CONFIRMED_MS, staleTtl: CONFIRMED_MS },
       );
+    },
+
+    /** The bell's two counts, from a first page. */
+    _publishCounts(page) {
+      if (!page) return;
+      if (page.pending != null) NotificationFeed.setPending(page.pending);
+      if (page.unread != null) NotificationFeed.setUnread(page.unread);
     },
 
     /**
@@ -155,6 +169,16 @@
     refreshFirstPage(opts) {
       NotificationFeed.invalidate();
       return NotificationFeed.list({ limit: (opts && opts.limit) || 20 });
+    },
+
+    /**
+     * Something new is known to exist (a push just arrived): re-pull page one
+     * past the confirmed window so the bell lights now. Fire-and-forget.
+     *
+     * @returns {Promise<void>}
+     */
+    refreshBell() {
+      return NotificationFeed.refreshFirstPage().then(() => {}, () => {});
     },
 
     /**

@@ -222,7 +222,18 @@ def _dedupe(user_ids: Iterable[str]) -> list[str]:
 # ── Sending ──────────────────────────────────────────────────────────────────
 
 
-def _send_one(sb: Client, sub: dict[str, Any], body: str) -> None:
+def _urgency(event: PushEvent) -> str:
+    """The RFC 8030 Urgency header for an event.
+
+    FCM holds a "normal" message for a phone in Doze until the phone next
+    wakes. Only a live-lobby invite is worth waking it for: the game is
+    starting now and the tap joins it. Everything else, a saved play included,
+    keeps until the phone is next picked up.
+    """
+    return "high" if event == PushEvent.SESSION_INVITE else "normal"
+
+
+def _send_one(sb: Client, sub: dict[str, Any], body: str, urgency: str) -> None:
     """One device. Blocking; runs in a worker thread. Never raises."""
     try:
         webpush(
@@ -238,6 +249,7 @@ def _send_one(sb: Client, sub: dict[str, Any], body: str) -> None:
             # next device's token, which that service would reject.
             vapid_claims={"sub": BGB_VAPID_SUBJECT},
             ttl=PUSH_TTL_SECONDS,
+            headers={"Urgency": urgency},
             timeout=PUSH_TIMEOUT_SECONDS,
         )
     except WebPushException as exc:
@@ -354,8 +366,9 @@ async def send(
             return
 
         body = json.dumps(data)
+        urgency = _urgency(event)
         await asyncio.gather(
-            *(asyncio.to_thread(_send_one, sb, sub, body) for sub in subs)
+            *(asyncio.to_thread(_send_one, sb, sub, body, urgency) for sub in subs)
         )
         # Stamped optimistically for the whole batch rather than per-send: the
         # column is a coarse "this device was reachable recently" for a future

@@ -91,6 +91,14 @@
         }
       });
 
+      // An app left open on this screen shows the list it was mounted with, so
+      // coming back to it re-pulls page one.
+      this.listenDom("visibilitychange", () => {
+        if (document.visibilityState === "visible") this._refresh();
+      });
+
+      this._openFromParams(this.params);
+
       const warm = window.NotificationFeed.peekConfirmed();
       if (warm) this._takePage(warm);
       this.render();
@@ -103,6 +111,24 @@
         await this._load({ initial: true });
       }
       this._attachPull();
+    }
+
+    /** The bell (or a tapped push) routed here while already open. */
+    onParamsChange(params) {
+      this._openFromParams(params);
+      return this._refresh();
+    }
+
+    /**
+     * `?play=<id>` is a saved-play push's tap: open that play's card over the
+     * list. The param is dropped from the URL once used, so a refresh or a
+     * later visit to the bell doesn't reopen it.
+     */
+    _openFromParams(params) {
+      const playId = params && params.play;
+      if (!playId) return;
+      window.router.replaceUrl("notifications", {});
+      this._open(playId);
     }
 
     async onUnmount() {
@@ -512,7 +538,7 @@
         : `<strong>${escapeHtml(who)}</strong> added you to ${escapeHtml(game)}`;
       const sub = many
         ? `${it.game_count > 1 ? `${it.game_count} games · ` : `${escapeHtml(game)} · `}${this._span(it)}`
-        : `${this._span(it)} · not in your stats yet`;
+        : this._span(it);
 
       return `
         <div class="bgbnotif-row bgbnotif-row--owed ${it.is_unread ? "is-unread" : ""}"
