@@ -1738,13 +1738,13 @@ components above.
     _renderLinkStep(isEditing) {
       let note;
       if (isAdmin()) {
-        note = "You're an admin, so this link is approved as soon as you save it and everyone can see it.";
+        note = "Approved on save.";
       } else if (this._formLinkStatus === "approved") {
-        note = "An admin approved this link, so everyone can see it. Changing the URL sends it back for review.";
+        note = "Approved. Changing the link sends it back for approval.";
       } else if (this._formLinkStatus === "denied") {
-        note = "An admin turned this link down. Save a different URL to send it back for review.";
+        note = "Declined. Change the link to send it back for approval.";
       } else {
-        note = "Saving sends it to an admin for review. Until it's approved, only you can see it.";
+        note = "Sent for approval when you save.";
       }
       return `
         ${this._renderTypeRow(isEditing)}
@@ -2757,12 +2757,10 @@ components above.
       const verb = isEditing ? "updated" : "added";
       const urlChanged = !isEditing || savedUrl !== this._formLinkUrlSaved;
       if (!urlChanged) {
-        if (this._formLinkStatus === "approved") return "Rulebook link updated — still live for everyone";
-        if (this._formLinkStatus === "denied") return "Rulebook link updated — an admin still has this one turned down";
-        return "Rulebook link updated — still waiting for an admin's review";
+        return "Rulebook link updated";
       }
-      if (isAdmin()) return `Rulebook link ${verb} — approved and live for everyone`;
-      return `Rulebook link ${verb} — sent to an admin for review`;
+      if (isAdmin()) return `Rulebook link ${verb}`;
+      return "Rulebook link sent for approval";
     }
 
     async _submitForm(event) {

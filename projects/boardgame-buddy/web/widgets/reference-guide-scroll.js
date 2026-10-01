@@ -732,7 +732,7 @@
         : "Added by an admin";
       const mine = link.created_by === myId;
       const badge = unreviewed
-        ? `<span class="scroll-rulebook__badge" title="Only you can see this until an admin approves it">
+        ? `<span class="scroll-rulebook__badge">
              <i data-icon="clock" class="w-3 h-3"></i>
              Waiting for approval
            </span>`
@@ -775,13 +775,13 @@
       let text;
       let icon;
       if (denied) {
-        text = "An admin turned your rulebook link down. Edit it to submit a different one.";
+        text = "Your rulebook link was declined";
         icon = "x";
       } else if (approved) {
-        text = "Your own rulebook link is approved — it is on this game's page for everyone.";
+        text = "Your rulebook link is approved";
         icon = "check";
       } else {
-        text = "Your rulebook link is waiting for an admin's approval. Only you can see it until then.";
+        text = "Your rulebook link is waiting for approval";
         icon = "clock";
       }
       return `

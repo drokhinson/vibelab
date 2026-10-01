@@ -156,7 +156,7 @@ scroll._rulebooks = [
 ];
 const alongside = scroll._renderRulebookSection();
 ok("my pending link behind somebody's approved one says so in words",
-  alongside.includes("waiting for an admin's approval"));
+  alongside.includes("waiting for approval"));
 ok("and the approved one is the link on show",
   alongside.includes(`href="https://example.com/rules.pdf"`) && !alongside.includes("Add a rulebook link"));
 
@@ -171,7 +171,7 @@ ok("…it is described as approved", bothApproved.includes("is approved"));
 
 scroll._rulebooks = [link({ id: "mine", moderation_status: "denied", created_by: "me" })];
 const denied = scroll._renderRulebookSection();
-ok("a denial reaches its author, in words", denied.includes("turned your rulebook link down"));
+ok("a denial reaches its author, in words", denied.includes("was declined"));
 ok("and no Add button, because the API allows one per game", !denied.includes("Add a rulebook link"));
 
 scroll._rulebooks = [
@@ -180,7 +180,7 @@ scroll._rulebooks = [
 ];
 const both = scroll._renderRulebookSection();
 ok("an approved link is shown even while the viewer's own was denied",
-  both.includes(`href="https://example.com/rules.pdf"`) && both.includes("turned your rulebook link down"));
+  both.includes(`href="https://example.com/rules.pdf"`) && both.includes("was declined"));
 
 console.log("the rolled-up copy");
 scroll._rulebooks = [link()];
