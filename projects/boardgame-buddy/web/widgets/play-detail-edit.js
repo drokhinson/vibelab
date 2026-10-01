@@ -821,6 +821,7 @@
       // there is the thing this edit exists to undo.
       searchAll: (q) => searchEveryone(q),
       searchAllLabel: "Search all of BoardgameBuddy",
+      oneTimeGuests: true,
       returnFocus: (event && event.currentTarget) || null,
       onConfirm: (picks) => addPlayers(picks),
     });
@@ -878,7 +879,7 @@
    * (uq_bgb_play_players_play_user), so a second seat for the same person is
    * a save the backend refuses.
    *
-   * @param {{name?: string, user_id?: string|null, avatar?: any}} c
+   * @param {{name?: string, user_id?: string|null, avatar?: any, one_time?: boolean}} c
    * @returns {boolean} Whether a seat was actually added.
    */
   function seatPlayer(c) {
@@ -896,6 +897,7 @@
       score: "",
       user_id: (c && c.user_id) || null,
       avatar: (c && c.avatar) || null,
+      one_time: !(c && c.user_id) && !!(c && c.one_time),
       roundScores: existingRounds > 0
         ? Array.from({ length: existingRounds }, () => null)
         : [],
@@ -1045,6 +1047,9 @@
           user_id: p.user_id || null,
           round_scores,
           team: (p.team || "").trim() || null,
+          // Only a seat added in this edit carries the flag; one already on
+          // the play keeps it server-side by name (_read_one_time_names).
+          one_time: !p.user_id && !!p.one_time,
         };
       }),
     };

@@ -676,12 +676,17 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   -- after trimming, the same comparison PlaySession.applyTeamTag uses to keep
   -- one side's win flags in step, so "Red" and "red" are one side.
   team TEXT,
+  -- A guest seated for this play only ("Player 2"). Kept off the logger's
+  -- ghost list, and claimed by bgb_ghost_key (play + name) rather than by name
+  -- across every play the logger has.
+  one_time BOOLEAN DEFAULT false NOT NULL,
   CONSTRAINT boardgamebuddy_play_players_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_play_players_play_id_fkey FOREIGN KEY (play_id) REFERENCES boardgamebuddy_plays(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_play_players_player_user_id_fkey FOREIGN KEY (player_user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
   CONSTRAINT boardgamebuddy_play_players_pending_user_id_fkey FOREIGN KEY (pending_user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
   CONSTRAINT bgb_play_players_identity_chk CHECK (((player_user_id IS NOT NULL) OR (player_display_name IS NOT NULL))),
   CONSTRAINT bgb_play_players_pending_chk CHECK (player_user_id IS NULL OR pending_user_id IS NULL),
+  CONSTRAINT bgb_play_players_one_time_chk CHECK (NOT one_time OR player_display_name IS NOT NULL),
   -- 16, not the 6 the Gather input enforces: that 6 is a layout fact about one
   -- grid column, not a fact about the data.
   CONSTRAINT bgb_play_players_team_len_chk CHECK ((team IS NULL OR char_length(team) <= 16))

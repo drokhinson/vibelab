@@ -707,6 +707,9 @@
           // nothing to group by. `null` rather than "" for an untagged
           // seat, or every seat in the app would share one anonymous side.
           team: (p.team || "").trim() || null,
+          // A "Player N" guest: kept off the logger's guest list, and
+          // claimable on this play alone.
+          one_time: !p.user_id && !!p.one_time,
         })),
         notes: this.notes || null,
         photo_url: this.photoUrl || null,

@@ -257,12 +257,35 @@ def _read_linked_at(sb, play_id: str) -> dict[str, tuple[str, bool]]:
     return out
 
 
+def _name_key(name: str | None) -> str:
+    return (name or "").strip().lower()
+
+
+def _read_one_time_names(sb, play_id: str) -> set[str]:
+    """The name keys of the play's one-time guests, for the edit path.
+
+    The edit form does not carry the flag — a guest's name is its only handle
+    there — so a seat is kept one-time by its name surviving the edit. Without
+    this, fixing a score would turn "Player 2" into an ordinary ghost on the
+    logger's list.
+    """
+    res = (
+        sb.table("boardgamebuddy_play_players")
+        .select("player_display_name")
+        .eq("play_id", play_id)
+        .eq("one_time", True)
+        .execute()
+    )
+    return {_name_key(r.get("player_display_name")) for r in res.data or []}
+
+
 def _write_play_players(
     sb,
     play_id: str,
     players: list,
     owner_id: str,
     linked_at_by_user: dict[str, tuple[str, bool]] | None = None,
+    one_time_names: set[str] | None = None,
 ) -> list[PlayPlayerResponse]:
     """Insert the play_players rows for a play in ONE bulk statement.
 
@@ -298,6 +321,8 @@ def _write_play_players(
     column is nullable, so an explicit NULL is both harmless and correct.
     `player_user_id` and `pending_user_id` are unconditional too: an account
     seat sets exactly one of them and the other goes as an explicit NULL.
+    So is `one_time`, which is NOT NULL: a guest is one-time when the payload
+    says so or when `one_time_names` (see _read_one_time_names) holds its name.
 
     The roster itself is already checked by the time it gets here: this is only
     reached from PUT /plays/{id}, whose PlayUpdate validator refuses an empty
@@ -309,6 +334,7 @@ def _write_play_players(
         return out
 
     carried = linked_at_by_user or {}
+    kept_one_time = one_time_names or set()
     seated_now = datetime.now(timezone.utc).isoformat()
     rows: list[dict] = []
     for p in players:
@@ -332,6 +358,9 @@ def _write_play_players(
             "team": team,
             "player_user_id": None if pending else player_uid,
             "pending_user_id": player_uid if pending else None,
+            "one_time": not player_uid and (
+                bool(getattr(p, "one_time", False)) or _name_key(p.name) in kept_one_time
+            ),
         }
         rows.append(row)
         out.append(PlayPlayerResponse(
@@ -615,9 +644,12 @@ def _update_play_sync(sb: Client, play_id: str, user_id: str, body: PlayUpdate) 
     # delete: the re-insert would otherwise re-stamp everyone and notify the
     # whole table about an edit (see _read_linked_at).
     carried = _read_linked_at(sb, play_id)
+    one_time = _read_one_time_names(sb, play_id)
     sb.table("boardgamebuddy_play_players").delete().eq("play_id", play_id).execute()
     sb.table("boardgamebuddy_play_expansions").delete().eq("play_id", play_id).execute()
-    _write_play_players(sb, play_id, body.players, user_id, linked_at_by_user=carried)
+    _write_play_players(
+        sb, play_id, body.players, user_id, linked_at_by_user=carried, one_time_names=one_time
+    )
     # Every expansion row names a game in the OLD base game's tree, so a pivot
     # drops the lot whatever the body asked for. The client clears its own list
     # when the user picks a new game; this is the half that can't be skipped,

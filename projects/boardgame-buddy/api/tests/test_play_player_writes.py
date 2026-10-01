@@ -137,3 +137,20 @@ def test_an_empty_roster_writes_nothing():
     sb = _FakeSb()
     assert _write_play_players(sb, "play-1", [], HOST) == []
     assert sb.rows is None
+
+
+def test_a_one_time_guest_is_written_as_one_and_stays_one_through_an_edit():
+    fresh = _Seat("Player 1")
+    fresh.one_time = True
+    sb = _FakeSb()
+    _write_play_players(
+        sb, "play-1",
+        # "player 2" comes back from the edit form with no flag on it; its name
+        # is what keeps it one-time. An account seat never is, whatever it sent.
+        [fresh, _Seat("Player 2"), _Seat("Sean D"), _Seat("Me", user_id=HOST)],
+        HOST,
+        one_time_names={"player 2", "me"},
+    )
+    by_name = {r["player_display_name"]: r["one_time"] for r in sb.rows}
+    assert by_name == {"Player 1": True, "Player 2": True, "Sean D": False, "Me": False}
+    assert len({frozenset(r) for r in sb.rows}) == 1

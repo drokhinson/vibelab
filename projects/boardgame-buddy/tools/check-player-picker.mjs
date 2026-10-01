@@ -346,6 +346,41 @@ console.log("\n6b. An unmatched name shows the search, then only the guest offer
   picker.close();
 }
 
+// ── 6c. One-time guests: Player 1, Player 2, … ───────────────────────────────
+
+console.log("\n6c. The one-time row seats numbered guests, one tap each");
+{
+  let picked = null;
+  picker.open({
+    candidates: [buddy("Marcus", "u-marcus"), ghost("Player 1")],
+    seatedNames: ["Player 2"],
+    oneTimeGuests: true,
+    onConfirm: (picks) => { picked = picks; },
+  });
+  const first = sheetInstance.html();
+  ok("the row is offered with an empty box", first.includes('data-picker-action="one-time"'));
+  ok("it skips a name already listed or seated", first.includes("Add “Player 3”"));
+  sheetInstance.tap("data-picker-action", "one-time");
+  sheetInstance.tap("data-picker-action", "one-time");
+  const after = sheetInstance.html();
+  ok("it renumbers in place", after.includes("Add “Player 5”"));
+  ok("the picks sit under Selected", sectionOf(after, "Player 3") === "Selected"
+     && sectionOf(after, "Player 4") === "Selected");
+  ok("and say what they are", after.includes("One-time guest"));
+  sheetInstance.type("pl");
+  ok("a typed query hides it", !sheetInstance.html().includes('data-picker-action="one-time"'));
+  sheetInstance.type("");
+  picker._confirm();
+  ok("the picks are one-time guests, in tick order",
+     picked && picked.map((p) => `${p.name}:${p.one_time}:${p.user_id}`).join(",")
+       === "Player 3:true:null,Player 4:true:null");
+
+  picker.open({ candidates: [], onConfirm: () => {} });
+  ok("a caller that doesn't ask never sees it",
+     !sheetInstance.html().includes('data-picker-action="one-time"'));
+  picker.close();
+}
+
 // ── 7. A buddy list that lands late does not double anyone ──────────────────
 
 console.log("\n7. A cold-cache search, then the buddy bundle, is still one row per person");
