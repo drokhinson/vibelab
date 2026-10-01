@@ -17316,15 +17316,15 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .theme-seg:has(.theme-seg__opt:disabled) { opacity: 0.55; }
 .theme-seg__opt:disabled { cursor: not-allowed; }
 
-/* Separator between winner name and score. Was a U+2736 dingbat, which is the
-   one non-SVG glyph the app rendered as data-art and drew inconsistently
-   across platforms; a styled dot is deterministic. */
+/* Separator between winner name and score. A styled dot rather than a glyph,
+   so it draws the same on every platform. Inked in the "Won by" label's muted
+   tone: the hairline --polaroid-line all but vanishes on the caption ground. */
 .play-card__caption-meta .win-sep {
   display: inline-block;
   width: 3px; height: 3px;
   margin: 0 6px;
   border-radius: 50%;
-  background: var(--polaroid-line);
+  background: var(--polaroid-muted);
   vertical-align: middle;
 }
 
