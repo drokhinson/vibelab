@@ -41,16 +41,6 @@
     return c.layout === "rulebook_link" || c.chapter_type === "rulebook";
   }
 
-  // Has an admin approved where this link goes? Written as "not approved and
-  // not denied" rather than as "pending", so a status added later reads as
-  // unreviewed rather than as vouched for — the same closed reading the API's
-  // services/chapter_rulebook.gate_status takes. Only the author is ever sent
-  // their own unreviewed or denied link.
-  function isUnreviewedRulebook(c) {
-    const status = c && c.moderation_status;
-    return status !== "approved" && status !== "denied";
-  }
-
   /** Host of a URL, for the one-line "where this goes" under the button. */
   function linkHost(url) {
     try { return new URL(url).host; } catch (_) { return url || ""; }
@@ -703,14 +693,12 @@
       if (!link) {
         return `<p class="scroll-rulebook__none scroll-rulebook__none--peek">No rulebook link available.</p>`;
       }
-      const unreviewed = isUnreviewedRulebook(link);
       return `
         <a class="scroll-rulebook__cta scroll-rulebook__cta--peek"
            href="${escapeAttr(link.link_url || "")}" target="_blank" rel="noopener"
            onclick="return window.referenceGuideScroll._confirmLeave(event, this.href)">
           <i data-icon="book-open" class="w-4 h-4"></i>
           <span>Rulebook</span>
-          ${unreviewed ? `<span class="scroll-rulebook__badge">Waiting for approval</span>` : ""}
           <i data-icon="external-link" class="w-3.5 h-3.5"></i>
         </a>
       `;
@@ -726,17 +714,10 @@
      */
     _renderRulebookLink(link, myId) {
       const url = link.link_url || "";
-      const unreviewed = isUnreviewedRulebook(link);
       const author = link.created_by_name
         ? `Added by ${link.created_by_name}`
         : "Added by an admin";
       const mine = link.created_by === myId;
-      const badge = unreviewed
-        ? `<span class="scroll-rulebook__badge">
-             <i data-icon="clock" class="w-3 h-3"></i>
-             Waiting for approval
-           </span>`
-        : "";
       return `
         <div class="scroll-rulebook">
           <a class="scroll-rulebook__cta" href="${escapeAttr(url)}"
@@ -749,7 +730,6 @@
           <div class="scroll-rulebook__meta">
             <span class="scroll-rulebook__host">${escapeHtml(linkHost(url))}</span>
             <span class="scroll-rulebook__by">${escapeHtml(author)}</span>
-            ${badge}
           </div>
           ${mine ? `
             <div class="scroll-rulebook__actions">
@@ -763,31 +743,15 @@
     }
 
     /**
-     * The author's own link when something else is on show, or nothing is —
-     * the one place a denial is ever visible.
+     * The author's own link when it is declined — the one place a denial is
+     * ever visible. Any other link of theirs is on show for everyone already.
      */
     _renderMyRulebookNote(mine) {
-      const status = mine.moderation_status;
-      const denied = status === "denied";
-      // An author whose own link IS approved but who has adopted somebody
-      // else's is shown this row too, and must not be told it is in a queue.
-      const approved = status === "approved";
-      let text;
-      let icon;
-      if (denied) {
-        text = "Your rulebook link was declined";
-        icon = "x";
-      } else if (approved) {
-        text = "Your rulebook link is approved";
-        icon = "check";
-      } else {
-        text = "Your rulebook link is waiting for approval";
-        icon = "clock";
-      }
+      if (mine.moderation_status !== "denied") return "";
       return `
-        <p class="scroll-rulebook__mine${denied ? " scroll-rulebook__mine--denied" : ""}">
-          <i data-icon="${icon}" class="w-3.5 h-3.5"></i>
-          <span>${text}</span>
+        <p class="scroll-rulebook__mine scroll-rulebook__mine--denied">
+          <i data-icon="x" class="w-3.5 h-3.5"></i>
+          <span>Your rulebook link was declined</span>
           <button class="btn btn-ghost btn-xs"
                   onclick="window.referenceGuideScroll._editChapter('${mine.id}', event)">
             <i data-icon="pencil" class="w-3.5 h-3.5"></i> Edit

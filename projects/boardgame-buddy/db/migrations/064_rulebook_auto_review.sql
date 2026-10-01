@@ -2,8 +2,9 @@
 -- 064_rulebook_auto_review.sql — every rulebook link goes to admin review
 -- ─────────────────────────────────────────────────────────────────────────────
 --
--- A rulebook link written by a non-admin is `pending` and visible only to its
--- author and admins until an admin approves it. A link written by an admin is
+-- A rulebook link written by a non-admin is `pending`: in the admin queue and
+-- visible to everyone meanwhile. A denied link reaches only its author and
+-- admins. A link written by an admin is
 -- `approved` and stamped with that admin. There is no `unlisted` state.
 --
 -- 1. Existing links written by an admin that are still undecided (pending or
@@ -56,4 +57,4 @@ ALTER TABLE public.boardgamebuddy_guide_chapters
 
 -- ── 4. Column comment ────────────────────────────────────────────────────────
 
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'Rulebook links only. approved: everyone sees it; pending (in the admin queue) and denied: the author and admins.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'Rulebook links only. approved and pending (in the admin queue): everyone sees it; denied: the author and admins.';

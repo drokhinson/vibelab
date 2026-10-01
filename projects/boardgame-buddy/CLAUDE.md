@@ -173,7 +173,7 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
 21. **A rulebook link is the one chapter with a gate, and the gate is not RLS.**
    Every other chapter is text this app renders; this one sends a reader to
    somebody else's server, so `moderation_status` decides who may see it —
-   approved to everyone, pending and denied to its author (and admins) alone.
+   approved and pending to everyone, denied to its author (and admins) alone.
    The rule lives in `routes/services/chapter_rulebook.py` and **every**
    chapter read path calls it, the user's own guide included: a link adopted
    while approved and denied afterwards has to stop being served to the people
@@ -186,9 +186,10 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    non-admin's link is written `pending` with no review switch to opt out of;
    an admin's is written `approved` and stamped with them
    (`chapter_rulebook.gate_columns`). A changed URL re-opens the gate the same
-   way. Pending links are visible to nobody but their author until approved —
-   not to buddies either. There is no `unlisted` state; `gate_status` reads any
-   unknown status as pending.
+   way. A pending link is live for everyone while it waits; only a denial hides
+   it. A guide holds **one** rulebook link per game: adopting or writing one
+   drops the other (`chapter_routes._keep_one_rulebook`). There is no
+   `unlisted` state; `gate_status` reads any unknown status as pending.
 
 ## Secrets that must never be rotated casually
 

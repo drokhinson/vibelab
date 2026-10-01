@@ -175,6 +175,33 @@ def _chapter_row_to_response(
     )
 
 
+def _keep_one_rulebook(sb: Client, user_id: str, game_id: str, keep_id: str) -> None:
+    """Drop every other rulebook link from this user's guide for this game.
+
+    A guide holds one rulebook link per game: adopting or writing one replaces
+    whichever was there. Only `kept` rows go; a dislike stays a dislike.
+    """
+    links = (
+        sb.table("boardgamebuddy_guide_chapters")
+        .select("id")
+        .eq("game_id", game_id)
+        .eq("layout", str(ChapterLayout.RULEBOOK_LINK))
+        .neq("id", keep_id)
+        .execute()
+    ).data or []
+    others = [r["id"] for r in links]
+    if not others:
+        return
+    (
+        sb.table("boardgamebuddy_user_chapters")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("state", "kept")
+        .in_("chapter_id", others)
+        .execute()
+    )
+
+
 def _validate_chapter_type(sb, chapter_type: str) -> None:
     """Raise 400 if the supplied chapter_type is not in the lookup table."""
     row = (
@@ -582,6 +609,8 @@ def _create_chapter_sync(
         .execute()
     )
     added_at = sel.data[0]["created_at"] if sel.data else None
+    if is_link:
+        _keep_one_rulebook(sb, user_id, game_id, new_id)
 
     fetched = (
         sb.table("boardgamebuddy_guide_chapters")
@@ -609,8 +638,9 @@ async def create_chapter(
 ) -> MyGuideChapterResponse:
     """Create a new chapter attached to a game and immediately add it to the creator's guide.
 
-    A rulebook link starts `pending` (in the admin queue, visible to its author
-    only), or `approved` when an admin writes it.
+    A rulebook link starts `pending` (in the admin queue, visible to everyone
+    meanwhile), or `approved` when an admin writes it. Either replaces any other
+    rulebook link in the author's guide for this game.
     """
     sb = get_supabase()
     return await asyncio.to_thread(_create_chapter_sync, sb, game_id, body, user)
@@ -966,6 +996,9 @@ def _add_chapter_to_my_guide_sync(
             .execute()
         )
         added_at = ins.data[0]["created_at"] if ins.data else None
+
+    if chapter_rulebook.is_rulebook_row(chapter.data[0]):
+        _keep_one_rulebook(sb, user_id, game_id, body.chapter_id)
 
     base = _chapter_row_to_response(chapter.data[0])
     return MyGuideChapterResponse(

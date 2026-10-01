@@ -160,8 +160,7 @@ class AdminReviewCounts(BaseModel):
     # is not expected to reach zero. The queue that has to terminate is
     # `bgg_meta_synced_at IS NULL`, and it lives in the endpoint.
     missing_metadata: int = 0
-    # Rulebook links waiting on a decision (`pending`). Each is hidden from
-    # everyone but its author until an admin approves it.
+    # Rulebook links waiting on a decision (`pending`).
     rulebook_links: int = 0
 
     @computed_field  # type: ignore[misc]

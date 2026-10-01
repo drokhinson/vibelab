@@ -1032,16 +1032,6 @@ html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
   white-space: nowrap;
   max-width: 60%;
 }
-.scroll-rulebook__badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 6px;
-  border-radius: var(--r-pill);
-  background: rgba(107, 74, 26, 0.14);
-  color: #6B4A1A;
-  font-weight: 700;
-}
 .scroll-rulebook__actions { display: flex; gap: var(--s-1); }
 /* The peek copy: the link and nothing else (see _renderRulebookPeek). It sits
    in the same strip as the scoring offer, so it wears that notice's height and

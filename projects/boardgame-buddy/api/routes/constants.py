@@ -869,7 +869,7 @@ class RulebookStatus(StrEnum):
     what is one function — services/chapter_rulebook.is_visible_to.
     """
 
-    # In the admin queue. Visible to its author and admins only. Every link a
+    # In the admin queue, and visible to everyone meanwhile. Every link a
     # non-admin writes, or re-points, starts here.
     PENDING = "pending"
     # An admin put their name to it, by deciding in the queue or by writing it.

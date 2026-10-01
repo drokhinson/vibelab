@@ -9,8 +9,10 @@ What this file pins is that function and the two write paths that set it,
 because every other read path in the API just calls
 `chapter_rulebook.filter_visible` and inherits whatever it decides:
 
-  * the VISIBILITY MATRIX — approved is public; pending and denied reach the
-    author and admins alone.
+  * the VISIBILITY MATRIX — approved and pending are public; denied reaches
+    the author and admins alone.
+  * A GUIDE HOLDS ONE RULEBOOK LINK per game: adopting or writing one drops
+    the other from the viewer's guide.
   * EVERY LINK A NON-ADMIN WRITES IS PENDING, and an admin's own link is
     approved on write, stamped with that admin.
   * EDITING THE URL RE-OPENS THE GATE. An approval is a decision about a
@@ -105,6 +107,14 @@ class _Q:
         self.filters[col] = list(vals)
         return self
 
+    def neq(self, col, val):
+        self.filters[f"{col}!="] = val
+        return self
+
+    def delete(self):
+        self.op = "delete"
+        return self
+
     def or_(self, expr):
         self.filters["or"] = expr
         return self
@@ -143,11 +153,11 @@ class _SB:
     (RulebookStatus.APPROVED, STRANGER, True),
     (RulebookStatus.APPROVED, BUDDY, True),
     (RulebookStatus.APPROVED, None, True),
-    # Pending reaches its author and nobody else — a buddy included.
+    # Pending reaches everyone too, while it waits in the admin queue.
     (RulebookStatus.PENDING, AUTHOR, True),
-    (RulebookStatus.PENDING, BUDDY, False),
-    (RulebookStatus.PENDING, STRANGER, False),
-    (RulebookStatus.PENDING, None, False),
+    (RulebookStatus.PENDING, BUDDY, True),
+    (RulebookStatus.PENDING, STRANGER, True),
+    (RulebookStatus.PENDING, None, True),
     # Denied reaches its author, so they can see it was looked at rather than
     # lost, and nobody else.
     (RulebookStatus.DENIED, AUTHOR, True),
@@ -160,10 +170,8 @@ def test_who_sees_a_rulebook_link(status, viewer, visible):
 
 
 def test_a_status_that_cannot_exist_is_read_as_pending():
-    """The safe reading of an impossible row is the closed one."""
+    """Never as approved: the row stays in front of an admin."""
     row = _link(status=None)
-    assert R.is_visible_to(row, STRANGER) is False
-    assert R.is_visible_to(row, AUTHOR) is True
     assert R.gate_status(row) is RulebookStatus.PENDING
 
 
@@ -175,8 +183,7 @@ def test_a_status_this_code_does_not_know_is_also_read_as_pending(raw):
     row = _link()
     row["moderation_status"] = raw
     assert R.gate_status(row) is RulebookStatus.PENDING
-    assert R.is_visible_to(row, STRANGER) is False
-    assert R.is_visible_to(row, AUTHOR) is True
+    assert R.is_visible_to(row, STRANGER) is True
 
 
 def test_an_admin_sees_every_link_whatever_its_state():
@@ -193,7 +200,7 @@ def test_every_other_chapter_passes_through_untouched():
 def test_a_row_claiming_the_type_but_not_the_layout_is_still_gated():
     """Read defensively off either column — the mirror of the frontend's own
     isRulebook, and what stops a mismatched row slipping past the gate."""
-    row = _link()
+    row = _link(RulebookStatus.DENIED)
     row["layout"] = "text"
     assert R.is_rulebook_row(row) is True
     assert R.is_visible_to(row, STRANGER) is False
@@ -209,7 +216,7 @@ def test_filter_drops_only_what_the_viewer_may_not_see():
         _link(RulebookStatus.DENIED, id="denied"),
     ]
     assert {r["id"] for r in R.filter_visible(rows, BUDDY)} == {
-        "chapter-prose", "approved",
+        "chapter-prose", "approved", "pending",
     }
     assert {r["id"] for r in R.filter_visible(rows, AUTHOR)} == {
         "chapter-prose", "approved", "pending", "denied",
@@ -217,9 +224,9 @@ def test_filter_drops_only_what_the_viewer_may_not_see():
 
 
 def test_visible_ids_matches_the_filter():
-    rows = [_link(RulebookStatus.APPROVED, id="approved"), _link(id="pending")]
+    rows = [_link(RulebookStatus.APPROVED, id="approved"), _link(RulebookStatus.DENIED, id="denied")]
     assert R.visible_ids(rows, STRANGER) == {"approved"}
-    assert R.visible_ids(rows, STRANGER, is_admin=True) == {"approved", "pending"}
+    assert R.visible_ids(rows, STRANGER, is_admin=True) == {"approved", "denied"}
 
 
 # ── The URL ──────────────────────────────────────────────────────────────────
@@ -309,6 +316,8 @@ def _create_sb(existing_mine=None):
                 return [{"id": "chapter-new"}]
             if "created_by" in q.filters:          # the one-per-author check
                 return existing_mine or []
+            if "id!=" in q.filters:                # the guide's other links
+                return [{"id": "chapter-old"}]
             return [{                              # the read-back
                 "id": "chapter-new",
                 "game_id": "game-1",
@@ -379,6 +388,25 @@ def test_an_admins_own_link_is_approved_and_stamped():
     assert row["moderation_status"] == str(RulebookStatus.APPROVED)
     assert row["moderated_by"] == "admin-1"
     assert row["moderated_at"] == "now()"
+
+
+def test_writing_a_link_replaces_the_one_in_the_authors_guide():
+    sb = _create_sb()
+    C._create_chapter_sync(sb, "game-1", _body(), _user())
+    dropped = sb.hits("boardgamebuddy_user_chapters", "delete")
+    assert len(dropped) == 1
+    _, _, filters, _ = dropped[0]
+    assert filters["user_id"] == AUTHOR
+    assert filters["state"] == "kept"
+    assert filters["chapter_id"] == ["chapter-old"]
+
+
+def test_a_prose_chapter_drops_nothing_from_the_guide():
+    sb = _create_sb()
+    C._create_chapter_sync(
+        sb, "game-1", ChapterCreate(chapter_type="setup", title="t", content="x"), _user(),
+    )
+    assert not sb.hits("boardgamebuddy_user_chapters", "delete")
 
 
 def test_a_prose_chapter_carries_no_gate():
@@ -637,3 +665,36 @@ def test_the_queue_shows_where_a_link_actually_goes():
     # Unparseable input falls back to the URL rather than taking the queue down
     # over exactly the rows it exists to show.
     assert A._link_host("nonsense") == "nonsense"
+
+
+# ── Adopting a link into the guide ───────────────────────────────────────────
+
+def _adopt_sb(chapter):
+    def handler(q):
+        if q.table_name == "boardgamebuddy_guide_chapters":
+            if "id!=" in q.filters:
+                return [{"id": "chapter-old"}]
+            return [dict(chapter, game_id="game-1", title="t", content="x", grid=None,
+                         updated_at="2026-09-20T00:00:00Z",
+                         created_at="2026-09-20T00:00:00Z")]
+        if q.table_name == "boardgamebuddy_user_chapters" and q.op == "insert":
+            return [{"created_at": "2026-09-20T00:00:00Z"}]
+        return []
+    return _SB(handler)
+
+
+def test_adopting_a_link_replaces_the_one_already_in_the_guide():
+    from routes.models import AddChapterRequest
+    sb = _adopt_sb(_link(RulebookStatus.PENDING, created_by=STRANGER))
+    C._add_chapter_to_my_guide_sync(sb, "game-1", AddChapterRequest(chapter_id="chapter-1"), BUDDY)
+    dropped = sb.hits("boardgamebuddy_user_chapters", "delete")
+    assert len(dropped) == 1
+    assert dropped[0][2]["user_id"] == BUDDY
+    assert dropped[0][2]["chapter_id"] == ["chapter-old"]
+
+
+def test_adopting_a_prose_chapter_leaves_the_rulebook_alone():
+    from routes.models import AddChapterRequest
+    sb = _adopt_sb(_prose())
+    C._add_chapter_to_my_guide_sync(sb, "game-1", AddChapterRequest(chapter_id="chapter-prose"), BUDDY)
+    assert not sb.hits("boardgamebuddy_user_chapters", "delete")

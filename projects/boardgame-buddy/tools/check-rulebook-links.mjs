@@ -7,17 +7,17 @@
 // loads the real modules into a VM context and pins the three properties that
 // are invisible when they break:
 //
-//   1. ONE resolver. A game can have several approved links plus the viewer's
-//      own pending one, so which is "the rulebook" is a decision, and it lives
-//      in domain/chapter.js so a second surface cannot answer it differently.
-//      The order: an adopted approved link, then any approved one, then the
-//      viewer's own pending one, and never a denied one.
+//   1. ONE resolver. A game can have several links, so which is "the
+//      rulebook" is a decision, and it lives in domain/chapter.js so a second
+//      surface cannot answer it differently. The order: the one in the
+//      viewer's guide, then an approved one, then a pending one, never a
+//      denied one.
 //   2. The guide offers "Add a rulebook link" only while no link is on show,
 //      and the rolled-up strip PRINTS "No rulebook link available" once the
 //      answer has landed — never before.
 //   3. The client never filters on moderation_status. The API decides who may
 //      see a row (services/chapter_rulebook.py); the status is on the wire so
-//      the AUTHOR's own copy can say whether it is pending, approved or denied.
+//      the AUTHOR of a declined link can be told so.
 //   4. Opening a link goes through a "you're leaving" confirm, and the guide
 //      carries no Report button — reporting lives on the Edit guide screen.
 import fs from "node:fs";
@@ -96,11 +96,11 @@ ok("an adopted approved link beats another approved one",
     link({ id: "popular" }),
     link({ id: "adopted", in_my_guide: true }),
   ]).id === "adopted");
-ok("an approved link beats my own adopted pending one",
+ok("the one in my guide wins, even when it is pending",
   Chapter.resolveRulebook([
     link({ id: "approved" }),
     link({ id: "mine", moderation_status: "pending", in_my_guide: true, created_by: "me" }),
-  ]).id === "approved");
+  ]).id === "mine");
 ok("an approved link beats a pending one",
   Chapter.resolveRulebook([
     link({ id: "pending", moderation_status: "pending" }),
@@ -145,7 +145,7 @@ ok("opening it asks first — you are leaving the app", shown.includes("_confirm
 
 scroll._rulebooks = [link({ moderation_status: "pending", created_by: "me" })];
 const mine = scroll._renderRulebookSection();
-ok("my own pending link says it is waiting", mine.includes("Waiting for approval"));
+ok("a pending link carries no approval badge", !mine.includes("approval"));
 ok("and offers Edit rather than Report", mine.includes("_editChapter") && !mine.includes("_reportChapter"));
 ok("and no second Add button, because the API allows one per game",
   !mine.includes("Add a rulebook link"));
@@ -155,8 +155,8 @@ scroll._rulebooks = [
   link({ id: "mine-pending", moderation_status: "pending", created_by: "me" }),
 ];
 const alongside = scroll._renderRulebookSection();
-ok("my pending link behind somebody's approved one says so in words",
-  alongside.includes("waiting for approval"));
+ok("my pending link behind somebody's approved one adds no note",
+  !alongside.includes("scroll-rulebook__mine"));
 ok("and the approved one is the link on show",
   alongside.includes(`href="https://example.com/rules.pdf"`) && !alongside.includes("Add a rulebook link"));
 
@@ -167,7 +167,7 @@ scroll._rulebooks = [
 const bothApproved = scroll._renderRulebookSection();
 ok("my own APPROVED link behind one I adopted is not described as waiting",
   !bothApproved.includes("waiting for approval"));
-ok("…it is described as approved", bothApproved.includes("is approved"));
+ok("…and adds no note either", !bothApproved.includes("scroll-rulebook__mine"));
 
 scroll._rulebooks = [link({ id: "mine", moderation_status: "denied", created_by: "me" })];
 const denied = scroll._renderRulebookSection();
@@ -189,7 +189,7 @@ ok("carries the link", peek.includes(`href="https://example.com/rules.pdf"`));
 ok("an approved link carries no badge on the strip", !peek.includes("Waiting for approval"));
 ok("and asks before leaving the app", peek.includes("_confirmLeave"));
 scroll._rulebooks = [link({ moderation_status: "pending", created_by: "me" })];
-ok("my pending one does", scroll._renderRulebookPeek().includes("Waiting for approval"));
+ok("nor does a pending one", !scroll._renderRulebookPeek().includes("approval"));
 scroll._rulebooks = [link()];
 ok("and none of the section's chrome — no heading, no Add, no Report",
   !peek.includes("scroll-section__header") && !peek.includes("Add a rulebook link")

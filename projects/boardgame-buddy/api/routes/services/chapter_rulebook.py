@@ -19,11 +19,12 @@ app did not write. Following it takes a reader off this origin and onto
 somebody else's server, so it carries a gate — `moderation_status` — that no
 other chapter has, and the gate is only worth anything if EVERY read path
 applies it. That is what `is_visible_to` and `filter_visible` below are for,
-and why they take a viewer rather than being a query filter: an author, an
-admin and a stranger get different answers for the same row.
+and why they take a viewer rather than being a query filter: the author of a
+denied link sees it where nobody else does.
 
-Every link a non-admin writes goes to the admin queue as `pending`; an admin's
-own link is approved on write (`initial_status`, `gate_columns`).
+Every link a non-admin writes is visible to everyone at once and goes to the
+admin queue as `pending`; an admin's own link is approved on write
+(`initial_status`, `gate_columns`). A denial hides it from all but its author.
 """
 
 import re
@@ -196,15 +197,15 @@ def is_visible_to(
     """THE rule. Every read path goes through here, directly or via filter_visible.
 
     A row that is not a rulebook link is always visible, so callers can hand it
-    a mixed list. A rulebook link that is approved is visible to everyone,
-    anonymous readers included; in any other state (pending, denied) it is
-    visible to its author and to admins only. Status is read via `gate_status`.
+    a mixed list. A rulebook link is visible to everyone, anonymous readers
+    included, unless it is denied; a denied one is visible to its author and to
+    admins only. Status is read via `gate_status`.
     """
     if not is_rulebook_row(row):
         return True
     if is_admin:
         return True
-    if gate_status(row) is RulebookStatus.APPROVED:
+    if gate_status(row) is not RulebookStatus.DENIED:
         return True
     author = row.get("created_by")
     return bool(author) and author == viewer_id
