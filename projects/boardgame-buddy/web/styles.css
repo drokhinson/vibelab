@@ -2045,18 +2045,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 0.95rem;
 }
 .chapter-edit__titlefield::placeholder { color: oklch(var(--bc) / 0.4); }
-/* The review switch's row. Sits between the URL field and the
-   sentence that explains it, and does not shrink: it is inside the same flex
-   column as the type scroller and the title row, which is the one that squeezes
-   its children (see .chapter-edit__typescroll's note below). */
-.chapter-edit__linkreview {
-  display: flex;
-  flex-shrink: 0;
-  padding: var(--s-1) 0;
-}
 /* What happens to the link after Save — see _renderLinkStep for why this
-   sentence is on screen rather than implied by a badge afterwards, and why it
-   changes with the switch above it. */
+   sentence is on screen rather than implied by a badge afterwards. */
 .chapter-edit__linknote {
   display: flex;
   align-items: flex-start;
@@ -3291,13 +3281,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   word-break: break-all;
 }
 .admin-rulebooks__url > [data-icon-name] { flex: none; align-self: center; }
-.admin-rulebooks__reach {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  color: var(--rust);
-  font-weight: 600;
-}
 
 /* ── Dev feedback board ─────────────────────────────────────────────────────
    views/feedback-view.js. Lives on a .bgb-spoke-screen, which is CHROME rather

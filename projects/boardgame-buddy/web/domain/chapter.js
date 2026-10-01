@@ -199,9 +199,9 @@
     //
     // What the client must NOT do is decide visibility itself. A row that
     // arrives here is one the viewer may have; `moderation_status` rides along
-    // so the AUTHOR's own copy can say which of the four states it is in —
-    // unlisted (they never asked), pending (waiting), approved, turned down —
-    // never so the client can filter on it.
+    // so the AUTHOR's own copy can say which of the three states it is in —
+    // pending (waiting for an admin), approved, turned down — never so the
+    // client can filter on it.
 
     rulebookLinks(gameId, { expansionIds } = {}) {
       return this.pool(gameId, {
@@ -230,33 +230,22 @@
     /**
      * THE link to show for a game, out of everything this viewer may see.
      *
-     * A game can have several — an admin's, your buddy's, your own — and every
-     * surface that shows "the rulebook" has to pick the same one or two screens
-     * in the same app send the same person to different places. So the choice
-     * is made once, here, and the three surfaces call it (the guide's Rulebook
-     * section, the game page, the play cascade).
+     * A game can have several approved ones, plus the viewer's own while it
+     * waits for review, and every surface that shows "the rulebook" has to
+     * pick the same one. So the choice is made once, here.
      *
      * In order:
-     *   1. one the viewer has ADOPTED. They have already chosen; nothing
-     *      outranks that, including an approved link they passed over — the
-     *      printing you own beats the printing an admin found.
-     *   2. an APPROVED one, most-adopted first. The safe public answer, and the
-     *      only kind a signed-out reader is ever handed.
-     *   3. whatever is left — an unreviewed link of their own or a buddy's,
-     *      whether it is pending or unlisted. The two are one
-     *      case here on purpose: both are live for exactly these readers, and
-     *      whether an admin was ASKED about it says nothing about which link
-     *      this viewer should be sent to. It is on their screen because the
-     *      server decided they may see it, and the caller draws the badge that
-     *      says nobody has vouched for it yet.
+     *   1. an APPROVED one the viewer has ADOPTED — they already chose it.
+     *   2. any other APPROVED one, most-adopted first.
+     *   3. the viewer's own pending link, which the server sends to its author
+     *      alone; the caller badges it "Waiting for approval".
      *
      * Rows arrive sorted by popularity then recency, so "first match wins" is
      * the tiebreak at every step and no sort happens here.
      *
-     * A DENIED link never wins on its own: the author is the only viewer who is
-     * sent one at all, and putting it up as their game's rulebook would read as
-     * the denial not having happened. It stays reachable in their guide, struck
-     * through, which is where the fact that it was turned down belongs.
+     * A DENIED link never wins: the author is the only viewer sent one, and
+     * putting it up as their game's rulebook would read as the denial not
+     * having happened.
      *
      * @param {Array<any>} rows a rulebookLinks() response
      * @returns {any|null}
@@ -264,8 +253,9 @@
     resolveRulebook(rows) {
       const list = (rows || []).filter((r) => r && r.link_url);
       const live = list.filter((r) => r.moderation_status !== "denied");
-      return live.find((r) => r.in_my_guide)
-        || live.find((r) => r.moderation_status === "approved")
+      const approved = live.filter((r) => r.moderation_status === "approved");
+      return approved.find((r) => r.in_my_guide)
+        || approved[0]
         || live[0]
         || null;
     },
