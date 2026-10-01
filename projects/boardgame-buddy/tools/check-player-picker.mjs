@@ -323,6 +323,29 @@ console.log("\n6. A global hit of the typed name takes the guest row off the tab
      !answered.includes('data-picker-action="guest"'));
 }
 
+// ── 6b. A name nobody has: spinner, then straight to the guest row ──────────
+
+console.log("\n6b. An unmatched name shows the search, then only the guest offer");
+{
+  picker.open({
+    candidates: [buddy("Marcus", "u-marcus")],
+    searchAll: async () => [],
+    onConfirm: () => {},
+  });
+  sheetInstance.type("intern max");
+  const waiting = sheetInstance.html();
+  ok("the spinner is up from the keystroke, debounce included",
+     waiting.includes("Searching buddies and BoardgameBuddy users"));
+  await settle();
+  const done = sheetInstance.html();
+  ok("no 'no buddy matches' heading", !/No buddy matches/i.test(done));
+  ok("no 'no other account matches' heading", !/No other account/i.test(done));
+  ok("the spinner is gone", !done.includes("Searching buddies"));
+  ok("the guest row stands under 'Not in your buddies?'",
+     done.includes("Not in your buddies?") && done.includes('data-picker-action="guest"'));
+  picker.close();
+}
+
 // ── 7. A buddy list that lands late does not double anyone ──────────────────
 
 console.log("\n7. A cold-cache search, then the buddy bundle, is still one row per person");

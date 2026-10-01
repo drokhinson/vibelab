@@ -387,19 +387,28 @@
     }
 
     /**
+     * The global search is in hand from the keystroke that schedules it, not
+     * only once its request leaves: the spinner covers the debounce too, so
+     * the guest row does not sit alone for 350ms and then get pushed down.
+     */
+    _globalPending() {
+      return this._globalBusy || !!this._globalTimer;
+    }
+
+    /**
      * What the global search has to say right now: nothing until a query is
-     * long enough to run one, then a spinner, then either its rows or the fact
-     * that it found none. Rendered UNDER the local rows and above the guest
-     * row — the local list answered first and keeps its place, and "this
-     * person has an account after all" still beats "keep them as a ghost".
+     * long enough to run one, then a spinner, then its rows. A search that
+     * found nobody says nothing at all — the guest row under it is the answer
+     * to "nobody by that name", and a heading announcing the absence only
+     * pushes that answer further down.
      *
-     * The spinner is the one thing here that is not a row, and it is why the
-     * local list is never gated on this: whatever the box matched locally is
-     * already on screen above it while this waits.
+     * Rendered UNDER the local rows and above the guest row — the local list
+     * answered first and keeps its place, and "this person has an account
+     * after all" still beats "keep them as a ghost".
      */
     _globalSection() {
-      if (this._globalBusy) {
-        return this._sec("Searching BoardgameBuddy…")
+      if (this._globalPending()) {
+        return this._sec("Searching buddies and BoardgameBuddy users…")
           + `<div class="player-picker__busy">
                <i data-icon="loader-2" class="w-5 h-5 animate-spin"></i>
              </div>`;
@@ -407,10 +416,7 @@
       if (this._globalError) {
         return `<p class="bgb-sheet__empty">${escapeHtml(this._globalError)}</p>`;
       }
-      if (!this._globalQuery) return "";
-      if (!this._globalRows.length) {
-        return this._sec(`No other account matches “${this._globalQuery}”`);
-      }
+      if (!this._globalQuery || !this._globalRows.length) return "";
       return this._sec("On BoardgameBuddy")
         + this._globalRows.map((c) => this._row(c)).join("");
     }
@@ -532,34 +538,30 @@
       const hasLocal = local.length || sugg.length || pending.length;
       const tail = this._globalSection() + this._globalRow();
 
+      // Single-select's guest row is the "none of these" answer, not an
+      // "add somebody new" one — and it is offered even when a buddy of the
+      // same name is listed, so "Not in your buddies?" would be a lie there.
+      const guestSec = this._single ? "Or" : "Not in your buddies?";
+
       if (!hasLocal && !pickedFirst) {
-        const note = q
-          ? this._sec(`No buddy matches “${q}”`)
-          : this._sec("No buddies yet — search to find one");
-        // Once the global search has been asked, ITS answer leads: burying
-        // those rows under "keep them as a ghost" would answer a question the
-        // user didn't ask.
-        if (this._globalQuery || this._globalBusy || this._globalError) {
-          return note + tail + (guest ? this._sec(this._single ? "Or" : "Not in your buddies?") + guest : "");
+        // A query nobody matched gets no "no match" heading: the spinner, then
+        // any accounts the search found, then the guest row ARE the answer.
+        if (q && (guest || tail)) {
+          return tail + (guest ? this._sec(guestSec) + guest : "");
         }
-        // Until then the guest row IS the answer: lead with it, let the note
-        // underneath explain the absence, and offer the search below both.
-        if (!guest) {
-          if (tail) return note + tail;
-          return `<p class="bgb-sheet__empty">${this._allowGuest
+        if (!q && guest) {
+          return guest + this._sec("No buddies yet — search to find one");
+        }
+        return `<p class="bgb-sheet__empty">${q
+          ? escapeHtml(`Nobody matches “${q}”.`)
+          : (this._allowGuest
             ? "No buddies yet — type a name to add a guest."
-            : escapeHtml(q ? `Nobody matches “${q}”.` : "Nobody to pick yet.")}</p>`;
-        }
-        return guest + note + tail;
+            : "Nobody to pick yet.")}</p>`;
       }
       // Real people first when the query matched any: "add a guest called ok"
       // above Jess Okoro would be a strange thing to lead with. It stays
       // offered, though — the buddy list can hold a Dan while a different Dan
       // is at the table tonight.
-      // Single-select's guest row is the "none of these" answer, not an
-      // "add somebody new" one — and it is offered even when a buddy of the
-      // same name is listed, so "Not in your buddies?" would be a lie there.
-      const guestSec = this._single ? "Or" : "Not in your buddies?";
       return pickedFirst + this._localSections(q, sugg, local, pending) + tail
         + (guest ? this._sec(guestSec) + guest : "");
     }
