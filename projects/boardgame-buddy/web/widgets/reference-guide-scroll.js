@@ -1065,15 +1065,13 @@
     _renderTemplateNotice() {
       const pending = this._pendingTemplates();
       if (!pending.length) return "";
+      // A viewer who already keeps a grid has answered the question this
+      // notice asks; offering a second only competes with the one they chose.
+      // Unfiltered: whether they keep one is a fact about their guide, not
+      // about what is typed in the search box.
+      if (this._showScoringGrids && (this._chapters || []).some(isScoringGrid)) return "";
       const n = pending.length;
-      // Unfiltered: whether the viewer already keeps a grid is a fact about
-      // their guide, not about what is typed in the search box.
-      const mine = this._showScoringGrids && (this._chapters || []).some(isScoringGrid);
-      // The wording turns on whether they already have one: "a grid exists" is
-      // news to somebody with none and old news to somebody with two.
-      const text = mine
-        ? `${n === 1 ? "1 more custom scoring grid" : `${n} more custom scoring grids`} for this game — tap to add`
-        : `${n === 1 ? "A custom scoring grid is" : `${n} custom scoring grids are`} available — tap to add`;
+      const text = `${n === 1 ? "A custom scoring grid is" : `${n} custom scoring grids are`} available — tap to add`;
       return `
         <button class="scroll-panel__notice" type="button"
                 onclick="window.referenceGuideScroll._openTemplates(event)">
