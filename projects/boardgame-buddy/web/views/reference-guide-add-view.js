@@ -46,6 +46,13 @@
   const LINK_TYPE = "rulebook";
   const LINK_LAYOUT = "rulebook_link";
 
+  // An admin's rulebook link is approved on save (chapter_rulebook.initial_status),
+  // so the link step and its toast word themselves for that.
+  function isAdmin() {
+    const me = window.store && window.store.get("user");
+    return !!(me && me.is_admin);
+  }
+
   function isMine(c) {
     const me = window.store && window.store.get("user");
     return !!(me && c.created_by && me.id === c.created_by);
@@ -254,17 +261,12 @@ components above.
       // rows, and the two must not be one buffer or an edit to the mirror would
       // read as an edit to the link.
       this._formLinkUrl = "";
-      // The review switch — whether to ask an admin to publish
-      // this link to everyone, or keep it between the author and their
-      // buddies. ON by default: sharing is what most authors mean.
-      this._formLinkReview = true;
       // The URL this link was loaded with — see _loadChapterIntoForm. Empty on
       // a create, where nothing has been saved to differ from.
       this._formLinkUrlSaved = "";
       // The gate the link being EDITED currently sits at, or null on a create.
-      // Read-only state: it decides whether the step asks the review question
-      // at all (a decided link is not asked again — see _renderLinkStep) and
-      // never travels back to the server, which recomputes the gate itself.
+      // Read-only state: it picks the sentence under the URL field and the save
+      // toast, and never travels back to the server, which sets the gate itself.
       this._formLinkStatus = null;
       // How an EXPANSION's grid meets the base game's:
       // "add_on" appends its rows to the base template, "replace" stands in
@@ -478,7 +480,7 @@ components above.
         this._arrivedByRoute = true;
       } else if (p.mode === "create" && p.layout === LINK_LAYOUT) {
         // External create entry: the reference guide's Rulebook section, from
-        // either "No rulebook link available" or "Add another".
+        // offered only while no link is on show there.
         //
         // Straight to the URL field. Step 0 asks for a chapter type the caller
         // has already named, and step 1 offers an AI head start on a body no
@@ -1372,12 +1374,7 @@ components above.
         ? "scoring_grid"
         : (c.layout === LINK_LAYOUT && c.link_url ? LINK_LAYOUT : "text");
       this._formLinkUrl = c.link_url || "";
-      // Any gate but `unlisted` means somebody has been asked — pending is
-      // waiting on them, approved and denied are their answer — so the switch
-      // opens ON for all three, and for a row with no status at all (an older
-      // cached shape), which is the same reading the API's own default takes.
       this._formLinkStatus = asCopy ? null : (c.moderation_status || null);
-      this._formLinkReview = c.moderation_status !== "unlisted";
       // The URL as it was LOADED, kept beside the editable buffer so the save
       // toast can tell "they changed where this points" (which re-opens the
       // gate server-side) from "they saved without touching it" (which does
@@ -1720,8 +1717,8 @@ components above.
     }
 
     /**
-     * The rulebook-link body: one URL field, one question about it, and the
-     * sentence that says what the answer means.
+     * The rulebook-link body: one URL field and the sentence that says what
+     * happens on Save.
      *
      * No title field, no markdown toolbar, no Write/Preview toggle and no
      * Import — the same subtraction the grid step makes, for the same reason.
@@ -1729,41 +1726,25 @@ components above.
      * (services/chapter_rulebook.rulebook_title) and `content` is a generated
      * mirror of the URL, so there is exactly one thing here to type.
      *
-     * THE REVIEW SWITCH. Saving a rulebook link and asking an
-     * admin to publish it are separate questions: an author who just wants the
-     * PDF their own table reads from — the printing they own, a fan
-     * translation — must not submit a queue item they never wanted, nor hand
-     * the admin a decision nobody asked for. The switch is the second
-     * question, defaulted ON because "share it" is what most people mean.
-     *
-     * The note under it is not decoration. This is the one chapter an author
-     * writes that does not appear for everybody the moment they save it, and
-     * finding that out from a badge afterwards reads as the save having
-     * half-failed — so the sentence changes with the switch and says which of
-     * the two things is about to happen.
-     *
-     * A DECIDED LINK IS NOT ASKED THE QUESTION AGAIN. Once an admin has
-     * approved or denied one, the switch would be a control that does nothing
-     * (chapter_routes._update_chapter_sync moves the gate only while a link is
-     * still waiting), so the step shows the decision instead — and, on an
-     * approval, says plainly that changing the URL sends it back.
+     * The note is not decoration. This is the one chapter that does not appear
+     * for everybody the moment it is saved — every link but an admin's waits
+     * for an admin's approval — and finding that out from a badge afterwards
+     * reads as the save having half-failed.
      *
      * type="url" for the keyboard it raises on a phone (a slash and a dot on
      * the main plane), with inputmode and the autocorrect trio off: a URL
      * autocapitalised to "Https://" is a link that 400s on save.
      */
     _renderLinkStep(isEditing) {
-      const decided = this._formLinkStatus === "approved" || this._formLinkStatus === "denied";
-      const review = !!this._formLinkReview;
       let note;
-      if (this._formLinkStatus === "approved") {
-        note = "An admin approved this link, so everyone can see it. Changing the URL sends it back for review.";
+      if (isAdmin()) {
+        note = "Approved on save.";
+      } else if (this._formLinkStatus === "approved") {
+        note = "Approved. Changing the link sends it back for approval.";
       } else if (this._formLinkStatus === "denied") {
-        note = "An admin turned this link down. Save a different URL to put it back in front of them.";
-      } else if (review) {
-        note = "Your buddies can use it straight away. It needs an admin's review before everyone else can see it.";
+        note = "Declined. Change the link to send it back for approval.";
       } else {
-        note = "Only you and your buddies will see it. Nobody is asked to review it.";
+        note = "Sent for approval when you save.";
       }
       return `
         ${this._renderTypeRow(isEditing)}
@@ -1779,19 +1760,6 @@ components above.
                  oninput="window.referenceGuideAddView._onLinkInput(this.value)" />
         </div>
 
-        ${decided ? "" : `
-          <div class="chapter-edit__linkreview">
-            ${window.BgbSwitch.render({
-              on: review,
-              // The id is what keeps keyboard focus on the switch across the
-              // repaint its own tap causes — the hosts here paint by replacing
-              // innerHTML (ui/switch.js).
-              id: "chapter-link-review",
-              label: "Ask an admin to review it",
-              title: "Off: the link stays between you and your buddies",
-              onclick: "window.referenceGuideAddView._toggleLinkReview()",
-            })}
-          </div>`}
 
         <p class="chapter-edit__linknote">
           <i data-icon="info" class="w-4 h-4"></i>
@@ -1812,22 +1780,6 @@ components above.
      */
     _onLinkInput(v) {
       this._formLinkUrl = v || "";
-    }
-
-    /**
-     * Flip the review switch, and repaint — unlike _onLinkInput above, which
-     * deliberately does not.
-     *
-     * The repaint is the POINT here: the note under the switch is the only
-     * thing that says what the new position means, and a switch whose
-     * explanation does not move with it is a switch nobody trusts. Safe to
-     * repaint because the URL field's `oninput` has already written every
-     * keystroke into `_formLinkUrl`, so the value survives the field being
-     * destroyed and rebuilt — and the tap moved focus off it anyway.
-     */
-    _toggleLinkReview() {
-      this._formLinkReview = !this._formLinkReview;
-      this.render();
     }
 
     // The scoring-grid body: a row list and nothing else — no title field, no
@@ -2791,47 +2743,24 @@ components above.
     /**
      * What a saved rulebook link is told.
      *
-     * Not "saved": the whole point of the gate is that this one chapter does
-     * not go live for everyone when the author hits Save, and a toast that says
-     * nothing about it is how somebody concludes the link is broken when a
-     * stranger cannot see it.
-     *
-     * Reads the SWITCH, not the author's role. Nobody's link is born approved
-     * — an admin's own goes through the queue like everyone
-     * else's — so there is no role branch here, only the question the author
-     * just answered.
-     *
-     * The branch this function exists for is the DECIDED link, where the
-     * switch is not on screen and the gate moves only if the URL moved
-     * (chapter_routes._update_chapter_sync). Saying "back to an admin" after
-     * a save that changed the chapter type on an approved link would be the
-     * same lie in the other direction: a toast describing a queue item that
-     * was never created.
+     * Not "saved": this one chapter does not go live for everyone when its
+     * author hits Save, and a toast that says nothing about it is how somebody
+     * concludes the link is broken when a stranger cannot see it. Mirrors the
+     * server's gate (chapter_routes._update_chapter_sync): an admin's link is
+     * approved on save, anybody else's waits for review, and on an edit the
+     * gate moves only if the URL did.
      *
      * @param {boolean} isEditing
      * @param {string} savedUrl the URL as just posted, trimmed
      */
     _linkSavedMessage(isEditing, savedUrl) {
       const verb = isEditing ? "updated" : "added";
-      const decided = this._formLinkStatus === "approved" || this._formLinkStatus === "denied";
-      if (decided) {
-        // A changed URL re-opens the gate whatever the decision was, and that
-        // is the one thing worth saying; otherwise the decision stands and the
-        // toast says which one, because "updated" alone on a link a reader
-        // still cannot see is how somebody concludes the save failed.
-        if (savedUrl !== this._formLinkUrlSaved) {
-          return "Rulebook link updated — back to an admin for review";
-        }
-        return this._formLinkStatus === "approved"
-          ? "Rulebook link updated — still live for everyone"
-          : "Rulebook link updated — an admin still has this one turned down";
+      const urlChanged = !isEditing || savedUrl !== this._formLinkUrlSaved;
+      if (!urlChanged) {
+        return "Rulebook link updated";
       }
-      if (!this._formLinkReview) {
-        return `Rulebook link ${verb} — just you and your buddies for now`;
-      }
-      return isEditing
-        ? "Rulebook link updated — back to an admin for review"
-        : "Rulebook link added — your buddies can see it while an admin reviews it";
+      if (isAdmin()) return `Rulebook link ${verb}`;
+      return "Rulebook link sent for approval";
     }
 
     async _submitForm(event) {
@@ -2938,15 +2867,7 @@ components above.
       // Sent only on the layout that has one — the API 422s a link_url on any
       // other layout, which is the mirror of the grid rule above and is what
       // keeps a stale client from writing a link onto a prose chapter.
-      //
-      // `request_review` rides with it. Sent on the edit path
-      // too, and sent EXPLICITLY rather than left out when it has not moved:
-      // the field is tri-state on ChapterUpdate and omitting it means "leave
-      // the gate alone", which is the right default for some other client and
-      // the wrong one for the form that just showed somebody the switch.
-      const linkFields = isLink
-        ? { link_url: linkUrl, request_review: !!this._formLinkReview }
-        : {};
+      const linkFields = isLink ? { link_url: linkUrl } : {};
       this._saving = true;
       this.render();
       const isEditing = this._tab === "edit";

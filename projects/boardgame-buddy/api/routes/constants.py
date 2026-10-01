@@ -866,32 +866,19 @@ class RulebookStatus(StrEnum):
     Why a gate at all, when prose chapters have only the reactive
     boardgamebuddy_chapter_reports queue: a rulebook link sends a reader to
     somebody else's server, so the first report is already too late. Who sees
-    what is one function — services/chapter_rulebook.is_visible_to — and the
-    prose above it in that module is the argument.
-
-    VISIBILITY AND THE QUEUE ARE TWO QUESTIONS, which is why there are four
-    values and not three: UNLISTED and PENDING reach exactly the same readers
-    and differ only in whether anybody has been asked to decide.
+    what is one function — services/chapter_rulebook.is_visible_to.
     """
 
-    # Written, live for the author and their buddies, and NOT submitted to
-    # anyone. The state of a link whose author wants the PDF
-    # their own table reads from and never asked for it to be published — and
-    # the one status the admin queue does not list, because nobody owes it an
-    # answer.
-    UNLISTED = "unlisted"
-    # Submitted, waiting for a decision. Visible to exactly who UNLISTED is
-    # visible to — its author and their ACCEPTED buddies — and in the queue.
-    # Reached by the author turning review on, whoever they are: an admin's
-    # own link is not born approved either.
+    # In the admin queue. Visible to its author and admins only. Every link a
+    # non-admin writes, or re-points, starts here.
     PENDING = "pending"
-    # An admin put their name to it. Visible to everyone, signed in or not.
+    # An admin put their name to it, by deciding in the queue or by writing it.
+    # Visible to everyone, signed in or not.
     APPROVED = "approved"
     # Turned down. Visible to its author, struck through so they know it was
     # looked at rather than lost, and to admins. Deliberately not a delete: the
     # row is what stops the same link being re-submitted past
-    # idx_bgb_chapters_rulebook_author and quietly re-entering every buddy's
-    # guide.
+    # idx_bgb_chapters_rulebook_author.
     DENIED = "denied"
 
 

@@ -14,30 +14,22 @@ readers services/chapter_grid.py lists for the grid's mirror:
 The mirror is regenerated on every save and never hand-edited: `link_url` is the
 source of truth.
 
-WHAT IS DIFFERENT FROM EVERY OTHER CHAPTER, and why this module is bigger than
-chapter_grid.py: this is the one chapter body the app did not write. Following
-it takes a reader off this origin and onto somebody else's server, so it carries
-a gate — `moderation_status` — that no other chapter has, and the gate is only
-worth anything if EVERY read path applies it. That is what `is_visible_to` and
-`filter_visible` below are for, and why they take a viewer rather than being a
-query filter: the answer is per-reader (an author, a buddy, an admin and a
-stranger get different answers for the same row) and PostgREST cannot express
-"or the author is one of my accepted buddies" without a round trip of its own,
-which is `buddy_ids` here.
+WHAT IS DIFFERENT FROM EVERY OTHER CHAPTER: this is the one chapter body the
+app did not write. Following it takes a reader off this origin and onto
+somebody else's server, so it carries a gate — `moderation_status` — that no
+other chapter has, and the gate is only worth anything if EVERY read path
+applies it. That is what `is_visible_to` and `filter_visible` below are for,
+and why they take a viewer rather than being a query filter: an author, an
+admin and a stranger get different answers for the same row.
 
-HOW A LINK ENTERS THE QUEUE, which is separate from who may
-read it. Asking for review is the author's own decision (`initial_status`), an
-unreviewed link that nobody was asked about is `unlisted` rather than
-`pending`, and an admin's own link is not born approved. The two unreviewed
-states are one case to every reader and two cases
-to exactly one caller: the admin queue, which lists `pending` and nothing else.
+Every link a non-admin writes goes to the admin queue as `pending`; an admin's
+own link is approved on write (`initial_status`, `gate_columns`).
 """
 
 import re
 from typing import Any, Iterable, Optional
 
 from fastapi import HTTPException
-from supabase import Client
 
 from ..constants import ChapterLayout, RulebookStatus
 
@@ -149,66 +141,36 @@ def url_to_content(url: str) -> str:
     return f"[Rulebook]({url})"
 
 
-def initial_status(review_requested: bool) -> RulebookStatus:
-    """The gate a newly-written link opens at — the AUTHOR's answer, not their role.
+def initial_status(is_admin: bool) -> RulebookStatus:
+    """The gate a newly-written URL opens at: approved for an admin, else pending."""
+    return RulebookStatus.APPROVED if is_admin else RulebookStatus.PENDING
 
-    Two states, and the choice between them is the save form's review toggle.
-    Both are visible to the author and their accepted buddies
-    the moment they save; they differ in whether an admin has been asked to
-    publish the link to everyone else.
 
-    `is_admin` is deliberately NOT a parameter. An admin's own link born
-    approved would make the same act mean two different things depending on
-    who did it, and leave the one person most likely to paste a link in a
-    hurry as the one person nobody reviewed. An admin approves their own link
-    from the queue, in one tap, like anybody else's.
+def gate_columns(user_id: str, is_admin: bool) -> dict[str, Any]:
+    """The three moderation columns for a newly-written URL.
+
+    An admin's write is their decision, so it carries their id and a
+    timestamp; anybody else's is undecided and carries neither.
     """
-    return RulebookStatus.PENDING if review_requested else RulebookStatus.UNLISTED
+    status = initial_status(is_admin)
+    decided = status is RulebookStatus.APPROVED
+    return {
+        "moderation_status": str(status),
+        "moderated_by": user_id if decided else None,
+        "moderated_at": "now()" if decided else None,
+    }
 
 
 def gate_status(row: dict[str, Any]) -> RulebookStatus:
     """The status to JUDGE a row by, with the impossible case closed.
 
-    A rulebook link with no status at all — or with one this code has never
-    heard of — is unreachable through bgb_chapters_link_shape, and the safe
-    reading of an impossible row is the closed one: both are read as PENDING
-    rather than as APPROVED. One helper because three call sites below need the
-    same defensive read and a fourth that forgot it would quietly publish a row
-    nobody decided.
+    A missing status, or one this code does not know ('unlisted'
+    included), is read as PENDING rather than APPROVED.
     """
     try:
         return RulebookStatus(row.get("moderation_status") or RulebookStatus.PENDING)
     except ValueError:
         return RulebookStatus.PENDING
-
-
-def buddy_ids(sb: Client, viewer_id: Optional[str]) -> set[str]:
-    """The viewer's ACCEPTED buddies, as a set of profile ids.
-
-    One round trip, and only on a request that has a rulebook link to judge —
-    see `filter_visible`, which skips it entirely when the rows it was handed
-    carry none. That matters: the chapter pool is fetched on every guide mount.
-
-    Both columns are read because boardgamebuddy_buddy_edges is canonical
-    (`user_a < user_b`), so which side the viewer is on says nothing about the
-    relationship. Pending and blocked edges are not buddies and are filtered out
-    in the query, not here.
-    """
-    if not viewer_id:
-        return set()
-    rows = (
-        sb.table("boardgamebuddy_buddy_edges")
-        .select("user_a, user_b")
-        .eq("status", "accepted")
-        .or_(f"user_a.eq.{viewer_id},user_b.eq.{viewer_id}")
-        .execute()
-    ).data or []
-    out: set[str] = set()
-    for r in rows:
-        a, b = r.get("user_a"), r.get("user_b")
-        out.add(b if a == viewer_id else a)
-    out.discard(viewer_id)
-    return out
 
 
 def is_rulebook_row(row: dict[str, Any]) -> bool:
@@ -229,91 +191,38 @@ def is_rulebook_row(row: dict[str, Any]) -> bool:
 def is_visible_to(
     row: dict[str, Any],
     viewer_id: Optional[str],
-    viewer_buddy_ids: set[str],
     is_admin: bool = False,
 ) -> bool:
     """THE rule. Every read path goes through here, directly or via filter_visible.
 
-    A row that is not a rulebook link is always visible — this function gates
-    one layout and passes everything else through untouched, so callers can hand
-    it a mixed list without sorting it first.
-
-    For a rulebook link:
-
-      * approved → everyone, including anonymous readers. An admin's name is on
-        it.
-      * unlisted → its author and their accepted buddies. The
-        author never asked for this one to be published, which is a statement
-        about the QUEUE and not about who may read it: the buddies at the table
-        that added it are exactly who it was added for.
-      * pending  → the same readers as unlisted, for the same reason. Vouching
-        is the relationship this app is built on, and holding a link back from
-        the table that just added it would make the common case useless. The
-        only difference is that somebody has been asked to decide.
-      * denied   → its author (so they can see it was looked at rather than
-        lost) and admins. Nobody else, buddies included — that is what "denial
-        hides it" means, and it is the half of the rule that would be easy to
-        get wrong by only filtering the pool.
-
-    An admin sees every rulebook link whatever its status: they are the ones
-    deciding, and a queue that hides its own items is not a queue.
-
-    A row with no status at all, or one this code does not recognise, is
-    treated as pending rather than approved — see `gate_status`.
+    A row that is not a rulebook link is always visible, so callers can hand it
+    a mixed list. A rulebook link that is approved is visible to everyone,
+    anonymous readers included; in any other state (pending, denied) it is
+    visible to its author and to admins only. Status is read via `gate_status`.
     """
     if not is_rulebook_row(row):
         return True
     if is_admin:
         return True
-    status = gate_status(row)
-    if status is RulebookStatus.APPROVED:
+    if gate_status(row) is RulebookStatus.APPROVED:
         return True
     author = row.get("created_by")
-    if author and viewer_id and author == viewer_id:
-        return True
-    if status is RulebookStatus.DENIED:
-        # Author-only above; a denial reaches nobody else, buddy or not.
-        return False
-    # Unlisted and pending, which is where the buddy edge is the whole answer.
-    return bool(author) and author in viewer_buddy_ids
+    return bool(author) and author == viewer_id
 
 
 def filter_visible(
-    sb: Client,
     rows: list[dict[str, Any]],
     viewer_id: Optional[str],
     is_admin: bool = False,
 ) -> list[dict[str, Any]]:
-    """Drop the rulebook links this viewer may not see, in one pass.
-
-    The buddy lookup is paid for ONLY when the list actually contains a rulebook
-    link a buddy edge could rescue — somebody else's, in a status that is
-    neither approved (everyone sees it already) nor denied (no edge helps) —
-    which on the vast majority of guide mounts it does not, so the common path
-    costs an `any()` over rows already in memory and no round trip at all.
-    """
-    if not rows:
-        return rows
-    undecided = (RulebookStatus.UNLISTED, RulebookStatus.PENDING)
-    needs_buddies = any(
-        is_rulebook_row(r)
-        and gate_status(r) in undecided
-        and r.get("created_by")
-        and r.get("created_by") != viewer_id
-        for r in rows
-    )
-    ids = buddy_ids(sb, viewer_id) if (needs_buddies and not is_admin) else set()
-    return [r for r in rows if is_visible_to(r, viewer_id, ids, is_admin)]
+    """Drop the rulebook links this viewer may not see, in one pass."""
+    return [r for r in rows if is_visible_to(r, viewer_id, is_admin)]
 
 
 def visible_ids(
-    sb: Client,
     rows: Iterable[dict[str, Any]],
     viewer_id: Optional[str],
     is_admin: bool = False,
 ) -> set[str]:
-    """The ids of the rows `filter_visible` would keep.
-
-    For the count endpoints, which need the answer without carrying the bodies.
-    """
-    return {r["id"] for r in filter_visible(sb, list(rows), viewer_id, is_admin)}
+    """The ids of the rows `filter_visible` would keep, for the count endpoints."""
+    return {r["id"] for r in filter_visible(list(rows), viewer_id, is_admin)}

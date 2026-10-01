@@ -41,18 +41,11 @@
     return c.layout === "rulebook_link" || c.chapter_type === "rulebook";
   }
 
-  // Has anybody vouched for where this link goes? Two statuses say no —
-  // `pending`, where an admin was asked and has not answered, and `unlisted`,
-  // where nobody was asked at all — and to every reader but
-  // the author they are one state. The predicate is written as "not approved
-  // and not denied" rather than as a list of the two, so a fifth status added
-  // later is treated as unreviewed rather than silently rendered as vouched
-  // for; that is the same closed reading the API's
-  // services/chapter_rulebook.gate_status takes.
-  //
-  // A denied link never reaches a reader who is not its author, so the DENIED
-  // arm is about the author's own row, where the strike-through and the "an
-  // admin turned this down" note carry the state instead.
+  // Has an admin approved where this link goes? Written as "not approved and
+  // not denied" rather than as "pending", so a status added later reads as
+  // unreviewed rather than as vouched for — the same closed reading the API's
+  // services/chapter_rulebook.gate_status takes. Only the author is ever sent
+  // their own unreviewed or denied link.
   function isUnreviewedRulebook(c) {
     const status = c && c.moderation_status;
     return status !== "approved" && status !== "denied";
@@ -304,8 +297,8 @@
      * beside it for the same reason: the guide's own chapters are what somebody
      * opened the scroll to read and must not wait on this.
      *
-     * The list arrives ALREADY FILTERED by the server — a pending link reaches
-     * its author and their buddies and nobody else
+     * The list arrives ALREADY FILTERED by the server — a link not yet
+     * approved reaches its author and nobody else
      * (api/routes/services/chapter_rulebook.py). Nothing here re-checks that,
      * and nothing here may: a client that filtered would be filtering rows it
      * had already been handed.
@@ -644,8 +637,8 @@
      *   * the viewer's OWN link when it is not the resolved one — the only
      *     place a denial is ever visible, and the reason a denial is a status
      *     rather than a delete;
-     *   * the add affordance, when there is no link or the viewer has not
-     *     written one.
+     *   * the add affordance, only while no link is on show and the viewer
+     *     has not written one.
      */
     _renderRulebookSection() {
       if (!this._showRulebook) return "";
@@ -664,7 +657,7 @@
       // this row — the server does not send them the chapter — so it is safe to
       // say plainly what happened to it.
       const mineNote = (mine && !mineIsShown) ? this._renderMyRulebookNote(mine) : "";
-      const addBtn = mine || !window.session ? "" : this._renderAddRulebook(!!link);
+      const addBtn = link || mine || !window.session ? "" : this._renderAddRulebook();
 
       // No link on show: no heading and no "none available" line — just the
       // author's own row and/or the add button. Returns "" when neither applies
@@ -696,7 +689,7 @@
      * screen with the scroll rolled — so it carries the one thing somebody
      * mid-game reaches for and none of the chrome the open section has room
      * for: no heading (the strip sits under a card already labelled Reference
-     * guide), no author line, no Report or Edit, and no Add. Adding a link is a
+     * guide), no author line, no Edit, and no Add. Adding a link is a
      * deliberate act and belongs on the open scroll; reaching the rules is not.
      *
      * It still says "No rulebook link available", because rolled up is the one
@@ -710,18 +703,14 @@
       if (!link) {
         return `<p class="scroll-rulebook__none scroll-rulebook__none--peek">No rulebook link available.</p>`;
       }
-      // Unlisted and pending read the same to a reader and say the same thing
-      // here: nobody has vouched for where this goes. The difference between
-      // them — whether an admin was ASKED to — is the author's
-      // business and appears on their own row below, not on a strip somebody
-      // is reading mid-game.
       const unreviewed = isUnreviewedRulebook(link);
       return `
         <a class="scroll-rulebook__cta scroll-rulebook__cta--peek"
-           href="${escapeAttr(link.link_url || "")}" target="_blank" rel="noopener">
+           href="${escapeAttr(link.link_url || "")}" target="_blank" rel="noopener"
+           onclick="return window.referenceGuideScroll._confirmLeave(event, this.href)">
           <i data-icon="book-open" class="w-4 h-4"></i>
           <span>Rulebook</span>
-          ${unreviewed ? `<span class="scroll-rulebook__badge">Not reviewed yet</span>` : ""}
+          ${unreviewed ? `<span class="scroll-rulebook__badge">Waiting for approval</span>` : ""}
           <i data-icon="external-link" class="w-3.5 h-3.5"></i>
         </a>
       `;
@@ -741,31 +730,18 @@
       const author = link.created_by_name
         ? `Added by ${link.created_by_name}`
         : "Added by an admin";
-      // To anyone but the author the two unreviewed states are one state, and
-      // the badge says the only thing that matters about both: nobody has
-      // checked where this goes. The AUTHOR gets the distinction, because for
-      // them it is the difference between waiting on somebody and waiting on
-      // nobody — and "Waiting for approval" on a link they never submitted is
-      // a queue item they would keep checking for.
       const mine = link.created_by === myId;
-      const unlisted = link.moderation_status === "unlisted";
-      const badgeText = mine
-        ? (unlisted ? "Buddies only" : "Waiting for approval")
-        : "Not reviewed yet";
       const badge = unreviewed
-        ? `<span class="scroll-rulebook__badge" title="${
-             mine && unlisted
-               ? "Only you and your buddies can see this — edit it to ask an admin to review it"
-               : "An admin has not reviewed this link yet"
-           }">
-             <i data-icon="${mine && unlisted ? "users" : "clock"}" class="w-3 h-3"></i>
-             ${badgeText}
+        ? `<span class="scroll-rulebook__badge">
+             <i data-icon="clock" class="w-3 h-3"></i>
+             Waiting for approval
            </span>`
         : "";
       return `
         <div class="scroll-rulebook">
           <a class="scroll-rulebook__cta" href="${escapeAttr(url)}"
-             target="_blank" rel="noopener">
+             target="_blank" rel="noopener"
+             onclick="return window.referenceGuideScroll._confirmLeave(event, this.href)">
             <i data-icon="book-open" class="w-4 h-4"></i>
             <span>Open the rulebook</span>
             <i data-icon="external-link" class="w-3.5 h-3.5"></i>
@@ -775,53 +751,37 @@
             <span class="scroll-rulebook__by">${escapeHtml(author)}</span>
             ${badge}
           </div>
-          <div class="scroll-rulebook__actions">
-            ${mine ? `
+          ${mine ? `
+            <div class="scroll-rulebook__actions">
               <button class="btn btn-ghost btn-xs"
                       onclick="window.referenceGuideScroll._editChapter('${link.id}', event)">
                 <i data-icon="pencil" class="w-3.5 h-3.5"></i> Edit
-              </button>` : `
-              <button class="btn btn-ghost btn-xs"
-                      onclick="window.referenceGuideScroll._reportChapter('${link.id}', event)">
-                <i data-icon="flag" class="w-3.5 h-3.5"></i> Report
-              </button>`}
-          </div>
+              </button>
+            </div>` : ""}
         </div>
       `;
     }
 
     /**
-     * The author's own link when something else is on show, or nothing is.
-     *
-     * The one place a denial is ever visible, and the one place an author is
-     * reminded that their link is unlisted on purpose.
-     * That sentence has to say it is THEIR doing and how to undo it: an
-     * unlisted link looks identical to a pending one from the outside, and an
-     * author who cannot tell which they have is an author waiting on a queue
-     * they are not in.
+     * The author's own link when something else is on show, or nothing is —
+     * the one place a denial is ever visible.
      */
     _renderMyRulebookNote(mine) {
       const status = mine.moderation_status;
       const denied = status === "denied";
-      const unlisted = status === "unlisted";
-      // The fourth case reaches here too: an author whose own link IS approved
-      // but who has adopted somebody else's is shown this row, and it must not
-      // fall through to "waiting for approval" — telling them their published
-      // link is still in a queue is the wrong sentence.
+      // An author whose own link IS approved but who has adopted somebody
+      // else's is shown this row too, and must not be told it is in a queue.
       const approved = status === "approved";
       let text;
       let icon;
       if (denied) {
-        text = "An admin turned your rulebook link down. Edit it to submit a different one.";
+        text = "Your rulebook link was declined";
         icon = "x";
-      } else if (unlisted) {
-        text = "Your rulebook link is shared with your buddies only. Edit it to ask an admin to review it.";
-        icon = "users";
       } else if (approved) {
-        text = "Your own rulebook link is approved — it is on this game's page for everyone.";
+        text = "Your rulebook link is approved";
         icon = "check";
       } else {
-        text = "Your rulebook link is waiting for approval — your buddies can see it already.";
+        text = "Your rulebook link is waiting for approval";
         icon = "clock";
       }
       return `
@@ -837,23 +797,18 @@
     }
 
     /**
-     * "Add a rulebook link" — offered to anyone signed in who has not written
-     * one for this game, whether or not a link is already on show. A second
-     * link is a legitimate thing to add: the one on show may be for a different
-     * printing, a different language, or a dead host.
-     *
-     * Not offered to somebody who already has one, because the API refuses that
-     * (one link per game per author, idx_bgb_chapters_rulebook_author) — the
-     * button would be a tap into a 409. Editing theirs is the path, and the row
-     * above carries that button.
+     * "Add a rulebook link" — offered only while the game has no link on show
+     * and the viewer has not written one. One already on show answers "where
+     * are the rules", and the API refuses a second link from the same author
+     * (idx_bgb_chapters_rulebook_author); editing theirs is that path.
      */
-    _renderAddRulebook(hasLink) {
+    _renderAddRulebook() {
       return `
         <button class="scroll-panel__notice scroll-panel__notice--create" type="button"
                 onclick="window.referenceGuideScroll._addRulebook(event)">
           <i data-icon="plus" class="w-4 h-4"></i>
           <span class="scroll-panel__notice-text">
-            ${hasLink ? "Add another rulebook link" : "Add a rulebook link"}
+            Add a rulebook link
           </span>
         </button>
       `;
@@ -1463,10 +1418,6 @@
                 <i data-icon="book-minus" class="w-3.5 h-3.5"></i> Remove
               </button>
               ${editBtn}
-              <button class="btn btn-ghost btn-xs"
-                      onclick="window.referenceGuideScroll._reportChapter('${c.id}', event)">
-                <i data-icon="flag" class="w-3.5 h-3.5"></i> Report
-              </button>
             </div>
           </details>
         </li>
@@ -1552,20 +1503,27 @@
       }
     }
 
-    async _reportChapter(chapterId, event) {
-      if (event) event.preventDefault();
-      const reason = await window.PolaroidPopup.prompt({
-        title: "Report this chapter",
-        body: "Why are you reporting it? (optional)",
-        confirmLabel: "Report",
-      });
-      if (reason === null) return;
-      try {
-        await window.Chapter.report(chapterId, reason.trim() || null);
-        if (typeof showToast === "function") showToast("Reported — thanks for flagging", "success");
-      } catch (e) {
-        if (typeof showToast === "function") showToast(e.message || "Failed to report chapter", "error");
+    /**
+     * The rulebook anchor's click: a warning before the app hands the reader
+     * to somebody else's server. Returns false so the anchor itself never
+     * navigates; the link opens from the confirm button's own click, which
+     * still counts as the user's gesture for the popup blocker.
+     */
+    _confirmLeave(event, url) {
+      if (event) { event.preventDefault(); event.stopPropagation(); }
+      if (!window.PolaroidPopup) {
+        window.open(url, "_blank", "noopener");
+        return false;
       }
+      window.PolaroidPopup.confirm({
+        title: "You're leaving Boardgame Buddy",
+        body: `This opens ${linkHost(url)}. Only continue if you trust this site.`,
+        confirmLabel: "Open link",
+        cancelLabel: "Stay here",
+      }).then((ok) => {
+        if (ok) window.open(url, "_blank", "noopener");
+      });
+      return false;
     }
   }
 

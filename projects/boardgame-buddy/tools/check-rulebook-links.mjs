@@ -7,25 +7,19 @@
 // loads the real modules into a VM context and pins the three properties that
 // are invisible when they break:
 //
-//   1. ONE resolver. A game can have several links — an admin's, a buddy's,
-//      your own — so which one is "the rulebook" is a decision, and it lives in
-//      domain/chapter.js so a second surface cannot answer it differently and
-//      send the same person somewhere else. The order: an adopted link first,
-//      then an approved one, then whatever is left, and never a denied one.
-//   2. "No rulebook link available" is PRINTED, and only once the answer has
-//      landed. An absent section reads exactly like a section that failed to
-//      draw, and printing it
-//      a beat before a link appears is the one way to be worse than silent.
+//   1. ONE resolver. A game can have several approved links plus the viewer's
+//      own pending one, so which is "the rulebook" is a decision, and it lives
+//      in domain/chapter.js so a second surface cannot answer it differently.
+//      The order: an adopted approved link, then any approved one, then the
+//      viewer's own pending one, and never a denied one.
+//   2. The guide offers "Add a rulebook link" only while no link is on show,
+//      and the rolled-up strip PRINTS "No rulebook link available" once the
+//      answer has landed — never before.
 //   3. The client never filters on moderation_status. The API decides who may
 //      see a row (services/chapter_rulebook.py); the status is on the wire so
-//      the AUTHOR's own copy can say which of the four states it is in. A
-//      denied link reaching a viewer at all means it is theirs, and it is shown
-//      as such rather than dropped.
-//   4. UNLISTED AND PENDING ARE ONE STATE TO A READER and two to their author.
-//      Both reach the same people; only the author is told which, because for
-//      them it is the difference between waiting on somebody and waiting on
-//      nobody — and a link that says "Waiting for approval" when
-//      it was never submitted is a queue somebody keeps checking for.
+//      the AUTHOR's own copy can say whether it is pending, approved or denied.
+//   4. Opening a link goes through a "you're leaving" confirm, and the guide
+//      carries no Report button — reporting lives on the Edit guide screen.
 import fs from "node:fs";
 import vm from "node:vm";
 
@@ -97,11 +91,16 @@ ok("carries the expansions the guide is merged over", req.query.expansion_ids ==
 console.log("one resolver, one answer");
 ok("nothing available resolves to null", Chapter.resolveRulebook([]) === null);
 ok("a row with no url is not a link", Chapter.resolveRulebook([link({ link_url: "" })]) === null);
-ok("an adopted link beats an approved one the viewer passed over",
+ok("an adopted approved link beats another approved one",
+  Chapter.resolveRulebook([
+    link({ id: "popular" }),
+    link({ id: "adopted", in_my_guide: true }),
+  ]).id === "adopted");
+ok("an approved link beats my own adopted pending one",
   Chapter.resolveRulebook([
     link({ id: "approved" }),
-    link({ id: "mine", moderation_status: "pending", in_my_guide: true }),
-  ]).id === "mine");
+    link({ id: "mine", moderation_status: "pending", in_my_guide: true, created_by: "me" }),
+  ]).id === "approved");
 ok("an approved link beats a pending one",
   Chapter.resolveRulebook([
     link({ id: "pending", moderation_status: "pending" }),
@@ -109,18 +108,6 @@ ok("an approved link beats a pending one",
   ]).id === "approved");
 ok("a pending link is shown when it is all there is",
   Chapter.resolveRulebook([link({ id: "pending", moderation_status: "pending" })]).id === "pending");
-ok("an unlisted link is shown when it is all there is",
-  Chapter.resolveRulebook([link({ id: "unlisted", moderation_status: "unlisted" })]).id === "unlisted");
-ok("an approved link beats an unlisted one",
-  Chapter.resolveRulebook([
-    link({ id: "unlisted", moderation_status: "unlisted" }),
-    link({ id: "approved" }),
-  ]).id === "approved");
-ok("but an adopted unlisted link still wins — the printing you own beats the one an admin found",
-  Chapter.resolveRulebook([
-    link({ id: "approved" }),
-    link({ id: "unlisted", moderation_status: "unlisted", in_my_guide: true }),
-  ]).id === "unlisted");
 ok("a denied link never wins, even as the only one",
   Chapter.resolveRulebook([link({ id: "denied", moderation_status: "denied" })]) === null);
 ok("a denied link does not beat an approved one either",
@@ -142,9 +129,8 @@ ok("says nothing at all before the answer lands", scroll._renderRulebookSection(
 
 scroll._rulebooksLoaded = true;
 const none = scroll._renderRulebookSection();
-ok("prints 'No rulebook link available' once the pool comes back empty",
-  none.includes("No rulebook link available"));
-ok("and offers to add one", none.includes("Add a rulebook link"));
+ok("offers to add one once the pool comes back empty", none.includes("Add a rulebook link"));
+ok("and never offers to add 'another'", !none.includes("Add another"));
 
 scroll._rulebooks = [link()];
 const shown = scroll._renderRulebookSection();
@@ -153,7 +139,9 @@ ok("opens it away from the app, with noopener",
   shown.includes(`target="_blank"`) && shown.includes(`rel="noopener"`));
 ok("names the host it goes to", shown.includes("example.com"));
 ok("an approved link carries no badge", !shown.includes("Waiting for approval"));
-ok("someone else's link can be reported", shown.includes("_reportChapter"));
+ok("someone else's link carries no Report button", !shown.includes("_reportChapter"));
+ok("and no Add button, because a link is already on show", !shown.includes("Add a rulebook link"));
+ok("opening it asks first — you are leaving the app", shown.includes("_confirmLeave"));
 
 scroll._rulebooks = [link({ moderation_status: "pending", created_by: "me" })];
 const mine = scroll._renderRulebookSection();
@@ -162,26 +150,15 @@ ok("and offers Edit rather than Report", mine.includes("_editChapter") && !mine.
 ok("and no second Add button, because the API allows one per game",
   !mine.includes("Add a rulebook link"));
 
-scroll._rulebooks = [link({ moderation_status: "unlisted", created_by: "me" })];
-const mineUnlisted = scroll._renderRulebookSection();
-ok("my own unlisted link says it is buddies-only, not that it is waiting",
-  mineUnlisted.includes("Buddies only") && !mineUnlisted.includes("Waiting for approval"));
-ok("and says how to change that", mineUnlisted.includes("ask an admin to review it"));
-
-scroll._rulebooks = [link({ moderation_status: "unlisted", created_by: "someone" })];
-const theirsUnlisted = scroll._renderRulebookSection();
-ok("a buddy's unlisted link reads the same as a pending one — nobody vouched for it",
-  theirsUnlisted.includes("Not reviewed yet"));
-ok("and carries no hint about whose queue it is or is not in",
-  !theirsUnlisted.includes("Buddies only"));
-
 scroll._rulebooks = [
   link({ id: "theirs" }),
-  link({ id: "mine-unlisted", moderation_status: "unlisted", created_by: "me" }),
+  link({ id: "mine-pending", moderation_status: "pending", created_by: "me" }),
 ];
 const alongside = scroll._renderRulebookSection();
-ok("my unlisted link behind somebody's approved one says so in words, not a badge",
-  alongside.includes("shared with your buddies only"));
+ok("my pending link behind somebody's approved one says so in words",
+  alongside.includes("waiting for approval"));
+ok("and the approved one is the link on show",
+  alongside.includes(`href="https://example.com/rules.pdf"`) && !alongside.includes("Add a rulebook link"));
 
 scroll._rulebooks = [
   link({ id: "adopted", in_my_guide: true }),
@@ -194,8 +171,8 @@ ok("…it is described as approved", bothApproved.includes("is approved"));
 
 scroll._rulebooks = [link({ id: "mine", moderation_status: "denied", created_by: "me" })];
 const denied = scroll._renderRulebookSection();
-ok("a denial reaches its author, in words", denied.includes("turned your rulebook link down"));
-ok("and the game still reads as having no link", denied.includes("No rulebook link available"));
+ok("a denial reaches its author, in words", denied.includes("was declined"));
+ok("and no Add button, because the API allows one per game", !denied.includes("Add a rulebook link"));
 
 scroll._rulebooks = [
   link({ id: "theirs" }),
@@ -203,18 +180,16 @@ scroll._rulebooks = [
 ];
 const both = scroll._renderRulebookSection();
 ok("an approved link is shown even while the viewer's own was denied",
-  both.includes(`href="https://example.com/rules.pdf"`) && both.includes("turned your rulebook link down"));
+  both.includes(`href="https://example.com/rules.pdf"`) && both.includes("was declined"));
 
 console.log("the rolled-up copy");
 scroll._rulebooks = [link()];
 const peek = scroll._renderRulebookPeek();
 ok("carries the link", peek.includes(`href="https://example.com/rules.pdf"`));
-ok("an approved link carries no badge on the strip", !peek.includes("Not reviewed yet"));
-scroll._rulebooks = [link({ moderation_status: "unlisted" })];
-ok("an unreviewed one does, whichever unreviewed state it is in",
-  scroll._renderRulebookPeek().includes("Not reviewed yet"));
-scroll._rulebooks = [link({ moderation_status: "pending" })];
-ok("…including pending", scroll._renderRulebookPeek().includes("Not reviewed yet"));
+ok("an approved link carries no badge on the strip", !peek.includes("Waiting for approval"));
+ok("and asks before leaving the app", peek.includes("_confirmLeave"));
+scroll._rulebooks = [link({ moderation_status: "pending", created_by: "me" })];
+ok("my pending one does", scroll._renderRulebookPeek().includes("Waiting for approval"));
 scroll._rulebooks = [link()];
 ok("and none of the section's chrome — no heading, no Add, no Report",
   !peek.includes("scroll-section__header") && !peek.includes("Add a rulebook link")
@@ -225,6 +200,32 @@ ok("still says so when there is no link, because the section is hidden while rol
 scroll._rulebooksLoaded = false;
 ok("and says nothing before the answer lands", scroll._renderRulebookPeek() === "");
 scroll._rulebooksLoaded = true;
+
+console.log("the guide's chapters");
+ctx.window.renderMarkdown = (t) => t;
+const row = scroll._renderChapter({
+  id: "ch1", chapter_type: "tips", title: "Tips", content: "x", game_id: "game-1", created_by: "someone",
+});
+ok("a chapter in the guide carries no Report button", !row.includes("_reportChapter") && !row.includes("Report"));
+
+console.log("leaving the app");
+let asked = null;
+let opened = null;
+ctx.window.PolaroidPopup = { confirm: (o) => { asked = o; return Promise.resolve(true); } };
+ctx.window.open = (u) => { opened = u; };
+const prevented = { done: false, preventDefault() { this.done = true; }, stopPropagation() {} };
+const ret = scroll._confirmLeave(prevented, "https://example.com/rules.pdf");
+ok("the anchor's own navigation is cancelled", ret === false && prevented.done);
+ok("the popup says you are leaving and names the site",
+  !!asked && /leaving Boardgame Buddy/.test(asked.title) && asked.body.includes("example.com")
+  && /trust/.test(asked.body));
+await Promise.resolve(); await Promise.resolve();
+ok("confirming opens the link", opened === "https://example.com/rules.pdf");
+opened = null;
+ctx.window.PolaroidPopup = { confirm: () => Promise.resolve(false) };
+scroll._confirmLeave(null, "https://example.com/rules.pdf");
+await Promise.resolve(); await Promise.resolve();
+ok("cancelling opens nothing", opened === null);
 
 console.log("a signed-out reader");
 const anon = sandbox({ user: null });

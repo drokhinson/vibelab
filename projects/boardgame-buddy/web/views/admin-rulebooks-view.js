@@ -8,9 +8,8 @@
 //
 // What an admin is deciding here is one thing: does this URL go where it says
 // it goes. So the row leads with the host, carries the full URL underneath it
-// as a real link, and says who submitted it and how many buddies can already
-// follow it — because a pending link is not dormant, it is live for the
-// author's accepted buddies the whole time it waits.
+// as a real link, and says who submitted it. A pending link reaches nobody but
+// its author until it is approved here.
 
 (function () {
   class AdminRulebooksView extends window.View {
@@ -89,21 +88,11 @@
 
     _renderLink(l) {
       const busy = this._busy.has(l.chapter_id);
-      const pending = l.moderation_status === "pending";
       const author = l.created_by_name
         // A backfilled link has no author at all, and the
         // queue says so rather than inventing one.
         ? `Submitted by ${escapeHtml(l.created_by_name)}`
         : "Curated — no submitter";
-      // The number that makes a pending row urgent rather than merely
-      // outstanding: how many people can already follow this link because they
-      // are buddies with whoever posted it.
-      const reach = pending && l.buddy_reach
-        ? `<span class="admin-rulebooks__reach" title="Buddies of the submitter can already open this link">
-             <i data-icon="users" class="w-3.5 h-3.5"></i>
-             ${l.buddy_reach} ${l.buddy_reach === 1 ? "buddy" : "buddies"} can already see it
-           </span>`
-        : "";
       return `
         <li class="admin-reports__row">
           <div class="admin-reports__meta">
@@ -123,7 +112,7 @@
             <i data-icon="external-link" class="w-3.5 h-3.5"></i>
           </a>
           <div class="admin-reports__footer">
-            <span class="admin-reports__reporter">${author}${reach ? " · " : ""}${reach}</span>
+            <span class="admin-reports__reporter">${author}</span>
             <div class="admin-reports__actions">
               ${l.moderation_status !== "approved" ? `
                 <button class="btn btn-ghost btn-xs" ${busy ? "disabled" : ""}

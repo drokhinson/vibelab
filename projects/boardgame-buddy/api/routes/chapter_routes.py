@@ -160,7 +160,11 @@ def _chapter_row_to_response(
         # response carries the status so the AUTHOR's copy can say it is
         # waiting, or was turned down, not so a client can do the filtering.
         link_url=row.get("link_url"),
-        moderation_status=row.get("moderation_status"),
+        moderation_status=(
+            chapter_rulebook.gate_status(row)
+            if row.get("moderation_status") is not None
+            else None
+        ),
         created_by=row.get("created_by"),
         created_by_name=created_by_name,
         updated_at=row["updated_at"],
@@ -229,7 +233,7 @@ def _browse_chapter_pool_sync(
     # THE GATE, applied before anything else looks at these rows. A rulebook link the viewer may not see must not reach the sort, the
     # popularity tally or the wire — filtering client-side would ship the URL to
     # the browser that is not allowed to have it, which is not filtering.
-    pool_rows = chapter_rulebook.filter_visible(sb, pool_rows, viewer_id)
+    pool_rows = chapter_rulebook.filter_visible(pool_rows, viewer_id)
 
     if not pool_rows:
         return []
@@ -398,7 +402,7 @@ def _chapter_pool_count_sync(
     )
     link_q = link_q.in_("game_id", all_game_ids) if exp_ids else link_q.eq("game_id", game_id)
     link_rows = link_q.execute().data or []
-    visible = chapter_rulebook.visible_ids(sb, link_rows, viewer_id)
+    visible = chapter_rulebook.visible_ids(link_rows, viewer_id)
     hidden = {r["id"] for r in link_rows if r["id"] not in visible}
 
     if hidden:
@@ -547,20 +551,13 @@ def _create_chapter_sync(
                 else None
             ),
             "link_url": link_url,
-            # The gate the author chose, not the one their role would give them:
-            # `request_review` picks pending or unlisted, and
-            # both are live for the author's buddies either way. Nobody's link
-            # is born approved, an admin's included — so no row leaves
-            # here carrying a decision, and `moderated_by`/`moderated_at` stay
-            # NULL until somebody actually makes one. NULL on every other
-            # layout, which bgb_chapters_link_shape requires.
-            "moderation_status": (
-                str(chapter_rulebook.initial_status(body.request_review))
+            # Pending for a non-admin, approved (and stamped) for an admin.
+            # NULL on every other layout, which bgb_chapters_link_shape requires.
+            **(
+                chapter_rulebook.gate_columns(user_id, user.is_admin)
                 if is_link
-                else None
+                else {"moderation_status": None, "moderated_by": None, "moderated_at": None}
             ),
-            "moderated_by": None,
-            "moderated_at": None,
             "created_by": user_id,
         })
         .execute()
@@ -612,10 +609,8 @@ async def create_chapter(
 ) -> MyGuideChapterResponse:
     """Create a new chapter attached to a game and immediately add it to the creator's guide.
 
-    A rulebook link starts `pending` when its author asks for review and
-    `unlisted` when they don't (`chapter_rulebook.initial_status`), admins
-    included. Either way it is visible to its author and their accepted buddies;
-    only a pending one sits in the admin queue.
+    A rulebook link starts `pending` (in the admin queue, visible to its author
+    only), or `approved` when an admin writes it.
     """
     sb = get_supabase()
     return await asyncio.to_thread(_create_chapter_sync, sb, game_id, body, user)
@@ -688,25 +683,16 @@ def _update_chapter_sync(
 
     # ── A rulebook link's URL, and its gate ──────────────────────────────────
     #
-    # Editing the URL RE-OPENS the gate, which is the whole reason this branch
-    # is not three lines. An approval is a decision about a destination, not
-    # about a row: without this, an author could get an innocuous PDF approved
-    # and then point the same approved row anywhere, and every reader following
-    # the app's own "approved" badge would go there. So a changed URL drops the
-    # badge it had and goes back through the gate — whoever is editing, admins
-    # included: an admin approves it from the queue, which is
-    # one tap and leaves an audit trail a self-approval would not.
-    #
-    # Unchanged URL, unchanged status: re-submitting the same link by saving the
-    # form again must not send an approved link back to the queue.
+    # An approval is a decision about a destination, not about a row, so a
+    # changed URL re-opens the gate: pending for a non-admin, approved by the
+    # editing admin. An unchanged URL leaves the status alone, so re-saving the
+    # form never sends an approved link back to the queue.
     if str(layout) == str(ChapterLayout.RULEBOOK_LINK) and body.link_url is not None:
         link_url = chapter_rulebook.clean_url(body.link_url)
         updates["link_url"] = link_url
         updates["content"] = chapter_rulebook.url_to_content(link_url)
-        # Derived on every save, exactly as a grid's is above and for the same
-        # reason — a renamed game re-titles its rulebook link the next time one
-        # is edited. Its own lookup rather than the grid branch's, because the
-        # two branches are mutually exclusive and neither pays for the other.
+        # Derived on every save, exactly as a grid's is above — a renamed game
+        # re-titles its rulebook link the next time one is edited.
         link_game = (
             sb.table("boardgamebuddy_games")
             .select("name")
@@ -716,41 +702,12 @@ def _update_chapter_sync(
         updates["title"] = chapter_rulebook.rulebook_title(
             link_game.data[0].get("name") if link_game.data else None
         )
-        # The review toggle. None means the caller did not send
-        # one — an older client, or an edit that is not about the gate — and
-        # then the row's current state answers for it: still submitted if it
-        # was pending, still not if it was unlisted, and True for anything else,
-        # since a decided link that is about to be re-opened by a changed URL
-        # was one somebody had asked about.
-        current = chapter_rulebook.gate_status(row)
-        wants_review = (
-            body.request_review
-            if body.request_review is not None
-            else current is not RulebookStatus.UNLISTED
-        )
-        url_changed = link_url != (row.get("link_url") or "")
-        # A DECISION STANDS UNTIL THE DESTINATION CHANGES. The toggle moves a
-        # link that is still waiting — submit it, or withdraw it from the queue
-        # — and moves nothing once an admin has ruled on it. Flipping it on an
-        # approved link would let its author quietly un-publish an admin's
-        # decision; flipping it on a denied one would re-queue the same URL an
-        # admin just turned down, which is exactly what the create path's 409
-        # exists to prevent. Changing the URL is how both are re-opened, and
-        # that is the branch above.
-        reopen = url_changed or current in (RulebookStatus.UNLISTED, RulebookStatus.PENDING)
-        new_status = (
-            chapter_rulebook.initial_status(wants_review) if reopen else current
-        )
-        # Written only when it MOVES. A pending link saved again is still
-        # pending, and a no-op write here would be three columns of churn on
-        # every keystroke-free re-save.
-        if new_status is not current:
-            updates["moderation_status"] = str(new_status)
-            # Nobody has decided the row this save produces, so the audit
-            # columns say so rather than keeping the last decision's author on
-            # a link that no longer carries their decision.
-            updates["moderated_by"] = None
-            updates["moderated_at"] = None
+        if link_url != (row.get("link_url") or ""):
+            updates.update(chapter_rulebook.gate_columns(user_id, user.is_admin))
+        elif str(chapter_rulebook.gate_status(row)) != row.get("moderation_status"):
+            # A stored status this code does not know is rewritten as the one
+            # gate_status already reads it as.
+            updates["moderation_status"] = str(chapter_rulebook.gate_status(row))
 
     sb.table("boardgamebuddy_guide_chapters").update(updates).eq("id", chapter_id).execute()
 
@@ -778,8 +735,8 @@ async def update_chapter(
 ) -> ChapterResponse:
     """Edit an existing chapter. Creator-only (admins can edit by deleting + recreating).
 
-    Changing a rulebook link's URL sends it back to the admin queue — an
-    approval is a decision about a destination, not about a row.
+    Changing a rulebook link's URL sends it back to the admin queue, or
+    re-approves it when an admin is the editor.
     """
     sb = get_supabase()
     return await asyncio.to_thread(_update_chapter_sync, sb, chapter_id, body, user)
@@ -900,7 +857,7 @@ def _get_my_chapters_sync(
     # this viewer's guide and must stop being served to them. "Denial hides it
     # for everyone else" is only true if the guide filters too. The author's own
     # copy survives — see services/chapter_rulebook.is_visible_to.
-    chapters = chapter_rulebook.filter_visible(sb, chapters, user_id)
+    chapters = chapter_rulebook.filter_visible(chapters, user_id)
 
     source_map = _build_source_map(sb, all_game_ids) if exp_ids else {}
 
@@ -962,7 +919,7 @@ def _add_chapter_to_my_guide_sync(
     # "this link exists but is not for you" is itself something a stranger does
     # not get to learn, and adopting by id would otherwise be the way around
     # every filter above.
-    if not chapter_rulebook.filter_visible(sb, chapter.data, user_id):
+    if not chapter_rulebook.filter_visible(chapter.data, user_id):
         raise HTTPException(status_code=404, detail="Chapter not found for this game")
 
     existing = (
