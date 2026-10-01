@@ -46,12 +46,6 @@
   const LINK_TYPE = "rulebook";
   const LINK_LAYOUT = "rulebook_link";
 
-  // An admin's rulebook link is approved on save (chapter_rulebook.initial_status),
-  // so the link step and its toast word themselves for that.
-  function isAdmin() {
-    const me = window.store && window.store.get("user");
-    return !!(me && me.is_admin);
-  }
 
   function isMine(c) {
     const me = window.store && window.store.get("user");
@@ -261,12 +255,9 @@ components above.
       // rows, and the two must not be one buffer or an edit to the mirror would
       // read as an edit to the link.
       this._formLinkUrl = "";
-      // The URL this link was loaded with — see _loadChapterIntoForm. Empty on
-      // a create, where nothing has been saved to differ from.
-      this._formLinkUrlSaved = "";
       // The gate the link being EDITED currently sits at, or null on a create.
-      // Read-only state: it picks the sentence under the URL field and the save
-      // toast, and never travels back to the server, which sets the gate itself.
+      // Read-only state: it decides whether the link step says "Declined", and
+      // never travels back to the server, which sets the gate itself.
       this._formLinkStatus = null;
       // How an EXPANSION's grid meets the base game's:
       // "add_on" appends its rows to the base template, "replace" stands in
@@ -1375,12 +1366,6 @@ components above.
         : (c.layout === LINK_LAYOUT && c.link_url ? LINK_LAYOUT : "text");
       this._formLinkUrl = c.link_url || "";
       this._formLinkStatus = asCopy ? null : (c.moderation_status || null);
-      // The URL as it was LOADED, kept beside the editable buffer so the save
-      // toast can tell "they changed where this points" (which re-opens the
-      // gate server-side) from "they saved without touching it" (which does
-      // not). The server makes the same comparison against the stored row; this
-      // copy is only so the sentence on screen agrees with it.
-      this._formLinkUrlSaved = asCopy ? "" : (c.link_url || "");
       this._formRows = rows
         ? rows.map((r) => ({
             label: r.label || "",
@@ -1476,6 +1461,16 @@ components above.
         // state and a client holding both true would draw the chapter into the
         // guide AND into the Turned-down section at once.
         if (targetState) row.disliked = false;
+        // A guide holds one rulebook link per game; the server drops the other
+        // on add (chapter_routes._keep_one_rulebook), mirrored here.
+        if (targetState && row.layout === LINK_LAYOUT) {
+          for (const other of this._allPool) {
+            if (other !== row && other.layout === LINK_LAYOUT
+                && (other.source_game_id || other.game_id || this._gameId) === targetGameId) {
+              other.in_my_guide = false;
+            }
+          }
+        }
         window.Chapter.invalidateChaptersCache();
         document.dispatchEvent(new CustomEvent("chapters-changed", {
           detail: { gameId: targetGameId },
@@ -1726,26 +1721,17 @@ components above.
      * (services/chapter_rulebook.rulebook_title) and `content` is a generated
      * mirror of the URL, so there is exactly one thing here to type.
      *
-     * The note is not decoration. This is the one chapter that does not appear
-     * for everybody the moment it is saved — every link but an admin's waits
-     * for an admin's approval — and finding that out from a badge afterwards
-     * reads as the save having half-failed.
+     * The one note it carries is for a declined link, the only state in which
+     * the author sees something nobody else does.
      *
      * type="url" for the keyboard it raises on a phone (a slash and a dot on
      * the main plane), with inputmode and the autocorrect trio off: a URL
      * autocapitalised to "Https://" is a link that 400s on save.
      */
     _renderLinkStep(isEditing) {
-      let note;
-      if (isAdmin()) {
-        note = "Approved on save.";
-      } else if (this._formLinkStatus === "approved") {
-        note = "Approved. Changing the link sends it back for approval.";
-      } else if (this._formLinkStatus === "denied") {
-        note = "Declined. Change the link to send it back for approval.";
-      } else {
-        note = "Sent for approval when you save.";
-      }
+      const note = this._formLinkStatus === "denied"
+        ? "Declined. Change the link to resubmit it."
+        : "";
       return `
         ${this._renderTypeRow(isEditing)}
 
@@ -1761,10 +1747,11 @@ components above.
         </div>
 
 
-        <p class="chapter-edit__linknote">
-          <i data-icon="info" class="w-4 h-4"></i>
-          <span>${escapeHtml(note)}</span>
-        </p>
+        ${note ? `
+          <p class="chapter-edit__linknote">
+            <i data-icon="info" class="w-4 h-4"></i>
+            <span>${escapeHtml(note)}</span>
+          </p>` : ""}
 
         ${this._error ? `<div class="text-error text-sm chapter-edit__error">${escapeHtml(this._error)}</div>` : ""}
       `;
@@ -2740,29 +2727,6 @@ components above.
       this.render();
     }
 
-    /**
-     * What a saved rulebook link is told.
-     *
-     * Not "saved": this one chapter does not go live for everyone when its
-     * author hits Save, and a toast that says nothing about it is how somebody
-     * concludes the link is broken when a stranger cannot see it. Mirrors the
-     * server's gate (chapter_routes._update_chapter_sync): an admin's link is
-     * approved on save, anybody else's waits for review, and on an edit the
-     * gate moves only if the URL did.
-     *
-     * @param {boolean} isEditing
-     * @param {string} savedUrl the URL as just posted, trimmed
-     */
-    _linkSavedMessage(isEditing, savedUrl) {
-      const verb = isEditing ? "updated" : "added";
-      const urlChanged = !isEditing || savedUrl !== this._formLinkUrlSaved;
-      if (!urlChanged) {
-        return "Rulebook link updated";
-      }
-      if (isAdmin()) return `Rulebook link ${verb}`;
-      return "Rulebook link sent for approval";
-    }
-
     async _submitForm(event) {
       event.preventDefault();
       // Only the editor step saves. The earlier steps live inside the same
@@ -2902,7 +2866,7 @@ components above.
             grid,
           });
           showToast(
-            isLink ? this._linkSavedMessage(true, linkUrl) : "Chapter updated",
+            isLink ? "Rulebook link updated" : "Chapter updated",
             "success"
           );
         } else {
@@ -2915,7 +2879,7 @@ components above.
             grid,
           });
           showToast(
-            isLink ? this._linkSavedMessage(false, linkUrl) : "Chapter added to your guide",
+            isLink ? "Rulebook link added to your guide" : "Chapter added to your guide",
             "success"
           );
         }

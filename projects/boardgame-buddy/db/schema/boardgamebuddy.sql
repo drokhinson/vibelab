@@ -269,8 +269,8 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
   -- every other layout. `content` carries a generated markdown
   -- mirror of it for the same three readers the grid's mirror serves.
   link_url TEXT,
-  -- pending | approved | denied, on a rulebook link only. Approved is public;
-  -- pending (in the admin queue) and denied reach the author and admins. A
+  -- pending | approved | denied, on a rulebook link only. Approved and pending
+  -- (in the admin queue) are public; denied reaches the author and admins. A
   -- non-admin's link is written pending, an admin's approved. Applied by
   -- routes/services/chapter_rulebook.py on every read path — NOT by RLS, which
   -- this service-role API bypasses.
@@ -1127,7 +1127,7 @@ COMMENT ON COLUMN public.boardgamebuddy_play_players.round_scores IS 'Per-round 
 COMMENT ON COLUMN public.boardgamebuddy_plays.client_key IS 'Client-generated idempotency key for plays queued offline.';
 COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS 'Snapshot of the scoring grid the play was scored with. Deliberately not a foreign key: editing or deleting the chapter never relabels an old play.';
 COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.grid IS 'Rows of a layout=''scoring_grid'' chapter: {"v":1,"mode":…,"rows":[{"label":…,"color":…,"note":…}]}. color is a palette slug, never a hex.';
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'Rulebook links only. approved: everyone sees it; pending (in the admin queue) and denied: the author and admins.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'Rulebook links only. approved and pending (in the admin queue): everyone sees it; denied: the author and admins.';
 COMMENT ON COLUMN public.boardgamebuddy_profiles.avatar IS 'Badge config {icon, iconColor, bgColor}; icon is "initials" or an icon key. NULL = the default badge.';
 COMMENT ON TABLE public.boardgamebuddy_affiliate_partners IS 'A partner renders only when enabled AND it has a tracking_tag or a wrapper_template.';
 COMMENT ON COLUMN public.boardgamebuddy_affiliate_partners.url_template IS 'Store URL with {query} (the game name, URL-encoded) and optionally {tag} (tracking_tag).';

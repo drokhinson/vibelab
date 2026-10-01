@@ -8,8 +8,8 @@
 //
 // What an admin is deciding here is one thing: does this URL go where it says
 // it goes. So the row leads with the host, carries the full URL underneath it
-// as a real link, and says who submitted it. A pending link reaches nobody but
-// its author until it is approved here.
+// as a real link, and says who submitted it. A pending link is already live
+// for everyone while it waits here; denying it hides it from all but its author.
 
 (function () {
   class AdminRulebooksView extends window.View {

@@ -27,8 +27,8 @@
   // filtered server-side to what this viewer is allowed to see. Its own
   // namespace for the same reason TEMPLATES_NS has one — it answers "what is
   // out there", not "what is mine" — and because the answer is PER VIEWER in a
-  // way the guide's cache is not: a pending link reaches its author's buddies
-  // and nobody else, so a cache shared across accounts would leak one. bgbCache
+  // way the guide's cache is not: a denied link reaches its author and nobody
+  // else, so a cache shared across accounts would leak one. bgbCache
   // is bound per-user at auth, which is what makes that safe here.
   const RULEBOOK_NS = "rulebook-links";
   const CH_FRESH = 10 * 60 * 1000; // instant-seed (get) window
@@ -230,22 +230,12 @@
     /**
      * THE link to show for a game, out of everything this viewer may see.
      *
-     * A game can have several approved ones, plus the viewer's own while it
-     * waits for review, and every surface that shows "the rulebook" has to
-     * pick the same one. So the choice is made once, here.
-     *
-     * In order:
-     *   1. an APPROVED one the viewer has ADOPTED — they already chose it.
-     *   2. any other APPROVED one, most-adopted first.
-     *   3. the viewer's own pending link, which the server sends to its author
-     *      alone; the caller badges it "Waiting for approval".
-     *
-     * Rows arrive sorted by popularity then recency, so "first match wins" is
-     * the tiebreak at every step and no sort happens here.
-     *
-     * A DENIED link never wins: the author is the only viewer sent one, and
-     * putting it up as their game's rulebook would read as the denial not
-     * having happened.
+     * A game can have several, and every surface that shows "the rulebook"
+     * has to pick the same one, so the choice is made once, here:
+     *   1. the one in the viewer's guide — they picked it (a guide holds one);
+     *   2. otherwise an APPROVED one, most-adopted first;
+     *   3. otherwise any pending one.
+     * A DENIED link never wins: only its author is sent it at all.
      *
      * @param {Array<any>} rows a rulebookLinks() response
      * @returns {any|null}
@@ -253,9 +243,8 @@
     resolveRulebook(rows) {
       const list = (rows || []).filter((r) => r && r.link_url);
       const live = list.filter((r) => r.moderation_status !== "denied");
-      const approved = live.filter((r) => r.moderation_status === "approved");
-      return approved.find((r) => r.in_my_guide)
-        || approved[0]
+      return live.find((r) => r.in_my_guide)
+        || live.find((r) => r.moderation_status === "approved")
         || live[0]
         || null;
     },
