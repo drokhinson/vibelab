@@ -17,18 +17,12 @@
   //
   // In that flow, the scoring_grid type's display_order (5) would put it
   // FIRST — a table pushing the rules somebody actually opened the scroll for below the fold.
-  // Leaving it out of this widget entirely is wrong too: on the Play screen the
-  // grid is two cards up in the scorepad, but on a game's own page there is no
-  // scorepad, and "what do we score on" is exactly the kind of thing the guide
-  // is opened for.
+  // Leaving it out of this widget entirely is wrong too: "what do we score on"
+  // is exactly the kind of thing the guide is opened for.
   //
-  // So both ends are handled by where it sits and by one flag: the section is
-  // always last (_renderScoringSection, appended after every other section),
-  // and the surface that already draws the real scorepad passes
-  // `showScoringGrids: false` so it is not shown the same table twice. The
-  // "a grid exists, tap to add" offer is not gated by that flag — an unadopted
-  // grid is not on anyone's screen yet, which is the whole point of offering
-  // it.
+  // So it is handled by where it sits: the section is always last
+  // (_renderScoringSection, appended after every other section), and every
+  // screen draws the same guide, scorepad or not.
   function isScoringGrid(c) {
     return c.layout === "scoring_grid" || c.chapter_type === "scoring_grid";
   }
@@ -136,11 +130,6 @@
   class ReferenceGuideScroll {
     /**
      * @param {Object} opts
-     * @param {boolean} [opts.showScoringGrids=true] draw the adopted scoring
-     *   grids in the Scoring section. Pass false on a screen that already
-     *   renders the live scorepad (the Play cascade, the session viewer) —
-     *   there the same table two cards apart is a duplicate, not a reference.
-     *   The "a grid exists for this game" offer is unaffected either way.
      * @param {boolean} [opts.showRulebook=true] draw the Rulebook section.
      *   There is no surface that needs it off today — the
      *   game page and both cascade screens all want it, and it is THE place the
@@ -150,12 +139,11 @@
      *   .claude/rules/ui-object-design.md §3b states.
      */
     constructor({ gameIds, baseGameId, expansionMeta, onAfterMutate, defaultOpen = true, gameImage = null,
-                  showScoringGrids = true, showRulebook = true } = {}) {
+                  showRulebook = true } = {}) {
       this._baseGameId = baseGameId || (gameIds && gameIds[0]) || null;
       this._gameIds = (gameIds && gameIds.length) ? gameIds.slice() : (this._baseGameId ? [this._baseGameId] : []);
       this._expansionMeta = expansionMeta || {};
       this._onAfterMutate = onAfterMutate || (() => {});
-      this._showScoringGrids = showScoringGrids !== false;
       this._showRulebook = showRulebook !== false;
       // Set once the scoring-grid pool has actually been fetched — see
       // _fetchTemplates. Until then "this game has no grid" is unknown, not false.
@@ -925,21 +913,19 @@
      * Two rows, in order:
      *   * the grids the viewer has adopted for this game → their real tables,
      *     collapsed like every other chapter, with the same remove/edit/report
-     *     actions (suppressed wholesale by `showScoringGrids: false` on a
-     *     screen that already draws the scorepad — see isScoringGrid above);
+     *     actions;
      *   * under them, the section's one call to action — adopt a grid that
      *     exists, or write the first when none does (_renderScoringCta).
      *
      * With neither, the section renders nothing: an empty "Scoring" heading is
-     * not information. That is the case while the pool is still loading, and
-     * the case where every grid that exists has been adopted already.
+     * not information. That is the case while the pool is still loading.
      *
      * Narrowed by the search box like every other section — read off the
      * widget rather than passed in, because _paintNotice repaints this section
      * on its own and would otherwise silently unfilter it mid-search.
      */
     _renderScoringSection() {
-      const grids = this._showScoringGrids ? this._matchingGrids() : [];
+      const grids = this._matchingGrids();
       const notice = this._renderScoringCta();
       if (!grids.length && !notice) return "";
       const count = grids.length > 1 ? ` (${grids.length})` : "";
@@ -954,44 +940,6 @@
           </ul>` : ""}
           ${notice}
         </section>
-      `;
-    }
-
-    /**
-     * "Nobody has written one — write the first" — shown only when the pool for
-     * this game is genuinely EMPTY.
-     *
-     * Deliberately not an alternative to the offer but a fallback behind it
-     * (see the `||` in _renderScoringSection): with grids already written,
-     * adopting one beats authoring a second, and two calls to action in one
-     * small section is the pair .claude/rules/ui-object-design.md §3b is about.
-     * It is equally not shown while the pool is still loading — an empty
-     * `_templates` before the fetch lands is silence, not an answer — nor on a
-     * screen that already draws the scorepad, where the guide is not the place
-     * the grid is decided (see the `showScoringGrids` note on the constructor).
-     */
-    _renderCreateTemplate() {
-      if (!this._showScoringGrids) return "";
-      // "Grids exist" means grids that still exist FOR THIS VIEWER: a grid
-      // they have turned down is one they have already
-      // decided about, and leaving it to suppress this button is how somebody
-      // who refused the only bad grid for a game ends up on a screen that
-      // offers them nothing at all. Refusing it is exactly the moment writing
-      // your own becomes the useful next step.
-      //
-      // NOT pendingTemplates(), which also drops the grids the viewer has
-      // ADOPTED — those must keep this button away, and this is the one
-      // reader that cares about the difference.
-      if (!this._templatesLoaded) return "";
-      if ((this._templates || []).some((t) => !t.disliked)) return "";
-      return `
-        <button class="scroll-panel__notice scroll-panel__notice--create" type="button"
-                onclick="window.referenceGuideScroll._openCreateTemplate(event)">
-          <i data-icon="plus" class="w-4 h-4"></i>
-          <span class="scroll-panel__notice-text">
-            No scoring template yet — tap to build one
-          </span>
-        </button>
       `;
     }
 
@@ -1052,31 +1000,37 @@
     }
 
     /**
-     * The section's one call to action, in priority order: adopt a grid that
-     * already exists, else write the first. Never both — see
-     * _renderCreateTemplate. Rendered by the Scoring section, by the peek while
-     * the scroll is rolled up, and by the empty state, which has no peek and no
-     * section of its own; only one of those three is ever on screen at a time.
+     * The section's one call to action, shown whenever the viewer keeps no
+     * scoring grid and never once they keep one — a viewer with a grid has
+     * answered the question, and offering another only competes with it.
+     *
+     * Unfiltered: whether they keep one is a fact about their guide, not about
+     * what is typed in the search box. Silent until the pool has loaded, since
+     * an empty `_templates` before the fetch lands is not yet an answer.
+     *
+     * Rendered by the Scoring section, by the peek while the scroll is rolled
+     * up, and by the empty state, which has no peek and no section of its own;
+     * only one of those three is ever on screen at a time.
      */
     _renderScoringCta() {
+      if ((this._chapters || []).some(isScoringGrid)) return "";
+      if (!this._templatesLoaded) return "";
       return this._renderTemplateNotice() || this._renderCreateTemplate();
     }
 
+    /**
+     * "Grids exist, none is in your guide" → the chapter browser, filtered to
+     * scoring grids. The X is a per-device "not now" for the grids pending
+     * today; once it is pressed the create bar takes this one's place.
+     */
     _renderTemplateNotice() {
       const pending = this._pendingTemplates();
       if (!pending.length) return "";
       const n = pending.length;
-      // Unfiltered: whether the viewer already keeps a grid is a fact about
-      // their guide, not about what is typed in the search box.
-      const mine = this._showScoringGrids && (this._chapters || []).some(isScoringGrid);
-      // The wording turns on whether they already have one: "a grid exists" is
-      // news to somebody with none and old news to somebody with two.
-      const text = mine
-        ? `${n === 1 ? "1 more custom scoring grid" : `${n} more custom scoring grids`} for this game — tap to add`
-        : `${n === 1 ? "A custom scoring grid is" : `${n} custom scoring grids are`} available — tap to add`;
+      const text = `${n === 1 ? "A custom scoring grid is" : `${n} custom scoring grids are`} available — tap to add`;
       return `
         <button class="scroll-panel__notice" type="button"
-                onclick="window.referenceGuideScroll._openTemplates(event)">
+                onclick="event.stopPropagation();window.referenceGuideScroll._openAddChapter('scoring_grid')">
           <i data-icon="table" class="w-4 h-4"></i>
           <span class="scroll-panel__notice-text">${text}</span>
           <span class="scroll-panel__notice-x" role="button" tabindex="0"
@@ -1089,134 +1043,28 @@
     }
 
     /**
-     * Tap to add → the template picker itself, not the browse screen.
-     *
-     * Which grid to take cannot be answered from a list of one-line rows — they
-     * all carry the same derived title — so the question is put through the
-     * same sheet the play cascade opens, which draws each candidate's real
-     * table (widgets/scoring-template-sheet.js#offer). Same object, same
-     * question, one answer surface (.claude/rules/ui-object-design.md §3b).
-     *
-     * Grids with no rows are filtered out, exactly as the play cascade filters
-     * them: a candidate the sheet can only draw as an empty table is not a
-     * candidate. The browse screen stays reachable from the Edit-chapters
-     * button below, which is where browsing belongs, and is the fallback if the
-     * sheet is somehow not on the page.
-     *
-     * Grouped per game, one step each, exactly as the play cascade groups them
-     * — the pool this notice counts merges the base game and every expansion,
-     * and the sheet asking about all of them at once is what groupByGame
-     * exists to stop. No `coveredGameIds` here, though: the play cascade only
-     * INTERRUPTS about games the viewer keeps nothing for, whereas somebody
-     * who has TAPPED "3 grids are available" is asking to see all three.
+     * The fallback bar: straight into the grid builder. Worded for the pool it
+     * stands in front of — "nobody has written one" is only true when every
+     * grid for this game is gone for this viewer (none written, or all
+     * disliked); otherwise grids exist and they have set the offer aside.
      */
-    _openTemplates(event) {
-      if (event) event.stopPropagation();
-      const pending = this._pendingTemplates()
-        .filter((t) => t.grid && Array.isArray(t.grid.rows) && t.grid.rows.length);
-      // So an expansion's grid is captioned with the expansion's name alone —
-      // the scroll's own chapter rows already strip the base game off the
-      // front, and the sheet opens over them.
-      const baseGameName = this._baseGameName();
-      const steps = pending.length && window.ScoringTemplate
-        ? window.ScoringTemplate.groupByGame(pending, {
-            baseGameId: this._baseGameId,
-            baseGameName,
-          })
-        : [];
-      if (!steps.length || !window.BgbScoringTemplateSheet) {
-        this._openAddChapter("scoring_grid");
-        return;
-      }
-      window.BgbScoringTemplateSheet.offer({
-        steps,
-        // So an expansion's grid is badged with the mode it would act in —
-        // the guide's pool merges base + expansions, and
-        // "adds two rows" and "is the whole score sheet instead" are not the
-        // same offer.
-        baseGameId: this._baseGameId,
-        baseGameName,
-        returnFocus: (event && event.currentTarget) || null,
-        onAdopt: (tpl) => this._adoptTemplate(tpl),
-        onSkip: (shown) => this._dismissTemplates(shown),
-        onDislike: (tpl) => this._dislikeTemplate(tpl),
-      });
+    _renderCreateTemplate() {
+      const none = !(this._templates || []).some((t) => !t.disliked);
+      const text = none
+        ? "No scoring template yet — tap to build one"
+        : "Add a scoring template — tap to build one";
+      return `
+        <button class="scroll-panel__notice scroll-panel__notice--create" type="button"
+                onclick="window.referenceGuideScroll._openCreateTemplate(event)">
+          <i data-icon="plus" class="w-4 h-4"></i>
+          <span class="scroll-panel__notice-text">${text}</span>
+        </button>
+      `;
     }
 
-    /**
-     * Turn one offered grid down for good.
-     *
-     * The sheet has already dropped the card; this is the write behind it. Not
-     * _dismissTemplates: that is the per-device "not now" that only quiets this
-     * notice, where a dislike takes the grid out of the pool, off the guide's
-     * "N of M" and out of every future offer on every device.
-     *
-     * refresh() rather than a local splice, and only once the write lands: the
-     * scroll holds three lists the dislike changes (the pool, the pending
-     * templates behind the notice, and the count on the Edit-chapters button),
-     * and re-reading them in one pass is what keeps the notice, the Scoring
-     * section and the button agreeing with each other.
-     */
-    async _dislikeTemplate(tpl) {
-      const targetGameId = tpl.source_game_id || tpl.game_id || this._baseGameId;
-      try {
-        await window.Chapter.dislike(targetGameId, tpl.id);
-        window.Chapter.invalidateChaptersCache();
-        document.dispatchEvent(new CustomEvent("chapters-changed", {
-          detail: { gameId: targetGameId },
-        }));
-        if (typeof showToast === "function") showToast("Won't suggest that again", "info");
-        await this.refresh();
-      } catch (e) {
-        if (typeof showToast === "function") {
-          showToast((e && e.message) || "Couldn't turn that grid down", "error");
-        }
-        // No rollback into the sheet: it is a transient surface the viewer is
-        // still standing in front of, and re-inserting a card under their thumb
-        // mid-pass is worse than the grid simply being back next time. The
-        // refresh above is skipped, so nothing local claims the write landed.
-      }
-    }
-
-    /**
-     * Take one of the offered grids into this viewer's guide.
-     *
-     * A chapter is adopted against the game it BELONGS to, which for an
-     * expansion's grid is the expansion and not the game the scroll is open on
-     * — mirrors reference-guide-add-view#_toggleInGuide and play-flow-view's
-     * _adoptTemplate.
-     */
-    async _adoptTemplate(tpl) {
-      const targetGameId = tpl.source_game_id || tpl.game_id || this._baseGameId;
-      try {
-        await window.Chapter.add(targetGameId, tpl.id);
-        window.Chapter.invalidateChaptersCache();
-        // The same event the add screen fires, so any other surface holding
-        // this game's guide (Game Detail's own listener, the Play cascade)
-        // reloads rather than keeping a list that is now short one chapter.
-        document.dispatchEvent(new CustomEvent("chapters-changed", {
-          detail: { gameId: targetGameId },
-        }));
-        if (typeof showToast === "function") showToast("Added to your reference guide", "success");
-        // Re-reads both lists: the grid moves out of the pending pool and into
-        // the Scoring section in one pass.
-        await this.refresh();
-        this._onAfterMutate();
-      } catch (e) {
-        if (typeof showToast === "function") {
-          showToast((e && e.message) || "Couldn't add that to your guide", "error");
-        }
-      }
-    }
-
-    /**
-     * Turn down grids, by id — the ones the sheet actually SHOWED when it is
-     * answering for the sheet, or everything pending when it is the notice's
-     * own dismiss X. A grid the sample left out was never put to anybody, so it
-     * stays pending.
-     */
-    _dismissTemplates(shown) {
-      const ids = (shown || this._pendingTemplates()).map((t) => t.id);
+    /** The notice's dismiss X: set aside, by id, every grid pending now. */
+    _dismissTemplates() {
+      const ids = this._pendingTemplates().map((t) => t.id);
       window.Chapter.dismissTemplates(this._baseGameId, ids);
       this._paintNotice();
     }
@@ -1397,8 +1245,7 @@
       // body. A guide holding nothing but grids is State C, not the empty one.
       // Unfiltered, like `visible`: which state the scroll is in is a fact
       // about the guide, not about what is typed in the search box.
-      const hasScoring = this._showScoringGrids
-        && (this._chapters || []).some(isScoringGrid);
+      const hasScoring = (this._chapters || []).some(isScoringGrid);
 
       // State B: signed in, nothing in the scroll at all. Always open, no search.
       if (!this._loading && !hasChapters && !hasScoring) {
@@ -1442,7 +1289,7 @@
 
       // The "no match" line is about the whole scroll, so a search that matched
       // only a scoring grid must not print it above the grid it matched.
-      const matchedScoring = this._showScoringGrids && this._matchingGrids().length > 0;
+      const matchedScoring = this._matchingGrids().length > 0;
       const noMatch = matchedScoring
         ? ""
         : `<div class="scroll-panel__empty">No chapters match "${escapeHtml(this._search)}".</div>`;
