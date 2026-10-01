@@ -17,18 +17,12 @@
   //
   // In that flow, the scoring_grid type's display_order (5) would put it
   // FIRST — a table pushing the rules somebody actually opened the scroll for below the fold.
-  // Leaving it out of this widget entirely is wrong too: on the Play screen the
-  // grid is two cards up in the scorepad, but on a game's own page there is no
-  // scorepad, and "what do we score on" is exactly the kind of thing the guide
-  // is opened for.
+  // Leaving it out of this widget entirely is wrong too: "what do we score on"
+  // is exactly the kind of thing the guide is opened for.
   //
-  // So both ends are handled by where it sits and by one flag: the section is
-  // always last (_renderScoringSection, appended after every other section),
-  // and the surface that already draws the real scorepad passes
-  // `showScoringGrids: false` so it is not shown the same table twice. The
-  // "a grid exists, tap to add" offer is not gated by that flag — an unadopted
-  // grid is not on anyone's screen yet, which is the whole point of offering
-  // it.
+  // So it is handled by where it sits: the section is always last
+  // (_renderScoringSection, appended after every other section), and every
+  // screen draws the same guide, scorepad or not.
   function isScoringGrid(c) {
     return c.layout === "scoring_grid" || c.chapter_type === "scoring_grid";
   }
@@ -136,11 +130,6 @@
   class ReferenceGuideScroll {
     /**
      * @param {Object} opts
-     * @param {boolean} [opts.showScoringGrids=true] draw the adopted scoring
-     *   grids in the Scoring section. Pass false on a screen that already
-     *   renders the live scorepad (the Play cascade, the session viewer) —
-     *   there the same table two cards apart is a duplicate, not a reference.
-     *   The "a grid exists for this game" offer is unaffected either way.
      * @param {boolean} [opts.showRulebook=true] draw the Rulebook section.
      *   There is no surface that needs it off today — the
      *   game page and both cascade screens all want it, and it is THE place the
@@ -150,12 +139,11 @@
      *   .claude/rules/ui-object-design.md §3b states.
      */
     constructor({ gameIds, baseGameId, expansionMeta, onAfterMutate, defaultOpen = true, gameImage = null,
-                  showScoringGrids = true, showRulebook = true } = {}) {
+                  showRulebook = true } = {}) {
       this._baseGameId = baseGameId || (gameIds && gameIds[0]) || null;
       this._gameIds = (gameIds && gameIds.length) ? gameIds.slice() : (this._baseGameId ? [this._baseGameId] : []);
       this._expansionMeta = expansionMeta || {};
       this._onAfterMutate = onAfterMutate || (() => {});
-      this._showScoringGrids = showScoringGrids !== false;
       this._showRulebook = showRulebook !== false;
       // Set once the scoring-grid pool has actually been fetched — see
       // _fetchTemplates. Until then "this game has no grid" is unknown, not false.
@@ -925,21 +913,19 @@
      * Two rows, in order:
      *   * the grids the viewer has adopted for this game → their real tables,
      *     collapsed like every other chapter, with the same remove/edit/report
-     *     actions (suppressed wholesale by `showScoringGrids: false` on a
-     *     screen that already draws the scorepad — see isScoringGrid above);
+     *     actions;
      *   * under them, the section's one call to action — adopt a grid that
      *     exists, or write the first when none does (_renderScoringCta).
      *
      * With neither, the section renders nothing: an empty "Scoring" heading is
-     * not information. That is the case while the pool is still loading, and on
-     * a scorepad screen where the viewer keeps a grid it does not draw.
+     * not information. That is the case while the pool is still loading.
      *
      * Narrowed by the search box like every other section — read off the
      * widget rather than passed in, because _paintNotice repaints this section
      * on its own and would otherwise silently unfilter it mid-search.
      */
     _renderScoringSection() {
-      const grids = this._showScoringGrids ? this._matchingGrids() : [];
+      const grids = this._matchingGrids();
       const notice = this._renderScoringCta();
       if (!grids.length && !notice) return "";
       const count = grids.length > 1 ? ` (${grids.length})` : "";
@@ -1063,9 +1049,6 @@
      * disliked); otherwise grids exist and they have set the offer aside.
      */
     _renderCreateTemplate() {
-      // A screen that already draws the scorepad builds its grid there; the
-      // guide is not where that screen decides it.
-      if (!this._showScoringGrids) return "";
       const none = !(this._templates || []).some((t) => !t.disliked);
       const text = none
         ? "No scoring template yet — tap to build one"
@@ -1262,8 +1245,7 @@
       // body. A guide holding nothing but grids is State C, not the empty one.
       // Unfiltered, like `visible`: which state the scroll is in is a fact
       // about the guide, not about what is typed in the search box.
-      const hasScoring = this._showScoringGrids
-        && (this._chapters || []).some(isScoringGrid);
+      const hasScoring = (this._chapters || []).some(isScoringGrid);
 
       // State B: signed in, nothing in the scroll at all. Always open, no search.
       if (!this._loading && !hasChapters && !hasScoring) {
@@ -1307,7 +1289,7 @@
 
       // The "no match" line is about the whole scroll, so a search that matched
       // only a scoring grid must not print it above the grid it matched.
-      const matchedScoring = this._showScoringGrids && this._matchingGrids().length > 0;
+      const matchedScoring = this._matchingGrids().length > 0;
       const noMatch = matchedScoring
         ? ""
         : `<div class="scroll-panel__empty">No chapters match "${escapeHtml(this._search)}".</div>`;

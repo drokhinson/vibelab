@@ -1387,9 +1387,6 @@
           gameIds: [s.game_id],
           expansionMeta,
           defaultOpen: true,
-          // Same reason as the Play cascade: this screen already draws the live
-          // scoring table, so the guide does not draw it a second time.
-          showScoringGrids: false,
         });
         this._guideWidget.mount(host);
       } else {
