@@ -8,11 +8,9 @@ metadata queue, and collapsing them fixed an over-count as well as three round
 trips: a game missing both its blurb and its year used to be counted twice, so
 the dot claimed more work than existed.
 
-FOUR WITH THE RULEBOOK-LINK QUEUE. It is counted
-here for the same reason the others are — one round trip lights the whole gear —
-but it is the one queue where the number is not tidy-up: a pending rulebook link
-is already visible to its author's buddies, so a count sitting here is readers
-following an unreviewed outbound link.
+FOUR WITH THE RULEBOOK-LINK QUEUE, counted here for the same reason the others
+are — one round trip lights the whole gear. Only `pending` counts: every link a
+non-admin writes lands there, and an admin's own link is approved on write.
 """
 
 import os
@@ -145,3 +143,12 @@ def test_a_game_short_of_two_things_is_counted_once(counts_client):
     assert body["rulebook_links"] == 3, (
         "one row per incomplete game, however many fields it is short of"
     )
+
+
+
+def test_pending_is_the_only_undecided_rulebook_status():
+    """The badge counts `pending` alone, which is complete only while there is
+    no other undecided state for a link to sit in."""
+    from routes.constants import RulebookStatus
+
+    assert {str(m) for m in RulebookStatus} == {"pending", "approved", "denied"}

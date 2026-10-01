@@ -160,10 +160,8 @@ class AdminReviewCounts(BaseModel):
     # is not expected to reach zero. The queue that has to terminate is
     # `bgg_meta_synced_at IS NULL`, and it lives in the endpoint.
     missing_metadata: int = 0
-    # Rulebook links waiting on a decision. The one queue here
-    # that is not merely tidy-up: until an admin looks, the link is live for its
-    # author's buddies, so a number sitting here is readers already following an
-    # unreviewed outbound link.
+    # Rulebook links waiting on a decision (`pending`). Each is hidden from
+    # everyone but its author until an admin approves it.
     rulebook_links: int = 0
 
     @computed_field  # type: ignore[misc]
@@ -1316,19 +1314,6 @@ class ChapterCreate(BaseModel):
     # into a 400 naming the problem — a 422 listing a regex is not an error an
     # author can act on.
     link_url: str | None = None
-    # Whether to put this rulebook link in the admin queue.
-    # True means pending, False means unlisted, and BOTH are visible to the
-    # author and their accepted buddies the moment they save — this field
-    # decides who is asked to publish the link to everyone else, not who can
-    # read it.
-    #
-    # Defaults to True, which is what an older client sends by
-    # sending nothing: that client's Save button meant "submit this", and it
-    # goes on meaning that. Ignored on every other layout rather than rejected,
-    # unlike `link_url` above — a stray True on a prose chapter asks for a
-    # queue that does not exist, which is a no-op, where a stray URL would
-    # write an ungated destination into a row.
-    request_review: bool = True
 
     @model_validator(mode="after")
     def _body_matches_layout(self) -> "ChapterCreate":
@@ -1425,12 +1410,6 @@ class ChapterUpdate(BaseModel):
     # — the point of the gate is that an admin approved THIS link, not whatever
     # the author points it at next.
     link_url: str | None = None
-    # The review toggle, and here it is TRI-STATE on purpose:
-    # None means "not supplied", so an older client — or any caller
-    # editing something other than the gate — cannot withdraw a submission by
-    # omission. True submits, False withdraws, None leaves the gate where the
-    # URL comparison puts it.
-    request_review: bool | None = None
 
 
 class ChapterResponse(BaseModel):
@@ -1452,11 +1431,10 @@ class ChapterResponse(BaseModel):
     # (services/chapter_rulebook.filter_visible), never by the client hiding a
     # row it was sent.
     link_url: str | None = None
-    # unlisted | pending | approved | denied, and None for every other layout.
+    # pending | approved | denied, and None for every other layout.
     # On the wire because the AUTHOR's own copy renders differently for each —
-    # an unlisted link says it is theirs and their buddies', a pending one says
-    # it is waiting, a denied one says it was turned down — and because the
-    # admin queue reads the same shape. It is NOT what the client filters on:
+    # a pending one says it is waiting, a denied one says it was turned down —
+    # and because the admin queue reads the same shape. It is NOT what the client filters on:
     # a row that arrives has already passed the gate server-side.
     moderation_status: RulebookStatus | None = None
     created_by: str | None = None
@@ -1530,7 +1508,7 @@ class RulebookLinkReviewItem(BaseModel):
     A flatter shape than ChapterResponse on purpose: an admin triaging links is
     deciding about a URL and who submitted it, and the fields that matter are
     the ones this row makes impossible to miss — the destination, the game it
-    claims to be the rules for, and the author whose buddies can already see it.
+    claims to be the rules for, and who submitted it.
     """
 
     chapter_id: str
@@ -1545,10 +1523,6 @@ class RulebookLinkReviewItem(BaseModel):
     moderation_status: RulebookStatus
     created_by: str | None = None
     created_by_name: str | None = None
-    # How many readers can already see this link on the strength of a buddy edge
-    # — the number that says how urgent a pending row is. Not a popularity
-    # count: it is the blast radius of leaving it pending.
-    buddy_reach: int = 0
     created_at: datetime
     moderated_at: datetime | None = None
 

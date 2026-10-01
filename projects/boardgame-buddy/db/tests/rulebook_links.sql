@@ -16,8 +16,8 @@
 --     have to guess about.
 --   * `idx_bgb_chapters_rulebook_author`, which is what makes a denial stick.
 --     A denied row keeps its author's one slot, so re-posting the same link
---     under a new row collides instead of quietly re-entering every buddy's
---     guide. Nothing in the Python suite can see a unique index.
+--     under a new row collides instead of quietly re-entering the admin
+--     queue. Nothing in the Python suite can see a unique index.
 --   * the BACKFILL, which runs exactly once against real data and decides
 --     whether every currently-curated game keeps its rulebook on the day this
 --     ships. It is run here for real — see the two `\i` lines below — rather

@@ -83,20 +83,11 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
         .execute()
     )
 
-    # Rulebook links still waiting on a decision. Unlike the
-    # three above, this queue is not tidy-up: a pending link is already live for
-    # its author's accepted buddies, so the number here is readers following an
-    # unreviewed outbound link. Off the partial index
+    # Rulebook links waiting on a decision. Off the partial index
     # idx_bgb_chapters_rulebook_status, and filtered on the layout as well as
     # the status because moderation_status is NULL on every other chapter and a
     # status filter alone would quietly start counting prose the day that
     # changes.
-    #
-    # PENDING only, which is narrower than "unreviewed":
-    # an `unlisted` link is equally unreviewed and equally live for its
-    # author's buddies, and is nobody's work — its author asked for nothing.
-    # Counting those would put a number on this badge that no amount of
-    # admin work could ever clear.
     rulebook_links = (
         _count_query(sb, "boardgamebuddy_guide_chapters")
         .eq("layout", str(ChapterLayout.RULEBOOK_LINK))
