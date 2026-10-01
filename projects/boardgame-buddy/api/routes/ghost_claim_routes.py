@@ -106,8 +106,10 @@ async def create_ghost_claim(
     claim = await asyncio.to_thread(
         ghost_claim_service.create_claim, sb, user.user_id, body.owner_user_id, body.display_name
     )
+    # The claim's own name, not the body's: a one-time guest is claimed by a
+    # key that is no name to show anybody.
     push_notify.ghost_claim(
-        background_tasks, sb, user, body.owner_user_id, body.display_name
+        background_tasks, sb, user, body.owner_user_id, claim.ghost_display_name
     )
     return claim
 

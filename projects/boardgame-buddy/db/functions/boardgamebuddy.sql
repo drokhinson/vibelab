@@ -554,7 +554,8 @@
 --     BoardGameGeek play they already have — the caller re-reads that row.
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
 --   Defined in: db/migrations/062_decimal_scores.sql
---               redefined in db/migrations/063_play_invites.sql
+--               redefined in db/migrations/063_play_invites.sql,
+--               065_one_time_guests.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by
@@ -882,7 +883,8 @@
 --   → JSONB { "accounts": [BuddyEdgeResponse…], "pending": [PendingBuddyEdge…],
 --             "ghosts": [GhostPlayer…], "recent": [PlayedWithUser…] }
 --   Defined in: db/migrations/003_baseline_functions_social.sql
---               redefined in db/migrations/063_play_invites.sql
+--               redefined in db/migrations/063_play_invites.sql,
+--               065_one_time_guests.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/services/played_with_service.py
 --               (fetch_play_partners — GET /play-partners; fetch_played_with
@@ -1014,7 +1016,8 @@
 -- bgb_link_ghost(p_viewer UUID, p_display_name TEXT, p_target UUID)
 --   → JSONB { "updated": INT } | { "error": "not_found" }
 --   Defined in: db/migrations/002_baseline_functions_play.sql
---               redefined in db/migrations/063_play_invites.sql
+--               redefined in db/migrations/063_play_invites.sql,
+--               065_one_time_guests.sql
 --   Language:   plpgsql
 --   Called by:  services/played_with_service.link_ghost (POST /ghost-players/link)
 --   Purpose:    Stamp a real account onto every ghost row matching a name in
@@ -1030,7 +1033,8 @@
 -- bgb_merge_ghosts(p_viewer UUID, p_source TEXT, p_target TEXT)
 --   → JSONB { "updated": INT }
 --   Defined in: db/migrations/002_baseline_functions_play.sql
---               redefined in db/migrations/063_play_invites.sql
+--               redefined in db/migrations/063_play_invites.sql,
+--               065_one_time_guests.sql
 --   Language:   plpgsql
 --   Called by:  services/played_with_service.merge_ghosts (POST /ghost-players/merge)
 --   Purpose:    Collapse two spellings of one ghost. Same query-string cliff as
@@ -1119,10 +1123,21 @@
 -- that same merge.
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- bgb_ghost_key(p_play UUID, p_name TEXT, p_one_time BOOLEAN)
+--   → TEXT
+--   Defined in: db/migrations/065_one_time_guests.sql
+--   Language:   sql (IMMUTABLE)
+--   Called by:  bgb_link_ghost_rows, bgb_ghost_summary, bgb_ghost_claims,
+--               bgb_link_ghost, bgb_ghost_claim_detail (SQL only)
+--   Purpose:    The handle a ghost is claimed and linked by: its lowercased
+--               name across the owner's plays, or, for a one-time guest,
+--               'play:<play id>:<name>', so a claim reaches that one seat.
+
 -- bgb_link_ghost_rows(p_owner UUID, p_name_key TEXT, p_target UUID)
 --   → INT (rows moved)
 --   Defined in: db/migrations/002_baseline_functions_play.sql
---               redefined in db/migrations/063_play_invites.sql
+--               redefined in db/migrations/063_play_invites.sql,
+--               065_one_time_guests.sql
 --   Language:   plpgsql
 --   Called by:  bgb_link_ghost, bgb_accept_ghost_claim (SQL only — no route)
 --   Purpose:    THE ghost→account merge, shared so the owner-initiated link
@@ -1134,7 +1149,8 @@
 --   → JSONB { exists, play_count, last_played_at, last_game_name,
 --             ghost_display_name, collides, visible }
 --   Defined in: db/migrations/002_baseline_functions_play.sql
---               redefined in db/migrations/063_play_invites.sql
+--               redefined in db/migrations/063_play_invites.sql,
+--               065_one_time_guests.sql
 --   Language:   sql
 --   Called by:  bgb_ghost_claim_detail, bgb_create_ghost_claim,
 --               bgb_accept_ghost_claim, bgb_dismiss_ghost_claim (SQL only)
@@ -1152,7 +1168,8 @@
 --              ghost_display_name, ghost_name_key, play_count, last_played_at,
 --              last_game_name, match_score, claim_status, claim_id} ]
 --   Defined in: db/migrations/002_baseline_functions_play.sql
---               redefined in db/migrations/063_play_invites.sql
+--               redefined in db/migrations/063_play_invites.sql,
+--               065_one_time_guests.sql
 --   Language:   plpgsql
 --   Called by:  services/ghost_claim_service.fetch_suggestions
 --               (GET /ghost-claims/suggestions)
@@ -1172,6 +1189,7 @@
 --   → JSONB { …suggestion fields…, can_claim, blocked_reason }
 --            | { "error": "not_visible" | "ghost_gone" | ... }
 --   Defined in: db/migrations/002_baseline_functions_play.sql
+--               redefined in db/migrations/065_one_time_guests.sql
 --   Language:   plpgsql
 --   Called by:  services/ghost_claim_service.fetch_detail (GET /ghost-claims/lookup)
 --   Purpose:    Backs the claim sheet opened from a polaroid back or the
@@ -1184,7 +1202,8 @@
 -- bgb_ghost_claims(p_viewer UUID)
 --   → JSONB { incoming: [...], outgoing: [...] }
 --   Defined in: db/migrations/002_baseline_functions_play.sql
---               redefined in db/migrations/063_play_invites.sql
+--               redefined in db/migrations/063_play_invites.sql,
+--               065_one_time_guests.sql
 --   Language:   plpgsql
 --   Called by:  services/ghost_claim_service.list_claims (GET /ghost-claims)
 --   Purpose:    Both sides of the request list, mirroring GET /buddies/requests.

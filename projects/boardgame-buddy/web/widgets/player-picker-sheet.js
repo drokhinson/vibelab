@@ -69,6 +69,15 @@
 // just added" is the likeliest answer to "who else is playing?" and the empty
 // box would otherwise open on a list they are not in at all.
 //
+// ── ONE-TIME GUESTS ─────────────────────────────────────────────────────────
+//
+// A caller that passes `oneTimeGuests` gets a row at the top of the empty box
+// that seats "Player 1", then "Player 2", and so on: somebody at the table you
+// will never see again, with no account and no name worth typing. It ticks
+// like any guest, and the pick carries `one_time`, which keeps the seat off
+// the logger's guest list and makes it claimable on that play alone. The row
+// stays put and renumbers, so three strangers are three taps.
+//
 // The shell is ui/bottom-sheet.js and the panel chrome is the shared
 // .bgb-sheet__* family; only the .player-picker__* row family is ours.
 
@@ -90,6 +99,8 @@
    *   the viewer and this person that nobody has answered yet — "incoming"
    *   they asked, "outgoing" the viewer did. Seatable either way; it only
    *   changes what the row says and which section it opens in.
+   * @property {boolean} [one_time]    A one-time guest ("Player 2") this
+   *   sheet made up — see ONE-TIME GUESTS at the top of the file.
    * @property {boolean} [isViewer]    This candidate is the signed-in user.
    *   Labelled "You" and pinned first — the play importer is the one caller
    *   that offers the viewer at all, since everywhere else they are already
@@ -147,6 +158,8 @@
    *   ghost player to an account is a choice among people who already exist,
    *   and "add “xyz” as a guest" there would offer an act with nothing behind
    *   it. Suppresses the row entirely, typed query or not.
+   * @property {boolean} [oneTimeGuests]       Offer the "Player N" row — see
+   *   ONE-TIME GUESTS at the top of this file. Multi-select only.
    */
 
   const LIST_SEL = "[data-picker-list]";
@@ -168,6 +181,9 @@
   // are, not that they were ranked: a row here is here because of a request
   // the viewer or the other person actually sent.
   const PENDING_LABEL = "Buddy requests";
+  // What a one-time guest is called. Numbered, because the scoreboard still
+  // has to tell two of them apart.
+  const ONE_TIME_PREFIX = "Player ";
 
   class PlayerPickerSheet {
     constructor() {
@@ -189,6 +205,7 @@
       this._guestTitle = "";
       this._guestHint = "";
       this._allowGuest = true;
+      this._oneTime = false;
       /** @type {PlayerCandidate[]} */
       this._suggestions = [];
       this._suggestionsLabel = "";
@@ -281,6 +298,7 @@
       });
       const bits = [];
       if (c.isViewer) bits.push("You");
+      if (c.one_time) bits.push("One-time guest");
       if (c.alias) bits.push(c.name);
       if (c.username) bits.push("@" + c.username);
       if (c.plays) bits.push(`${c.plays} play${c.plays === 1 ? "" : "s"} together`);
@@ -361,6 +379,39 @@
     }
 
     /**
+     * The lowest "Player N" nobody is called yet: not at the table, not
+     * ticked, and not a name in the caller's list (an older guest of that name
+     * would share its picker key and tick in its place).
+     */
+    _nextOneTimeName() {
+      const taken = new Set([...this._seatedNames]);
+      for (const c of this._picked) taken.add(key(c.name));
+      for (const c of this._candidates) taken.add(key(c.name));
+      let n = 1;
+      while (taken.has(key(ONE_TIME_PREFIX + n))) n++;
+      return ONE_TIME_PREFIX + n;
+    }
+
+    /**
+     * The "Player N" row. Empty box only: a typed name is somebody with a
+     * name, and the guest row already answers that.
+     */
+    _oneTimeRow() {
+      if (!this._oneTime || this._single || !this._allowGuest || this._query.trim()) return "";
+      const name = this._nextOneTimeName();
+      return `
+        <button class="player-picker__row player-picker__row--guest" type="button"
+                data-picker-action="one-time">
+          <span class="player-picker__plus"><i data-icon="user-plus" class="w-5 h-5"></i></span>
+          <span class="player-picker__body">
+            <span class="player-picker__name">Add “${escapeHtml(name)}”</span>
+            <span class="player-picker__meta">One-time guest — not saved to your guests</span>
+          </span>
+        </button>
+      `;
+    }
+
+    /**
      * WHAT THE SHEET IS ABOUT TO DO, at the top, always. Ticked people render
      * here and nowhere else — _renderList() takes them out of the body — so
      * clearing the search box cannot scatter the four people you just
@@ -387,19 +438,28 @@
     }
 
     /**
+     * The global search is in hand from the keystroke that schedules it, not
+     * only once its request leaves: the spinner covers the debounce too, so
+     * the guest row does not sit alone for 350ms and then get pushed down.
+     */
+    _globalPending() {
+      return this._globalBusy || !!this._globalTimer;
+    }
+
+    /**
      * What the global search has to say right now: nothing until a query is
-     * long enough to run one, then a spinner, then either its rows or the fact
-     * that it found none. Rendered UNDER the local rows and above the guest
-     * row — the local list answered first and keeps its place, and "this
-     * person has an account after all" still beats "keep them as a ghost".
+     * long enough to run one, then a spinner, then its rows. A search that
+     * found nobody says nothing at all — the guest row under it is the answer
+     * to "nobody by that name", and a heading announcing the absence only
+     * pushes that answer further down.
      *
-     * The spinner is the one thing here that is not a row, and it is why the
-     * local list is never gated on this: whatever the box matched locally is
-     * already on screen above it while this waits.
+     * Rendered UNDER the local rows and above the guest row — the local list
+     * answered first and keeps its place, and "this person has an account
+     * after all" still beats "keep them as a ghost".
      */
     _globalSection() {
-      if (this._globalBusy) {
-        return this._sec("Searching BoardgameBuddy…")
+      if (this._globalPending()) {
+        return this._sec("Searching buddies and BoardgameBuddy users…")
           + `<div class="player-picker__busy">
                <i data-icon="loader-2" class="w-5 h-5 animate-spin"></i>
              </div>`;
@@ -407,10 +467,7 @@
       if (this._globalError) {
         return `<p class="bgb-sheet__empty">${escapeHtml(this._globalError)}</p>`;
       }
-      if (!this._globalQuery) return "";
-      if (!this._globalRows.length) {
-        return this._sec(`No other account matches “${this._globalQuery}”`);
-      }
+      if (!this._globalQuery || !this._globalRows.length) return "";
       return this._sec("On BoardgameBuddy")
         + this._globalRows.map((c) => this._row(c)).join("");
     }
@@ -516,6 +573,10 @@
     }
 
     _renderList() {
+      return this._oneTimeRow() + this._renderRows();
+    }
+
+    _renderRows() {
       const q = this._query.trim();
       const guest = this._guestRow();
       const pickedFirst = this._pickedSection();
@@ -532,34 +593,30 @@
       const hasLocal = local.length || sugg.length || pending.length;
       const tail = this._globalSection() + this._globalRow();
 
+      // Single-select's guest row is the "none of these" answer, not an
+      // "add somebody new" one — and it is offered even when a buddy of the
+      // same name is listed, so "Not in your buddies?" would be a lie there.
+      const guestSec = this._single ? "Or" : "Not in your buddies?";
+
       if (!hasLocal && !pickedFirst) {
-        const note = q
-          ? this._sec(`No buddy matches “${q}”`)
-          : this._sec("No buddies yet — search to find one");
-        // Once the global search has been asked, ITS answer leads: burying
-        // those rows under "keep them as a ghost" would answer a question the
-        // user didn't ask.
-        if (this._globalQuery || this._globalBusy || this._globalError) {
-          return note + tail + (guest ? this._sec(this._single ? "Or" : "Not in your buddies?") + guest : "");
+        // A query nobody matched gets no "no match" heading: the spinner, then
+        // any accounts the search found, then the guest row ARE the answer.
+        if (q && (guest || tail)) {
+          return tail + (guest ? this._sec(guestSec) + guest : "");
         }
-        // Until then the guest row IS the answer: lead with it, let the note
-        // underneath explain the absence, and offer the search below both.
-        if (!guest) {
-          if (tail) return note + tail;
-          return `<p class="bgb-sheet__empty">${this._allowGuest
+        if (!q && guest) {
+          return guest + this._sec("No buddies yet — search to find one");
+        }
+        return `<p class="bgb-sheet__empty">${q
+          ? escapeHtml(`Nobody matches “${q}”.`)
+          : (this._allowGuest
             ? "No buddies yet — type a name to add a guest."
-            : escapeHtml(q ? `Nobody matches “${q}”.` : "Nobody to pick yet.")}</p>`;
-        }
-        return guest + note + tail;
+            : "Nobody to pick yet.")}</p>`;
       }
       // Real people first when the query matched any: "add a guest called ok"
       // above Jess Okoro would be a strange thing to lead with. It stays
       // offered, though — the buddy list can hold a Dan while a different Dan
       // is at the table tonight.
-      // Single-select's guest row is the "none of these" answer, not an
-      // "add somebody new" one — and it is offered even when a buddy of the
-      // same name is listed, so "Not in your buddies?" would be a lie there.
-      const guestSec = this._single ? "Or" : "Not in your buddies?";
       return pickedFirst + this._localSections(q, sugg, local, pending) + tail
         + (guest ? this._sec(guestSec) + guest : "");
     }
@@ -631,6 +688,7 @@
       this._guestTitle = opts.guestTitle || "";
       this._guestHint = opts.guestHint || "";
       this._allowGuest = opts.allowGuest !== false;
+      this._oneTime = !!opts.oneTimeGuests;
       this._suggestions = Array.isArray(opts.suggestions) ? opts.suggestions : [];
       this._suggestionsLabel = opts.suggestionsLabel || "";
       this._restLabel = opts.restLabel || "";
@@ -644,6 +702,7 @@
         returnFocus: opts.returnFocus || null,
         onClick: (e) => {
           if (e.target.closest('[data-picker-action="guest"]')) { this._pickGuest(); return; }
+          if (e.target.closest('[data-picker-action="one-time"]')) { this._pickOneTime(); return; }
           if (e.target.closest('[data-picker-action="global"]')) { this._runGlobalSearch(); return; }
           if (e.target.closest('[data-picker-action="confirm"]')) { this._confirm(); return; }
           const row = e.target.closest("[data-picker-name]");
@@ -688,6 +747,7 @@
           this._guestTitle = "";
           this._guestHint = "";
           this._allowGuest = true;
+          this._oneTime = false;
           this._suggestions = [];
           this._suggestionsLabel = "";
           this._restLabel = "";
@@ -907,6 +967,14 @@
       if (this._isPicked(name)) return;
       this._picked.push(guest);
       this._clear();
+    }
+
+    /** Tick the next "Player N". The box is already empty, so nothing to clear. */
+    _pickOneTime() {
+      if (!this._oneTime || this._single) return;
+      this._picked.push({ source: "ghost", user_id: null, name: this._nextOneTimeName(),
+                          username: null, avatar: null, one_time: true });
+      this._repaintList(true);
     }
 
     /**

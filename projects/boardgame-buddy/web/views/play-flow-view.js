@@ -3271,11 +3271,13 @@
     // ── Players ─────────────────────────────────────────────────────────────
 
     /**
-     * @param {{name: string, user_id: string|null, avatar: string|null}} row
+     * @param {{name: string, user_id: string|null, avatar: string|null,
+     *   one_time?: boolean}} row `one_time` marks a "Player N" guest from the
+     *   picker; it rides to the save so the seat stays off the guest list.
      * @param {{defer?: boolean}} [opts] `defer` skips the repaint — set it when
      *   seating several players at once so the screen paints once, not N times.
      */
-    _addPlayer({ name, user_id, avatar }, opts = {}) {
+    _addPlayer({ name, user_id, avatar, one_time }, opts = {}) {
       // Seated identity, not seated SPELLING. The name test alone would let one
       // account take two seats: the buddy list spells someone by their display
       // name and "search all of BoardgameBuddy" by whatever the search
@@ -3295,6 +3297,7 @@
           score: null,
           user_id: user_id || null,
           avatar: avatar || null,
+          one_time: !user_id && !!one_time,
           roundScores: Array(currentRounds).fill(null),
         };
         this._ps.players.push(row);
@@ -5143,6 +5146,7 @@
         seatedNames: this._ps.players.map((p) => p.name || ""),
         searchAll: (q) => this._searchEveryone(q),
         searchAllLabel: "Search all of BoardgameBuddy",
+        oneTimeGuests: true,
         returnFocus: (event && event.currentTarget) || null,
         onConfirm: (picks) => this._addPlayers(picks),
       });
@@ -5182,7 +5186,8 @@
      */
     _addPlayers(picks) {
       for (const c of picks) {
-        this._addPlayer({ name: c.name, user_id: c.user_id || null, avatar: c.avatar || null },
+        this._addPlayer({ name: c.name, user_id: c.user_id || null, avatar: c.avatar || null,
+                          one_time: !!c.one_time },
                         { defer: true });
       }
       this.render();
@@ -5627,6 +5632,9 @@
           avatar: p.avatar || null,
           team: p.team || "",
           initials: p.initials || null,
+          // Another round with the same strangers is another one-time seat
+          // each: the new play is claimed on its own.
+          one_time: !!p.one_time,
         })),
       };
     }

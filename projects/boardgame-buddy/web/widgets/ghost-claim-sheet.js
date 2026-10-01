@@ -223,7 +223,9 @@
       this._paint();
       const seq = this._seq;
       try {
-        await window.GhostClaim.create(d.owner_user_id, d.ghost_display_name);
+        // The key the lookup resolved, not the name: a one-time guest's key
+        // carries the play it sits on, so the claim reaches that one seat.
+        await window.GhostClaim.create(d.owner_user_id, d.ghost_name_key || d.ghost_display_name);
       } catch (err) {
         if (seq !== this._seq) return;
         this._sending = false;
@@ -255,7 +257,7 @@
       this._sending = true;
       const seq = this._seq;
       try {
-        await window.GhostClaim.dismiss(d.owner_user_id, d.ghost_display_name);
+        await window.GhostClaim.dismiss(d.owner_user_id, d.ghost_name_key || d.ghost_display_name);
       } catch (err) {
         if (seq !== this._seq) return;
         this._sending = false;

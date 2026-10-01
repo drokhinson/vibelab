@@ -999,6 +999,10 @@ class PlayerEntry(BaseModel):
     # caps its own input at 6 characters for column width; this cap is about
     # the data, not that column — see MAX_PLAY_TEAM_CHARS.
     team: str | None = Field(None, max_length=MAX_PLAY_TEAM_CHARS)
+    # A guest for this play only ("Player 2"): kept off the logger's ghost
+    # list and claimed per play rather than across every play with the same
+    # name. Ignored on an account seat.
+    one_time: bool = False
 
     @field_validator("team")
     @classmethod
@@ -1899,7 +1903,12 @@ class GhostClaimsResponse(BaseModel):
 
 
 class GhostClaimCreate(BaseModel):
-    """Ask the ghost's owner to link it to your account."""
+    """Ask the ghost's owner to link it to your account.
+
+    `display_name` is the ghost's name, or the `ghost_name_key` the lookup
+    returned — the two agree for an ordinary ghost, and a one-time guest can
+    only be named by its key, which carries the play it sits on.
+    """
 
     owner_user_id: str
     display_name: str = Field(..., min_length=1)
