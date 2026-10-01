@@ -333,8 +333,9 @@
   //       coop      → "We lost" / "They lost"       (grey/italic)
   //       otherwise → "No winner recorded"          (grey/italic)
   //   - all-or-nothing (coop, OR everyone won) → "We won!" / "They won!" (brass)
-  //   - a TEAM play the viewer sat at → their own side's result:
-  //       "We won!" (brass) / "We lost" (grey/italic)
+  //   - a TEAM play the viewer sat at on a side, won by a side → their own
+  //       side's result: "We won!" (brass) / "We lost" (grey/italic)
+  //     A lone winner, or a viewer who played alone, falls to the next bucket.
   //   - standard competitive (a named winner) →
   //       "Won by <You|Name> · <score>" (score omitted if unknown)
   // The first bucket has to come first: a play with no result looks exactly
@@ -375,8 +376,13 @@
     // the names of one side — "Won by Ana, Kim" — where the only thing the
     // viewer wants to know is which side theirs was. Their own seat carries
     // that, so say it the way they would.
+    //
+    //
+    // A seat left off every team plays alone against the rest of the table.
+    // A single winner is therefore named like any competitive winner, and a
+    // viewer who played alone gets that same named caption rather than a "We".
     const seat = viewerSeat(card, me);
-    if (playMode === "team" && seat) {
+    if (playMode === "team" && seat && !playedAlone(card, seat) && !soloWinner(card)) {
       return seat.is_winner
         ? `<span class="win">We won!</span>`
         : `<span class="win-loss">We lost</span>`;
@@ -469,6 +475,26 @@
     const players = card.players;
     if (!Array.isArray(players)) return null;
     return players.find((p) => p && p.user_id && String(p.user_id) === String(me.id)) || null;
+  }
+
+  function hasTeam(p) {
+    return !!(p && String(p.team == null ? "" : p.team).trim());
+  }
+
+  // The seat sat off every team while others were on one. A play with no team
+  // tags at all can't say who sat with whom, so nobody reads as alone there.
+  function playedAlone(card, seat) {
+    if (hasTeam(seat)) return false;
+    const players = card.players;
+    return Array.isArray(players) && players.some(hasTeam);
+  }
+
+  // The win went to one player who was on no team.
+  function soloWinner(card) {
+    const players = card.players;
+    if (!Array.isArray(players) || !players.length) return winnerNames(card).length === 1;
+    const winners = players.filter((p) => p && p.is_winner);
+    return winners.length === 1 && !hasTeam(winners[0]);
   }
 
   // A play whose outcome was never recorded: nobody is flagged a winner AND not

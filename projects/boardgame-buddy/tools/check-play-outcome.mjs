@@ -108,6 +108,34 @@ console.log("\nteam plays read as the viewer's own side:");
      "Won byYou, Britt");
 }
 
+console.log("\na player on no team plays alone against the table:");
+{
+  // Two sides and one seat left off both. The lone player won, so the card
+  // names them rather than telling either side "We lost".
+  const solo = card([
+    seat("You", { user_id: "u-me", score: 310, team: "Red" }),
+    seat("Britt", { user_id: "u-b", score: 310, team: "Red" }),
+    seat("Dana", { user_id: "u-d", is_winner: true, score: 600 }),
+    seat("Sam", { user_id: "u-s", score: 200, team: "Blue" }),
+  ], { play_mode: "team" });
+  eq("a lone winner is named, not reported as our loss", text(caption(solo)), "Won byDana600");
+  eq("the lone winner sees themselves", text(caption(solo, { id: "u-d", display_name: "Dana" })),
+     "Won byYou600");
+
+  // The viewer played alone and a side won: there is no "we" to speak for.
+  const sideWon = card([
+    seat("You", { user_id: "u-me", score: 200 }),
+    seat("Britt", { user_id: "u-b", is_winner: true, score: 520, team: "Red" }),
+    seat("Dana", { user_id: "u-d", is_winner: true, score: 520, team: "Red" }),
+    seat("Sam", { user_id: "u-s", score: 310, team: "Blue" }),
+  ], { play_mode: "team" });
+  eq("a lone viewer sees the winning side named", text(caption(sideWon)), "Won byBritt, Dana");
+  eq("a viewer on the winning side still says We", text(caption(sideWon, { id: "u-b", display_name: "Britt" })),
+     "We won!");
+  eq("a viewer on the losing side still says We", text(caption(sideWon, { id: "u-s", display_name: "Sam" })),
+     "We lost");
+}
+
 console.log("\nthe caption names people the way the viewer does:");
 {
   // Rename someone, and the caption on the front must call them what the back
