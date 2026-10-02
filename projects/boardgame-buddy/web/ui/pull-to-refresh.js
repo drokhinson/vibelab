@@ -11,7 +11,8 @@
 // refresh from arming; preventDefault() on the first downward touchmove at the
 // top is what stops the page rubber-banding while we draw. The class is put on
 // <html> by attach() and taken off by detach(), so every screen that has NOT
-// opted in keeps the native gesture.
+// opted in keeps the native gesture. It is also off while an overlay holds the
+// scroll lock — see _syncArmed().
 //
 // APPENDING, NOT REPLACING. Both callers merge the refreshed first page over
 // the first page they are holding and keep the cursor pages below it, so a
@@ -96,6 +97,8 @@
       this._onStart = (e) => this._start(e);
       this._onMove = (e) => this._move(e);
       this._onEnd = () => this._end();
+      this._lockObserver = null;
+      this._rearmFrame = 0;
     }
 
     attach() {
@@ -109,7 +112,34 @@
       this._host.addEventListener("touchmove", this._onMove, { passive: false });
       this._host.addEventListener("touchend", this._onEnd, { passive: true });
       this._host.addEventListener("touchcancel", this._onEnd, { passive: true });
-      document.documentElement.classList.add("bgb-ptr-armed");
+      this._syncArmed();
+      // Overlays lock the page with `overflow: hidden` on <body> (styles.css
+      // carries it up to <html>). iOS WebKit leaves the document unscrollable
+      // once that lock lifts if <html> held `overscroll-behavior` through it,
+      // until something restyles the root. So the overscroll rule stands down
+      // for as long as a lock is on, and returns a frame after it lifts.
+      if (window.MutationObserver) {
+        this._lockObserver = new MutationObserver(() => this._syncArmed());
+        this._lockObserver.observe(document.body, { attributes: true, attributeFilter: ["style"] });
+      }
+    }
+
+    /** `bgb-ptr-armed` on <html> exactly while attached and no overlay holds the scroll lock. */
+    _syncArmed() {
+      const root = document.documentElement;
+      cancelAnimationFrame(this._rearmFrame);
+      this._rearmFrame = 0;
+      if (!this._attached || document.body.style.overflow === "hidden") {
+        root.classList.remove("bgb-ptr-armed");
+        return;
+      }
+      if (root.classList.contains("bgb-ptr-armed")) return;
+      this._rearmFrame = requestAnimationFrame(() => {
+        this._rearmFrame = 0;
+        if (this._attached && document.body.style.overflow !== "hidden") {
+          root.classList.add("bgb-ptr-armed");
+        }
+      });
     }
 
     detach() {
@@ -119,7 +149,9 @@
       this._host.removeEventListener("touchmove", this._onMove);
       this._host.removeEventListener("touchend", this._onEnd);
       this._host.removeEventListener("touchcancel", this._onEnd);
-      document.documentElement.classList.remove("bgb-ptr-armed");
+      if (this._lockObserver) this._lockObserver.disconnect();
+      this._lockObserver = null;
+      this._syncArmed();
       this._reset();
     }
 
