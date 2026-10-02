@@ -640,19 +640,18 @@
     }
 
     /**
-     * What the seat strip shows: "ask" (Accept / Not me), "counted" (the
-     * chip) or "none". Only while the game is on: at Settle Up the wrap-up
-     * card carries the answer instead. A seat that said "not me", or a bundle
-     * with no `accepted` on the row, shows nothing.
+     * What the seat strip shows: "ask" (Accept / Not me) or "none". Only
+     * while the game is on: at Settle Up the wrap-up card carries the answer
+     * instead. An answered seat (accepted or "not me"), or a bundle with no
+     * `accepted` on the row, shows nothing.
      *
      * @param {Object|null} s session bundle
-     * @returns {"ask"|"counted"|"none"}
+     * @returns {"ask"|"none"}
      */
     _seatState(s) {
       const seat = this._mySeat(s);
       const phase = (s && s.phase) || "gather";
       if (!seat || seat.declined || (phase !== "gather" && phase !== "play")) return "none";
-      if (seat.accepted === true) return "counted";
       if (seat.accepted === false) return "ask";
       return "none";
     }
@@ -667,16 +666,7 @@
     }
 
     _renderSeat(s) {
-      const state = this._seatState(s);
-      if (state === "counted") {
-        return `
-          <div class="session-viewer__seat-chip">
-            <i data-icon="check" class="w-3.5 h-3.5"></i>
-            <span>Counts for you</span>
-          </div>
-        `;
-      }
-      if (state !== "ask") return "";
+      if (this._seatState(s) !== "ask") return "";
       const host = (s.participants || []).find((p) => p.user_id === s.host_user_id);
       const hostName = host
         ? window.Buddy.nameFor(host.user_id, host.display_name)

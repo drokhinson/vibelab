@@ -731,18 +731,6 @@
     _onLobbyReplaced() {
       this._noteCodeReplaced();
       for (const p of this._ps.players || []) p.participant_id = null;
-      // bgb_create_session seats the host, so the replacement's roster already
-      // carries their row — adopt it here. _syncRosterToLobby below skips the
-      // host by design, and a replacement that happens mid-Play leaves the
-      // Gather poll disarmed, so nothing else would ever give the host back an
-      // id: their own column would stop streaming for the rest of the game.
-      const me = window.store.get("user");
-      const mine = me && ((this._lobby && this._lobby.participants) || [])
-        .find((part) => part.user_id === me.id);
-      if (mine) {
-        const self = (this._ps.players || []).find((p) => p.user_id === me.id);
-        if (self) self.participant_id = mine.id;
-      }
       this._rosterRetries = 0;
       this._rosterPending = 0;
       this._ps.persist();
@@ -756,6 +744,8 @@
         this._liveScores = null;
         Promise.resolve().then(() => live.stop()).catch(() => {});
       }
+      // After the teardown, so the adoption cannot publish to the dead channel.
+      this._adoptSelfSeat();
       // Order matters, and all three steps are best-effort:
       //   1. roster — participants are Gather-only, and the replacement is born
       //      in gather, so this has to land before the phase moves off it;
@@ -819,6 +809,33 @@
         const card = this.container && this.container.querySelector(".cascade-invite__replaced");
         if (card) card.remove();
       }, 8000);
+    }
+
+    /**
+     * Give the host's own row the participant id bgb_create_session seated
+     * them under, straight off the lobby bundle just taken.
+     *
+     * The host's seat is never pushed (_syncRosterToLobby skips it, since the
+     * server already made it), so this and the Gather poll are the only ways
+     * it gets an id. The poll alone is not enough: a host who taps Continue
+     * before its first tick leaves Gather with the poll disarmed, and live
+     * scores are keyed by participant id, so their own column would never
+     * reach a spectator. Cells typed before the id landed were never sent, so
+     * a mid-Play adoption republishes the grid.
+     */
+    _adoptSelfSeat() {
+      const me = window.store.get("user");
+      if (!me) return;
+      const self = (this._ps.players || []).find((p) => p.user_id === me.id);
+      if (!self || self.participant_id) return;
+      const mine = ((this._lobby && this._lobby.participants) || [])
+        .find((part) => part.user_id === me.id);
+      if (!mine) return;
+      self.participant_id = mine.id;
+      this._ps.persist();
+      if (this._liveScores && this._ps.phase === "play") {
+        this._liveScores.syncGrid(this._ps.players).catch(() => {});
+      }
     }
 
     async _ensureLobbyOpen() {
@@ -890,6 +907,7 @@
             this._ps.sessionId = s.id;
             this._ps.hostUserId = s.host_user_id;
             if (phaseSeq === this._phaseSeq) this._ps.phase = s.phase;
+            this._adoptSelfSeat();
             this._ps.persist();
             this._syncUrlToCode();
             this._reconcileGameToLobby();
@@ -944,6 +962,7 @@
         this._ps.sessionId = session.id;
         this._ps.hostUserId = session.host_user_id;
         if (phaseSeq === this._phaseSeq) this._ps.phase = session.phase || "gather";
+        if (!(priorCode && session.code !== priorCode)) this._adoptSelfSeat();
         this._ps.persist();
         this._syncUrlToCode();
         this._reconcileGameToLobby();

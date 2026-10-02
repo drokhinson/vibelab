@@ -6683,19 +6683,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 /* ≥44px hit area (WCAG 2.5.5) — DaisyUI's btn-sm is 32px. */
 .session-viewer__seat-btn { min-height: 44px; min-width: 88px; }
-.session-viewer__seat-chip {
-  flex: none;
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--ok);
-  background: color-mix(in srgb, var(--ok) 14%, transparent);
-}
 .session-viewer__guide-mount { margin-top: 0.25rem; }
 /* Edit mode */
 .play-detail--edit .play-detail__game-info { gap: 0.35rem; }
