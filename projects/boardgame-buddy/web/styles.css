@@ -9701,6 +9701,21 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   box-shadow: none;
   font: 600 24px/1 var(--font-score);
 }
+/* The bottom row's outer corners follow the phone's own rounded corners, so
+   the screen's curve does not clip them. Every corner is given: a pill's
+   999px left on the others would scale these down with it. The vertical radii
+   on each side add up to the 44px key height. Horizontal ~47px is a 55pt
+   iPhone corner less the pad's 8px side inset. */
+.score-pad:not(.score-pad--side) .score-pad__key--sumkey {
+  border-radius: 12px 22px 22px 47px / 12px 22px 22px 32px;
+}
+.score-pad.has-round:not(.is-summing):not(.score-pad--side) .score-pad__key--round,
+.score-pad.is-summing:not(.score-pad--side) .score-pad__key--eq {
+  border-radius: 22px 12px 47px 22px / 22px 12px 32px 22px;
+}
+.score-pad:not(.has-round):not(.is-summing):not(.score-pad--side) .score-pad__key--sumkey {
+  border-radius: 12px 12px 47px 47px / 12px 12px 32px 32px;
+}
 .score-pad__key--dot { font: 600 26px/1 var(--font-score); }
 .score-pad__key--op { background: var(--accent-quiet); color: var(--accent); font: 600 26px/1 var(--font-score); box-shadow: none; }
 .score-pad__key--op.is-armed { box-shadow: inset 0 0 0 2px var(--accent); }
