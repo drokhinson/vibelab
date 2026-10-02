@@ -4,15 +4,16 @@
 //   1  2  3  ⌫          Sum mode:   1  2  3  ⌫
 //   4  5  6  (−)                    4  5  6  −
 //   7  8  9                         7  8  9  +
-//   Prev  0  Next  .                Prev  0  Next  .
+//   Prev  0  ⌨↓  .                  Prev  0  ⌨↓  .
 //   Σ Sum  |  + Round               Σ Sum  |  =
 //
 // On a coarse pointer the cells render with inputmode="none"
 // (round-score-grid.js asks ScoreKeypad.custom), so focusing one raises no
 // system keyboard and this pad slides up instead. A score field outside a grid
 // (the play-detail card's whole-play scores) opts in with `data-score-pad`,
-// and Prev / Next walk the nearest [data-score-pad-group] around it. A mouse-and-keyboard screen
-// keeps plain typing, with Enter / Shift+Enter moving between cells.
+// and Prev walks the nearest [data-score-pad-group] around it. ⌨↓ puts the pad
+// away. A mouse-and-keyboard screen keeps plain typing, with Enter /
+// Shift+Enter moving between cells.
 //
 // The pad is one element on <body>, created on first use, so it is never inside
 // a transformed sheet where `position: fixed` would stop meaning the screen. It
@@ -91,7 +92,7 @@
     return Array.from(grid.querySelectorAll(CELL));
   }
 
-  // Next past the last cell closes the pad; Prev before the first one does
+  // Enter past the last cell closes the pad; Prev before the first one does
   // nothing (its key is disabled there).
   function move(el, step) {
     const cells = cellsOf(el);
@@ -105,6 +106,8 @@
   }
 
   // ── The pad ──────────────────────────────────────────────────────────
+  // A keyboard over a down chevron: put the pad away.
+  const HIDE_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="12" rx="2"/><path d="M7 7h.01M11 7h.01M15 7h.01M7 11h10"/><path d="m8 18 4 3 4-3"/></svg>`;
   const BACK_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7z"/><path d="m12 9 6 6M18 9l-6 6"/></svg>`;
 
   /** @type {HTMLElement|null} */
@@ -144,7 +147,7 @@
         ${blank}${key("+", "+", "score-pad__key--op score-pad__sum", "Add")}
         ${key("prev", "Prev", "score-pad__key--nav")}
         ${key("0", "0")}
-        ${key("next", "Next", "score-pad__key--next")}
+        ${key("hide", HIDE_ICON, "score-pad__key--hide", "Hide keyboard")}
         ${key(".", ".", "score-pad__key--fn score-pad__key--dot", "Decimal point")}
         ${key("sum", "&Sigma; Sum", "score-pad__key--tool score-pad__key--sumkey")}
         ${key("round", "+ Round", "score-pad__key--tool score-pad__key--round score-pad__plain")}
@@ -185,7 +188,7 @@
     const b = target.closest("button");
     if (!b || /** @type {HTMLButtonElement} */ (b).disabled) return;
     const k = b.getAttribute("data-key");
-    if (k === "next") move(el, 1);
+    if (k === "hide") { settle(el); el.blur(); }
     else if (k === "prev") move(el, -1);
     else if (k === "round") {
       endSum();
@@ -272,9 +275,7 @@
     if (active !== el) endSum();
     active = el;
     const cells = cellsOf(el);
-    const nextBtn = pad.querySelector('[data-key="next"]');
     const prevBtn = /** @type {HTMLButtonElement|null} */ (pad.querySelector('[data-key="prev"]'));
-    if (nextBtn) nextBtn.textContent = cells[cells.length - 1] === el ? "Done" : "Next";
     if (prevBtn) prevBtn.disabled = cells[0] === el;
     pad.classList.toggle("has-round", !!el.closest("[data-kp-round]"));
     place();
