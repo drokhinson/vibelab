@@ -94,7 +94,15 @@
       const ddy = t.clientY - y0;
       const ddx = t.clientX - x0;
       if (!drawing) {
-        if (Math.abs(ddy) < SLOP_PX && Math.abs(ddx) < SLOP_PX) return;
+        if (Math.abs(ddy) < SLOP_PX && Math.abs(ddx) < SLOP_PX) {
+          // A downward move from the top has nothing to scroll, so on iOS its
+          // only native effect is a rubber band on the card's scroller. Held
+          // from the first pixel: a bounce that starts here is still running
+          // when the pull closes the card, and WebKit leaves the page's own
+          // scroll latched to the removed scroller until the next relayout.
+          if (ddy > 0 && ddy >= Math.abs(ddx)) e.preventDefault();
+          return;
+        }
         // Up, sideways (the rounds grid scrolls sideways), or the list moved
         // off its top: not ours, for the rest of this touch.
         if (ddy <= 0 || Math.abs(ddx) > Math.abs(ddy) || (!fromTopbar && !atTop())) {

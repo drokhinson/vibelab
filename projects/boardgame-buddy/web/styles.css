@@ -14637,6 +14637,13 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   transition: transform 240ms cubic-bezier(.55, 0, .8, .45), opacity 200ms ease-in;
   opacity: 0;
 }
+/* Stops any native scroll still running in the card (an iOS rubber band, a
+   flick's momentum) before the card is removed. WebKit otherwise keeps the
+   page's scroll latched to the removed scroller, and the feed underneath stops
+   scrolling until something relays it out. */
+.play-detail-popup__backdrop.is-collapsing .play-detail-popup__scroll {
+  overflow: hidden;
+}
 /* The photo in flight from the popup back to its polaroid. Above the backdrop
    (z-index 100), which is fading out underneath it. */
 .pdp-flyer {
