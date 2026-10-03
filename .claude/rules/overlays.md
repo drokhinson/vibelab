@@ -95,6 +95,12 @@ What the shell must do:
 - **Guarded focus return** (§5).
 - **Close animation** on an `.is-closing` class, with the timeout constant
   commented as *must match the CSS animation duration*.
+- **Pull down to close**, touch only: a downward drag that starts at rest on the
+  panel moves it with the finger and closes past a distance or on a flick
+  (`.claude/rules/card-gestures.md` §4, §6). It stands down for a sideways
+  drag, inside a list scrolled away from its top, and on a form field. In
+  boardgame-buddy that is `ui/sheet-pull.js`, attached by the shell, so every
+  sheet has it.
 - **Orphan teardown**: a second `open()` while one is closing must clear the
   pending timer and sweep any stale node with the same id, or the teardown
   removes the new sheet.

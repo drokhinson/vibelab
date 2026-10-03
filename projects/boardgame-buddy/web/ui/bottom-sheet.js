@@ -8,8 +8,8 @@
 // ui/viewport-lock.js), then re-anchors itself to the bottom of the screen.
 //
 // This class owns the lifecycle only — create, scroll lock, delegated clicks,
-// Escape, the device back gesture (ui/back-guard.js), focus return, the close
-// animation. Each sheet still writes its own panel markup and its own CSS
+// Escape, the device back gesture (ui/back-guard.js), pull down to close
+// (ui/sheet-pull.js), focus return, the close animation. Each sheet still writes its own panel markup and its own CSS
 // family; nothing about how a sheet LOOKS lives here.
 // Shared rather than copied per sheet (.claude/rules/ui-object-design.md §4:
 // fix the root cause rather than ship a second copy).
@@ -164,6 +164,7 @@
         ? window.BgbBackGuard.arm({ root: root, close: () => this.close() })
         : 0;
 
+      if (window.BgbSheetPull) window.BgbSheetPull.attach(root, { close: () => this.close() });
       if (opts.search) this._bindSearch(root, opts.search);
       if (opts.onOpen) opts.onOpen(root);
     }

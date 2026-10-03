@@ -5,7 +5,8 @@
 // release slides it the rest of the way off and closes the sheet. Anything
 // less springs it back. A drag that starts sideways is left alone, so a
 // horizontally scrolling track inside the panel keeps its swipe; one that
-// starts inside something scrolled down scrolls that instead.
+// starts inside something scrolled down scrolls that instead, and one that
+// starts on a form field is the field's (.claude/rules/card-gestures.md §6).
 //
 // Touch-only, like widgets/play-detail-collapse.js: Close, a tap outside,
 // Escape and the back gesture stay the exits everywhere else.
@@ -17,11 +18,14 @@
 // and it stays through BottomSheet.close(), so the .is-closing slide does not
 // restart from the top after a pull has already carried the panel off.
 //
+// Every sheet gets it: ui/bottom-sheet.js attaches it on open. The panel is
+// the backdrop's first child, looked up on each touch rather than held, so a
+// sheet that rebuilds its markup still moves the panel on screen.
+//
 // API:
-//   window.BgbSheetPull.attach(root, { panelSel, close })
-//     root     — the sheet backdrop (BottomSheet's el)
-//     panelSel — the panel inside it that moves
-//     close    — () => void; the sheet's close()
+//   window.BgbSheetPull.attach(root, { close })
+//     root  — the sheet backdrop (BottomSheet's el)
+//     close — () => void; the sheet's close()
 
 (function () {
   // Below this a move is a tap's jitter, or undecided between down and sideways.
@@ -42,32 +46,37 @@
     return false;
   }
 
+  const FIELD_SEL = "input, textarea, select, [contenteditable]";
+
   /**
    * @param {HTMLElement} root
-   * @param {{ panelSel: string, close: () => void }} opts
+   * @param {{ close: () => void }} opts
    */
   function attach(root, opts) {
     if (!("ontouchstart" in window)) return;
-    const panel = /** @type {HTMLElement|null} */ (root.querySelector(opts.panelSel));
-    if (!panel) return;
+    /** @type {HTMLElement|null} */
+    let panel = null;
     let state = "idle"; // idle | undecided | pulling | ignored
     let x0 = 0, y0 = 0, dy = 0, lastY = 0, lastT = 0, vel = 0;
 
     const paint = (y) => {
       const d = Math.max(0, y);
       root.style.setProperty("--sheet-drag", `${d}px`);
-      root.style.setProperty("--sheet-pull", String(Math.min(1, d / (panel.offsetHeight || 1))));
+      root.style.setProperty("--sheet-pull", String(Math.min(1, d / ((panel && panel.offsetHeight) || 1))));
     };
 
     root.addEventListener("touchstart", (e) => {
-      if (e.touches.length !== 1 || !panel.contains(/** @type {Node} */ (e.target))) {
+      panel = /** @type {HTMLElement|null} */ (root.firstElementChild);
+      const target = /** @type {Element} */ (e.target);
+      if (e.touches.length !== 1 || !panel || !panel.contains(target)
+          || (target.closest && target.closest(FIELD_SEL))) {
         state = "ignored";
         return;
       }
       const t = e.touches[0];
       x0 = t.clientX; y0 = t.clientY; dy = 0; vel = 0;
       lastY = y0; lastT = e.timeStamp;
-      state = scrolledAbove(e.target, panel) ? "ignored" : "undecided";
+      state = scrolledAbove(target, panel) ? "ignored" : "undecided";
     }, { passive: true });
 
     root.addEventListener("touchmove", (e) => {

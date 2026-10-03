@@ -9,7 +9,7 @@
 // ends. Arrows and an "N of M" count sit above it, and ←/→ turn too. The
 // count, the label and the arrows follow the page under the finger, switching
 // as the drag crosses halfway rather than when the snap settles. A row of one
-// gets none of that. Pulling the sheet down closes it (ui/sheet-pull.js).
+// gets none of that.
 //
 // Its class is named in the theme re-point list in styles.css; a body-level
 // sheet lands outside the screen that opened it (.claude/rules/theming.md §8).
@@ -152,9 +152,6 @@
         if (btn) turn(Number(btn.getAttribute("data-step")));
       },
       onOpen: (root) => {
-        if (window.BgbSheetPull) {
-          window.BgbSheetPull.attach(root, { panelSel: ".ach-sheet__panel", close: () => sheet.close() });
-        }
         track = /** @type {HTMLElement|null} */ (root.querySelector(".ach-track"));
         if (!paged) { onShow(row[start]); return; }
         if (!track) return;
