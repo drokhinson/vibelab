@@ -607,11 +607,6 @@
         gameName: game.name || "Game over",
         game: game,
         winnerName: winner,
-        // Settle comes before the save, so an accepted seat is still a promise
-        // here; the finalize update above turns it into the saved fact. An
-        // unaccepted seat says nothing — the save files it as an invite, and
-        // the invite reaches the viewer's notification bell.
-        seatNote: this._seatCounts(session) ? "Counts for you" : null,
       });
     }
 
