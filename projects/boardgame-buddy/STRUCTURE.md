@@ -1,7 +1,9 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-10-03 (**Imported plays no longer count toward the play-count badges**. `bgb_sync_achievements` (migration 067) counts `plays_logged` (Table Regular, Century Club, Table Titan) only over plays logged in the app; a play with `import_batch_id` / `import_group_id` set is left out, the same test `bgb_dormant_collection` uses. Every other metric still reads imported plays, and a badge already unlocked stays unlocked. Deploy order: either.)
+> Last updated: 2026-10-03 (**Discover is back in the bottom nav, with Climbing this week, and without subtitles**. The Discover tab returns as Feed · Discover · Play · Profile. The Climbing this week rail is back, without its "Up the BoardGameGeek hot list since yesterday." line, the header's "Games worth a look…" blurb is gone, and Picked for you no longer shows its new-account line over catalog picks. Frontend only.)
+>
+> Previously: 2026-10-03 (**Imported plays no longer count toward the play-count badges**. `bgb_sync_achievements` (migration 067) counts `plays_logged` (Table Regular, Century Club, Table Titan) only over plays logged in the app; a play with `import_batch_id` / `import_group_id` set is left out, the same test `bgb_dormant_collection` uses. Every other metric still reads imported plays, and a badge already unlocked stays unlocked. Deploy order: either.)
 >
 > Previously: 2026-10-03 (**Discover leaves the bottom nav, and the Climbing this week rail is gone**. The nav is Feed · Play · Profile; `/discover` still routes and renders, but nothing in the shell links to it. The Climbing rail is no longer rendered — the trending rail still carries each game's ▲/▼/NEW move on its meta line. Frontend only; `/discover` and the hot-list snapshots are unchanged.)
 >
@@ -1230,7 +1232,7 @@ Path-based routing via the History API (`projects/boardgame-buddy/web/domain/vie
 | Path | Route name | Path params | Querystring (optional) | Notes |
 |---|---|---|---|---|
 | `/feed` (also `/`) | `feed` | — | — | Home: chronological play feed + rails. Bottom-nav Feed tab. |
-| `/discover` | `discovery` | — | — | Discover: personal picks, BGG trending, this year's releases, the dormant shelf. Not in the bottom nav — reachable by URL (and a release notice's link). |
+| `/discover` | `discovery` | — | — | Discover: personal picks, BGG trending, this year's releases, the dormant shelf. Bottom-nav Discover tab. |
 | `/auth` | `auth` | — | — | Sign-in / sign-up, plus the five-line **feature strip** (`ui/feature-strip.js`, reading `widgets/tour-chapters.js`) and a **See how it works** button into `/tour`. The sign-in card is first and the strip sits under it — nothing above it but the wordmark, and **no hero vignette**: the screen's whole pitch is those five lines and the button. The strip reads the chapters in `TourChapters.strip()`'s order, which is the pitch's, not the deck's. Pushed when the auth layer reports no session. |
 | `/tour` | `tour` | — | `c` (chapter slug) | **The feature tour.** Five chapters — community, guides, scoring, stats, discover — plus an uncounted closer, on one horizontal track. **Public and chromeless** (both lists in `domain/view.js`), so a stranger can read it before signing up; also reachable from Settings → What's new & what's next → Take the tour. A **routed screen, not an overlay**: it arms no `BgbBackGuard`, because a routed screen already owns a history entry (`.claude/rules/overlays.md` §8b). The chapter rides as `?c=` and moving between chapters **replaces** the entry rather than pushing one, so leaving takes one back press and `/tour?c=scoring` still deep-links. Each chapter hosts an animated vignette (`ui/tour-vignette.js` + the two `widgets/tour-vignette-*.js` modules, all three lazy-loaded and `rel=prefetch` in `index.html` so they stay off the boot path and out of the bundler's manifest). |
 | `/play` (also `/join`) | `log-play` | — | — | The Play tab: Host half on top (resume banner + Host a game / Another Round / Game Explorer), Join half below (code entry + active sessions). `/join` is an alias for the retired standalone Join screen so old links still land here. |
@@ -1272,7 +1274,7 @@ Path-based routing via the History API (`projects/boardgame-buddy/web/domain/vie
 **Back-stack semantics:** `router.back()` defers to `history.back()`; the popstate handler replays the entry's state (or falls back to `matchPath()` for direct loads). An internal `_stack` is kept in parallel only because the browser doesn't expose history-entry metadata — `peekBack()` reads it to label back affordances ("Back to game details", etc.).
 
 ## Screen Flow
-Bottom nav has three tabs: **Feed**, **Play**, **Profile**. On the wide layout tier (≥ 1024px) the same nav stands on its end as a left rail and also carries the header's brand mark, bell and gear — see the design-system section above.
+Bottom nav has four tabs: **Feed**, **Discover**, **Play**, **Profile**. On the wide layout tier (≥ 1024px) the same nav stands on its end as a left rail and also carries the header's brand mark, bell and gear — see the design-system section above.
 
 1. Auth (login/signup) → splash → **first-run setup, when the profile carries `needs_setup`** → 2. **Feed** (home): chronological mix of plays from the viewer and their accepted buddies, plus inline "hot this week" / "buddies you may know" rails. A search pill at the top opens the **Game Search** screen.
 
