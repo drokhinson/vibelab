@@ -7499,6 +7499,19 @@ html.bgb-ptr-armed body {
 .bgb-sheet .bgb-sheet__panel:focus { outline: none; }
 .polaroid-popup__backdrop.bgb-sheet.is-closing { animation: fadeOut 200ms ease-out both; }
 .bgb-sheet.is-closing .bgb-sheet__panel { animation: sheetOut 200ms var(--ease) both; }
+/* Pulled down (ui/sheet-pull.js), on every bottom sheet. After both panels'
+   .is-closing rules on purpose: at equal specificity this one wins, so a panel a pull has already carried off is not
+   slid out again from the top. The dim lifts with the pull. */
+.bgb-sheet.is-pulled :is(.bgb-sheet__panel, .status-sheet__panel) {
+  animation: none;
+  transform: translateY(var(--sheet-drag, 0px));
+}
+.polaroid-popup__backdrop.bgb-sheet.is-pulled {
+  background: rgba(15, 12, 10, calc(0.55 * (1 - var(--sheet-pull, 0))));
+}
+/* Must match SETTLE_MS in ui/sheet-pull.js. */
+.bgb-sheet.is-pulled.is-settling :is(.bgb-sheet__panel, .status-sheet__panel) { transition: transform 220ms var(--ease); }
+.polaroid-popup__backdrop.bgb-sheet.is-pulled.is-settling { transition: background-color 220ms ease-out; }
 
 .bgb-sheet__grip {
   width: 44px; height: 4px; border-radius: 4px;
