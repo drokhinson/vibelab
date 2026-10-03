@@ -369,18 +369,29 @@ def finalize_session(sb: Client, *, host_user_id: str, code: str, payload: dict[
     return PlayResponse.model_validate(data)
 
 
-def seats_saved_read(sb: Client, play_id: str) -> set[str]:
-    """Accounts whose seat on this play was saved already read: the lobby seats
-    they accepted (play_players.seen_at, stamped by bgb_log_play). The finalize
-    route sends them no push about a game they watched."""
-    res = (
-        sb.table("boardgamebuddy_play_players")
-        .select("player_user_id")
-        .eq("play_id", play_id)
-        .not_.is_("seen_at", "null")
+def accepted_seats(sb: Client, play_id: str) -> set[str]:
+    """Accounts that accepted their seat in the lobby this play was saved from
+    (participants.accepted_at: by joining, or by Accept on the spectator
+    screen). They watched the game, so the finalize route pushes them nothing
+    about it. Empty when no session was finalized into this play."""
+    sess = (
+        sb.table("boardgamebuddy_play_sessions")
+        .select("id")
+        .eq("finalized_play_id", play_id)
+        .limit(1)
         .execute()
     )
-    return {r["player_user_id"] for r in res.data or [] if r.get("player_user_id")}
+    if not sess.data:
+        return set()
+    res = (
+        sb.table("boardgamebuddy_play_session_participants")
+        .select("user_id")
+        .eq("session_id", sess.data[0]["id"])
+        .not_.is_("user_id", "null")
+        .not_.is_("accepted_at", "null")
+        .execute()
+    )
+    return {r["user_id"] for r in res.data or [] if r.get("user_id")}
 
 
 # ALLOWED_PHASE_TRANSITIONS, in the shape bgb_advance_phase wants. Passing the

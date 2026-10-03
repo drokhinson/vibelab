@@ -1,42 +1,21 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 068_accepted_seat_saved_read.sql — a seat you accepted is not news to you
+-- 068_accepted_seat_saved_read.sql — a seat you accepted keeps a clear tray clear
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- Somebody who accepts their seat in a live game (by joining it, or by
--- answering "Accept" on the spectator screen) watched the game happen. The
--- play the host saves still seats them, and the notification tray would show
--- that play as a new, unread "seated you" entry. It is saved read instead.
+-- answering "Accept" on the spectator screen) watched the game happen. When
+-- the host saves the play, bgb_log_play now checks each such account's
+-- notifications: if nothing is unread, it moves their read watermark
+-- (profiles.link_notifications_seen_at) up to the new seat, so the play shows
+-- in the tray already read. If something is unread, the watermark stays where
+-- it is and the play is unread like everything after it.
 --
--- Read state is one watermark per account (profiles.link_notifications_seen_at),
--- and moving it would mark everything older read too, so the fact is stored
--- on the seat:
---
--- 1. boardgamebuddy_play_players.seen_at: set when a seat is saved already
---    read. NULL is every other seat, which is read once the watermark passes
---    its linked_at, as before.
--- 2. bgb_log_play stamps it on the lobby seats bgb_finalize_session passes as
---    accepted (the logger's own seat is never in the feed).
--- 3. bgb_notifications reports such an entry with is_unread false, and
---    bgb_notifications_unread leaves it out of the bell's count.
---
--- Deploy order: this migration first, then API. The API's play edit reads and
--- re-writes the column so an edit keeps the seat read; an API running before
--- the column exists would fail that read.
+-- Deploy order: either. The signature is unchanged.
 --
 -- Run in: Supabase Dashboard → SQL Editor → New Query → Run
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
-
--- ── 1. Column ────────────────────────────────────────────────────────────────
-
-ALTER TABLE public.boardgamebuddy_play_players
-  ADD COLUMN IF NOT EXISTS seen_at timestamp with time zone;
-
-COMMENT ON COLUMN public.boardgamebuddy_play_players.seen_at IS
-  'Set when this seat was saved already read by its account (a lobby seat it accepted). Such a seat is never unread in bgb_notifications.';
-
--- ── 2. bgb_log_play stamps accepted lobby seats ──────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.bgb_log_play(p_user uuid, p_payload jsonb)
  RETURNS jsonb
@@ -61,6 +40,7 @@ DECLARE
   v_bga_table   BIGINT;
   v_bgg_play_id BIGINT;
   v_accepted    UUID[];
+  v_caught_up   UUID[];
   v_declined    UUID[];
 BEGIN
   -- Empty string and absent both mean "no key" — the client omits the field
@@ -240,9 +220,16 @@ BEGIN
     RETURN jsonb_build_object('duplicate', true, 'id', v_existing);
   END;
 
+  -- Accepted lobby seats whose notifications are all read. Asked BEFORE the
+  -- seats are written, since the new seat would itself count as unread.
+  v_caught_up := ARRAY(
+    SELECT a FROM unnest(v_accepted) AS a
+     WHERE a <> p_user AND bgb_notifications_unread(a) = 0
+  );
+
   INSERT INTO boardgamebuddy_play_players (
     play_id, player_user_id, pending_user_id, player_display_name, is_winner,
-    score, round_scores, team, one_time, seen_at
+    score, round_scores, team, one_time
   )
   SELECT
     v_play.id,
@@ -270,15 +257,21 @@ BEGIN
     NULLIF(btrim(pl.team), ''),
     -- Only a guest can be one-time: an account seat is a person by
     -- definition, and the flag on it would mean nothing.
-    COALESCE(pl.one_time, false) AND pl.user_id IS NULL,
-    -- A lobby seat its account accepted is one they saw happen, so the play it
-    -- lands in is saved already read in their notifications.
-    CASE WHEN pl.user_id <> p_user AND pl.user_id = ANY(v_accepted)
-         THEN now() END
+    COALESCE(pl.one_time, false) AND pl.user_id IS NULL
   FROM jsonb_to_recordset(v_roster)
          AS pl(name TEXT, is_winner BOOLEAN, score NUMERIC,
                user_id UUID, round_scores JSONB, team TEXT,
                one_time BOOLEAN);
+
+  -- An accepted lobby seat is a game its account watched. If their tray was
+  -- clear, it stays clear: the read watermark moves up to this seat's
+  -- linked_at (now(), in this transaction), so the play arrives read. With
+  -- anything still unread, the watermark is left alone and the play is one
+  -- more unread entry beside the rest.
+  UPDATE boardgamebuddy_profiles
+     SET link_notifications_seen_at =
+           GREATEST(COALESCE(link_notifications_seen_at, '-infinity'::timestamptz), now())
+   WHERE id = ANY(v_caught_up);
 
   -- DISTINCT guards the (play_id, expansion_game_id) primary key against a
   -- payload that repeats an id.
@@ -368,308 +361,5 @@ END;
 $function$;
 REVOKE EXECUTE ON FUNCTION public.bgb_log_play(p_user uuid, p_payload jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.bgb_log_play(p_user uuid, p_payload jsonb) TO boardgamebuddy_role;
-
--- ── 3. The feed and the bell's count skip seats saved read ──────────────────
-
-CREATE OR REPLACE FUNCTION public.bgb_notifications(p_viewer uuid, p_limit integer DEFAULT 20, p_before timestamp with time zone DEFAULT NULL::timestamp with time zone, p_before_key text DEFAULT NULL::text)
- RETURNS TABLE(entry_key text, kind text, occurred_at timestamp with time zone, is_unread boolean, actor_id uuid, actor_display_name text, actor_username text, actor_avatar jsonb, play_group text, play_id uuid, play_ids uuid[], group_count integer, game_count integer, played_from date, played_to date, game_id uuid, game_name text, game_thumbnail_url text, import_batch_id uuid, edge_id uuid)
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_seen TIMESTAMPTZ;
-  v_lim  INT := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100);
-BEGIN
-  SELECT pr.link_notifications_seen_at INTO v_seen
-  FROM boardgamebuddy_profiles pr WHERE pr.id = p_viewer;
-
-  RETURN QUERY
-  WITH seats AS (
-    -- The viewer's own seats on plays SOMEBODY ELSE logged, carrying their
-    -- grouping key and nothing more. This is also the whole visibility rule:
-    -- every row is a play the viewer is a player in, so there is nothing to
-    -- leak and no buddy-graph check to run.
-    --
-    -- to_char at UTC rather than l_at::text: the key is the
-    -- paging tiebreak and travels to the client and back, so it has to mean the
-    -- same thing on both ends of that trip regardless of the session's TimeZone
-    -- and DateStyle.
-    SELECT pp.play_id   AS p_id,
-           pp.linked_at AS l_at,
-           p.user_id    AS o_id,
-           -- Unread: after the watermark, and not a seat saved already read.
-           (pp.seen_at IS NULL
-            AND pp.linked_at > COALESCE(v_seen, '-infinity'::timestamptz)) AS u,
-           CASE
-             WHEN p.import_batch_id IS NOT NULL THEN 'b:' || p.import_batch_id::text
-             WHEN p.import_group_id IS NOT NULL THEN 'g:' || p.import_group_id::text
-             ELSE 'a:' || p.user_id::text || ':'
-                  || to_char(pp.linked_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US')
-           END AS k,
-           CASE
-             WHEN p.import_batch_id IS NOT NULL THEN 'batch'
-             WHEN p.import_group_id IS NOT NULL THEN 'run'
-             ELSE 'act'
-           END AS kd
-    FROM boardgamebuddy_play_players pp
-    JOIN boardgamebuddy_plays p ON p.id = pp.play_id
-    WHERE pp.player_user_id = p_viewer
-      AND p.user_id <> p_viewer
-  ),
-  page_keys AS (
-    -- Which entries are on this page. MAX is the only aggregate here, and the
-    -- ORDER BY / LIMIT are the ones the final SELECT would have applied anyway
-    -- — just applied before the expensive work instead of after it.
-    SELECT s.k AS k, s.kd AS kd, s.o_id AS o_id, MAX(s.l_at) AS l_at
-    FROM seats s
-    GROUP BY s.k, s.kd, s.o_id
-    HAVING p_before IS NULL
-        OR (MAX(s.l_at), s.k) < (p_before, COALESCE(p_before_key, ''))
-    ORDER BY MAX(s.l_at) DESC, s.k DESC
-    LIMIT v_lim
-  ),
-  members AS (
-    -- Every seat belonging to a chosen entry, now with the wide columns. The
-    -- join to plays is by primary key and runs for these rows only.
-    SELECT pk.k AS k, pk.kd AS kd, pk.o_id AS o_id, s.l_at AS l_at, s.u AS u,
-           p.id AS p_id, p.game_id AS g_id, p.played_at AS p_at,
-           p.game_name AS g_name, p.game_thumbnail_url AS g_thumb,
-           p.import_batch_id AS b_id
-    FROM seats s
-    JOIN page_keys pk ON pk.k = s.k AND pk.kd = s.kd AND pk.o_id = s.o_id
-    JOIN boardgamebuddy_plays p ON p.id = s.p_id
-  ),
-  entries AS (
-    SELECT m.k AS k, m.kd AS kd, m.o_id AS o_id,
-           MAX(m.l_at)                    AS l_at,
-           bool_or(m.u)                   AS u,
-           COUNT(*)::int                  AS n_plays,
-           COUNT(DISTINCT m.g_id)::int    AS n_games,
-           MIN(m.p_at)                    AS from_at,
-           MAX(m.p_at)                    AS to_at,
-           array_agg(m.p_id ORDER BY m.p_at DESC NULLS LAST, m.p_id) AS ids,
-           -- No MIN()/MAX() aggregate exists for uuid, so the representative is
-           -- picked by ordering rather than aggregated. It is the most recent
-           -- play in the entry — the one the card names and opens.
-           (array_agg(m.p_id    ORDER BY m.p_at DESC NULLS LAST, m.p_id))[1] AS rep,
-           (array_agg(m.g_id    ORDER BY m.p_at DESC NULLS LAST, m.p_id))[1] AS rep_game,
-           (array_agg(m.g_name  ORDER BY m.p_at DESC NULLS LAST, m.p_id))[1] AS rep_name,
-           (array_agg(m.g_thumb ORDER BY m.p_at DESC NULLS LAST, m.p_id))[1] AS rep_thumb,
-           (array_agg(m.b_id    ORDER BY m.p_at DESC NULLS LAST, m.p_id))[1] AS rep_batch
-    FROM members m
-    GROUP BY m.k, m.kd, m.o_id
-  ),
-  -- Each source is normalised to the SAME wide row inside its own CTE, so the
-  -- NULL casts are written once per branch rather than smeared through a union
-  -- of bare SELECTs, and the cursor, the order and the limit are applied
-  -- exactly once at the end over the merge.
-  play_rows AS (
-    SELECT e.k                                   AS ekey,
-           'play_link'::text                     AS nkind,
-           e.l_at                                AS occ,
-           e.u                                   AS unr,
-           e.o_id                                AS act_id,
-           NULL::text                            AS act_name,
-           e.kd                                  AS pgroup,
-           e.rep                                 AS rep_play,
-           e.ids                                 AS rep_plays,
-           e.n_plays                             AS n_plays,
-           e.n_games                             AS n_games,
-           e.from_at                             AS from_at,
-           e.to_at                               AS to_at,
-           e.rep_game                            AS rep_game,
-           -- game_name / game_thumbnail_url are denormalized and null on
-           -- older rows, so fall back to the catalog
-           -- the same way bgb_collection_shelf does.
-           COALESCE(e.rep_name, g.name)          AS rep_name,
-           COALESCE(e.rep_thumb, g.thumbnail_url) AS rep_thumb,
-           e.rep_batch                           AS rep_batch,
-           NULL::uuid                            AS e_id
-    FROM entries e
-    LEFT JOIN boardgamebuddy_games g ON g.id = e.rep_game
-  ),
-  -- Somebody asked to be your buddy and you have not answered. Accept flips the
-  -- edge to 'accepted' and both Decline and Cancel DELETE it, so this row
-  -- leaves the feed the instant it is acted on, from either side and with no
-  -- bookkeeping — the same self-healing the play source gets from being derived.
-  request_rows AS (
-    SELECT 'req:' || be.id::text  AS ekey,
-           'buddy_request'::text  AS nkind,
-           be.created_at          AS occ,
-           be.created_at > COALESCE(v_seen, '-infinity'::timestamptz) AS unr,
-           be.requested_by        AS act_id,
-           NULL::text   AS act_name,
-           NULL::text   AS pgroup,    NULL::uuid AS rep_play,
-           NULL::uuid[] AS rep_plays,  NULL::int  AS n_plays,
-           NULL::int    AS n_games,    NULL::date AS from_at,
-           NULL::date   AS to_at,      NULL::uuid AS rep_game,
-           NULL::text   AS rep_name,   NULL::text AS rep_thumb,
-           NULL::uuid   AS rep_batch,
-           be.id                  AS e_id
-    FROM boardgamebuddy_buddy_edges be
-    WHERE be.status = 'pending'
-      AND be.requested_by <> p_viewer
-      AND (be.user_a = p_viewer OR be.user_b = p_viewer)
-  ),
-  -- Somebody said yes. Keyed on accepted_by, never on requested_by: a QR
-  -- scan writes an edge born accepted with requested_by = the scanner, so a
-  -- requested_by rule would tell the scanner about a request they never sent.
-  -- `accepted_by <> p_viewer` is what stops the feed announcing an act the
-  -- viewer performed themselves.
-  accepted_rows AS (
-    SELECT 'acc:' || be.id::text  AS ekey,
-           'buddy_accepted'::text AS nkind,
-           be.accepted_at         AS occ,
-           be.accepted_at > COALESCE(v_seen, '-infinity'::timestamptz) AS unr,
-           be.accepted_by         AS act_id,
-           NULL::text   AS act_name,
-           NULL::text   AS pgroup,    NULL::uuid AS rep_play,
-           NULL::uuid[] AS rep_plays,  NULL::int  AS n_plays,
-           NULL::int    AS n_games,    NULL::date AS from_at,
-           NULL::date   AS to_at,      NULL::uuid AS rep_game,
-           NULL::text   AS rep_name,   NULL::text AS rep_thumb,
-           NULL::uuid   AS rep_batch,
-           be.id                  AS e_id
-    FROM boardgamebuddy_buddy_edges be
-    WHERE be.status = 'accepted'
-      AND be.accepted_at IS NOT NULL
-      AND be.accepted_by IS NOT NULL
-      AND be.accepted_by <> p_viewer
-      AND (be.user_a = p_viewer OR be.user_b = p_viewer)
-  ),
-  -- A play that passed to the viewer because the account that logged it was
-  -- deleted. The fourth kind, and the only one with no actor to join to
-  -- — the person IS the actor and their profile row is gone, which is the
-  -- whole event. So the name rides up the union in act_name and the final
-  -- SELECT coalesces it against the join that is going to miss. That is what
-  -- keeps RETURNS TABLE unchanged and this a REPLACE rather than a DROP.
-  --
-  -- One row per play and no grouping, deliberately: the import groupings that
-  -- play_link uses answer "these twelve arrived together", and a handover is
-  -- not a batch — the plays it moves need have nothing to do with each other
-  -- beyond the person who is gone.
-  inherited_rows AS (
-    SELECT 'inh:' || p.id::text     AS ekey,
-           'play_inherited'::text   AS nkind,
-           p.inherited_at           AS occ,
-           p.inherited_at > COALESCE(v_seen, '-infinity'::timestamptz) AS unr,
-           NULL::uuid               AS act_id,
-           p.inherited_from_name    AS act_name,
-           NULL::text               AS pgroup,
-           p.id                     AS rep_play,
-           ARRAY[p.id]::uuid[]      AS rep_plays,
-           1::int                   AS n_plays,
-           1::int                   AS n_games,
-           p.played_at              AS from_at,
-           p.played_at              AS to_at,
-           p.game_id                AS rep_game,
-           -- Same catalog fallback play_rows uses: the denormalized pair is
-           -- null on older rows.
-           COALESCE(p.game_name, g.name)                    AS rep_name,
-           COALESCE(p.game_thumbnail_url, g.thumbnail_url)  AS rep_thumb,
-           NULL::uuid               AS rep_batch,
-           NULL::uuid               AS e_id
-    FROM boardgamebuddy_plays p
-    LEFT JOIN boardgamebuddy_games g ON g.id = p.game_id
-    WHERE p.user_id = p_viewer
-      AND p.inherited_at IS NOT NULL
-  ),
-  merged AS (
-    SELECT * FROM play_rows
-    UNION ALL SELECT * FROM request_rows
-    UNION ALL SELECT * FROM accepted_rows
-    UNION ALL SELECT * FROM inherited_rows
-  )
-  SELECT m.ekey, m.nkind, m.occ, m.unr,
-         -- The coalesce is for play_inherited alone: every other kind has a
-         -- live profile behind act_id, and that arm has no act_id at all.
-         m.act_id, COALESCE(pr.display_name, m.act_name), pr.username, pr.avatar,
-         m.pgroup, m.rep_play, m.rep_plays, m.n_plays, m.n_games,
-         m.from_at, m.to_at, m.rep_game, m.rep_name, m.rep_thumb, m.rep_batch,
-         m.e_id
-  FROM merged m
-  LEFT JOIN boardgamebuddy_profiles pr ON pr.id = m.act_id
-  -- Keyset, not OFFSET: rows vanish from under the cursor as the user unlinks
-  -- and as requests are answered, and an offset would skip whatever slid up
-  -- into the gap. Still applied here over the whole union — page_keys has
-  -- already applied the identical predicate to the play arm, which is a
-  -- redundancy on that arm and the only filter the two buddy arms get.
-  WHERE p_before IS NULL
-     OR (m.occ, m.ekey) < (p_before, COALESCE(p_before_key, ''))
-  ORDER BY m.occ DESC, m.ekey DESC
-  LIMIT v_lim;
-END;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_notifications(p_viewer uuid, p_limit integer, p_before timestamp with time zone, p_before_key text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_notifications(p_viewer uuid, p_limit integer, p_before timestamp with time zone, p_before_key text) TO boardgamebuddy_role;
-
-CREATE OR REPLACE FUNCTION public.bgb_notifications_unread(p_viewer uuid)
- RETURNS integer
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_seen TIMESTAMPTZ;
-  v_n    INT;
-BEGIN
-  SELECT pr.link_notifications_seen_at INTO v_seen
-  FROM boardgamebuddy_profiles pr WHERE pr.id = p_viewer;
-  -- Both a NULL column and a missing profile row mean "has read nothing".
-  v_seen := COALESCE(v_seen, '-infinity'::timestamptz);
-
-  SELECT
-      -- Play ENTRIES, not plays: a badge reading 214 over a list showing one
-      -- row is a bug that only appears on the accounts that most need this
-      -- feature. Same key expression bgb_notifications groups by, below.
-      (SELECT COUNT(*)::int FROM (
-         SELECT 1
-         FROM boardgamebuddy_play_players pp
-         JOIN boardgamebuddy_plays p ON p.id = pp.play_id
-         WHERE pp.player_user_id = p_viewer
-           AND pp.linked_at > v_seen
-           AND pp.seen_at IS NULL
-           AND p.user_id <> p_viewer
-         GROUP BY CASE
-                    WHEN p.import_batch_id IS NOT NULL THEN 'b:' || p.import_batch_id::text
-                    WHEN p.import_group_id IS NOT NULL THEN 'g:' || p.import_group_id::text
-                    ELSE 'a:' || p.user_id::text || ':'
-                         || to_char(pp.linked_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US')
-                  END
-       ) e)
-      -- The two buddy terms are plain row counts: an edge is already one row
-      -- per event. One account's pending and accepted sets are small, which is
-      -- why they have no index of their own.
-    + (SELECT COUNT(*)::int
-         FROM boardgamebuddy_buddy_edges be
-        WHERE be.status = 'pending'
-          AND be.requested_by <> p_viewer
-          AND (be.user_a = p_viewer OR be.user_b = p_viewer)
-          AND be.created_at > v_seen)
-    + (SELECT COUNT(*)::int
-         FROM boardgamebuddy_buddy_edges be
-        WHERE be.status = 'accepted'
-          AND be.accepted_at IS NOT NULL
-          AND be.accepted_by IS NOT NULL
-          AND be.accepted_by <> p_viewer
-          AND (be.user_a = p_viewer OR be.user_b = p_viewer)
-          AND be.accepted_at > v_seen)
-      -- A play handed over by a deleted account. One row per play, no
-      -- grouping: a handover is not a batch and two of them are two events.
-      -- Rides idx_bgb_plays_inherited, so an account that has never inherited
-      -- anything — which is almost all of them — scans nothing.
-    + (SELECT COUNT(*)::int
-         FROM boardgamebuddy_plays p
-        WHERE p.user_id = p_viewer
-          AND p.inherited_at IS NOT NULL
-          AND p.inherited_at > v_seen)
-    INTO v_n;
-
-  RETURN v_n;
-END;
-$function$;
-REVOKE EXECUTE ON FUNCTION public.bgb_notifications_unread(p_viewer uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_notifications_unread(p_viewer uuid) TO boardgamebuddy_role;
 
 COMMIT;

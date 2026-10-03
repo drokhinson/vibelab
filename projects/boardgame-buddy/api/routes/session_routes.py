@@ -388,6 +388,6 @@ async def finalize_session(
     push_notify.play_logged(
         background_tasks, sb, user, play,
         session_code=code,
-        already_seen=session_service.seats_saved_read(sb, play.id),
+        already_seen=session_service.accepted_seats(sb, play.id),
     )
     return play

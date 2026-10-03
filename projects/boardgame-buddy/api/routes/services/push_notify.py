@@ -271,9 +271,9 @@ def play_logged(
     `quiet` keeps that rewrite from buzzing a second time
     (push_service.payload).
 
-    `already_seen` are the seats saved already read (play_players.seen_at: a
-    lobby seat its account accepted). Those people watched the game happen, so
-    they get no push about it; the achievement sweep still covers them, since a
+    `already_seen` are the accounts that accepted their seat in the lobby
+    (session_service.accepted_seats). They watched the game happen, so they
+    get no push about it; the achievement sweep still covers them, since a
     badge is news the game itself was not.
 
     Either way the tap opens this play's detail card over the bell

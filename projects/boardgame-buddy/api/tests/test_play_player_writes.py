@@ -76,7 +76,7 @@ def test_every_row_in_a_mixed_batch_carries_linked_at():
     """The field case: a carried-over host seat beside a ghost with none."""
     rows, _ = _write(
         [_Seat("Me", user_id=HOST), _Seat("Sean D")],
-        carried={HOST: (SEATED_AT, False, None)},
+        carried={HOST: (SEATED_AT, False)},
     )
     assert len(rows) == 2
     assert all("linked_at" in r for r in rows)
@@ -88,7 +88,7 @@ def test_every_row_in_a_mixed_batch_carries_linked_at():
 def test_a_returning_seat_keeps_its_timestamp_and_a_new_one_is_stamped_now():
     rows, _ = _write(
         [_Seat("Me", user_id=HOST), _Seat("Buddy", user_id=BUDDY), _Seat("Sean D")],
-        carried={HOST: (SEATED_AT, False, None)},
+        carried={HOST: (SEATED_AT, False)},
     )
     by_name = {r["player_display_name"]: r for r in rows}
     assert by_name["Me"]["linked_at"] == SEATED_AT
@@ -117,10 +117,10 @@ def test_a_new_account_seat_is_an_invite_and_the_owner_is_not():
 
 def test_an_edit_keeps_each_seat_as_accepted_or_invited_as_it_was():
     accepted = _write(
-        [_Seat("Buddy", user_id=BUDDY)], carried={BUDDY: (SEATED_AT, False, None)}
+        [_Seat("Buddy", user_id=BUDDY)], carried={BUDDY: (SEATED_AT, False)}
     )[0][0]
     invited = _write(
-        [_Seat("Buddy", user_id=BUDDY)], carried={BUDDY: (SEATED_AT, True, None)}
+        [_Seat("Buddy", user_id=BUDDY)], carried={BUDDY: (SEATED_AT, True)}
     )[0][0]
     assert accepted["player_user_id"] == BUDDY and accepted["pending_user_id"] is None
     assert invited["pending_user_id"] == BUDDY and invited["player_user_id"] is None
@@ -154,18 +154,3 @@ def test_a_one_time_guest_is_written_as_one_and_stays_one_through_an_edit():
     by_name = {r["player_display_name"]: r["one_time"] for r in sb.rows}
     assert by_name == {"Player 1": True, "Player 2": True, "Sean D": False, "Me": False}
     assert len({frozenset(r) for r in sb.rows}) == 1
-
-
-def test_an_edit_keeps_a_seat_read_that_was_saved_read():
-    """A seat accepted in the lobby is saved with `seen_at`; the edit's
-    delete-and-reinsert must carry it, or the notification comes back unread.
-    Every row carries the key, so the batch keeps one key set."""
-    rows, _ = _write(
-        [_Seat("Me", user_id=HOST), _Seat("Buddy", user_id=BUDDY), _Seat("Sean D")],
-        carried={HOST: (SEATED_AT, False, None), BUDDY: (SEATED_AT, False, SEATED_AT)},
-    )
-    by_name = {r["player_display_name"]: r for r in rows}
-    assert by_name["Buddy"]["seen_at"] == SEATED_AT
-    assert by_name["Me"]["seen_at"] is None
-    assert by_name["Sean D"]["seen_at"] is None
-    assert len({frozenset(r) for r in rows}) == 1
