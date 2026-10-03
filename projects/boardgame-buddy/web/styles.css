@@ -9668,7 +9668,6 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .score-pad__key--sign { font: 500 19px/1 var(--font-score); }
 .score-pad__key--blank { background: transparent; box-shadow: none; pointer-events: none; }
 .score-pad__key--nav { background: var(--bg-0); font-size: 16px; font-weight: 600; }
-.score-pad__key--nav:disabled { color: var(--ink-faint); box-shadow: none; cursor: default; }
 .score-pad__key--hide { background: var(--accent-fill); color: var(--on-accent); }
 /* Σ Sum and + Round: outlined in the accent so the hide key stays the one solid key.
    + Round is the Play step's "Next round" and shows only there
