@@ -3651,7 +3651,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 /* Flat rectangular tab bar — square corners, edge-to-edge, nothing
-   protruding above the top edge. Three equal-width tabs; the active one is
+   protruding above the top edge. Four equal-width tabs; the active one is
    marked by a gold top rule plus gold icon/label, so the bar's silhouette
    stays a clean rectangle. */
 .bgb-nav {
@@ -3865,9 +3865,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* ── The rail, drawn compact (land tier) ────────────────────────────────────
    Same rail, sized for the short axis instead of a monitor. The wide rail does
    not fit here and the arithmetic is the whole reason this block exists: a
-   64px brand plus five 64px tabs plus its padding is 396px, and a phone on its
-   side is 375–430px tall — so on the shorter ones the gear falls off the
-   bottom edge. At 38 + 5 × 46 it comes to 268px and clears every phone with
+   64px brand plus six 64px tabs plus its padding is 460px, and a phone on its
+   side is 375–430px tall — so on every one of them the gear falls off the
+   bottom edge. At 38 + 6 × 46 it comes to 314px and clears every phone with
    room to spare. The rail scrolls (`overflow-y: auto`, set above) as a
    backstop, but a nav you have to scroll is a nav with a hidden item. */
 :root[data-bgb-layout="land"] .bgb-nav {
@@ -5027,12 +5027,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   letter-spacing: -0.01em;
   color: var(--ink);
   line-height: 1.15;
-}
-.discover__blurb {
-  margin-top: 0.3rem;
-  font-size: 13.5px;
-  color: var(--ink-muted);
-  max-width: 34rem;
 }
 .discover__section:empty { display: none; }
 .discover__empty {

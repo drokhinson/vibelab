@@ -28,6 +28,7 @@
 
   const HOSTS = {
     picks: "discover-picks-host",
+    climbing: "discover-climbing-host",
     trending: "discover-trending-host",
     fresh: "discover-new-host",
     shelf: "discover-shelf-host",
@@ -180,9 +181,9 @@
         <div class="discover">
           <header class="discover__head">
             <h2 class="discover__title font-display">Discover</h2>
-            <p class="discover__blurb">Games worth a look, picked from what's on your shelf and what hits your table.</p>
           </header>
           <section class="discover__section" id="${HOSTS.picks}"></section>
+          <section class="discover__section" id="${HOSTS.climbing}"></section>
           <section class="discover__section" id="${HOSTS.trending}"></section>
           <section class="discover__section" id="${HOSTS.fresh}"></section>
           <section class="discover__section" id="${HOSTS.shelf}"></section>
@@ -203,6 +204,7 @@
       if (!b && this._loading) {
         this._paintHosts({
           picks: this._skeleton("sparkles", "Picked for you"),
+          climbing: "",
           trending: this._skeleton("flame", "Trending on BoardGameGeek"),
           fresh: this._skeleton("star", "New this year"),
           shelf: this._skeleton("hourglass", "Time to revisit"),
@@ -213,12 +215,13 @@
         // Failed with nothing to show: one retry card, not four.
         this._paintHosts({
           picks: this._renderLoadError(),
-          trending: "", fresh: "", shelf: "",
+          climbing: "", trending: "", fresh: "", shelf: "",
         });
         return;
       }
       this._paintHosts({
         picks: this._renderPicks(b),
+        climbing: this._renderClimbing(b),
         trending: this._renderTrending(b),
         fresh: this._renderNew(b),
         shelf: this._renderShelf(b),
@@ -286,11 +289,9 @@
         reason: p.reason_label || "",
         meta: this._ratingMeta(p.game),
       }));
-      const cold = picks.length && picks.every((p) => p.cold_start);
       return window.renderGameRail(entries, this._railOpts({
         icon: "sparkles",
         title: "Picked for you",
-        subtitle: cold ? "Log a few plays and add some games to your shelf \u2014 we'll get personal." : "",
         emptyHtml: this._empty("Log a few plays and add some games to your shelf \u2014 we'll get personal."),
       }));
     }
@@ -333,6 +334,24 @@
       return t.game
         ? { game: t.game, meta }
         : { stub: { bgg_id: t.bgg_id, name: t.name, thumbnail_url: t.thumbnail_url, year_published: t.year_published }, meta };
+    }
+
+    /**
+     * What moved up since yesterday's run — the interesting half of a hot
+     * list. Only when at least three games climbed three or more places;
+     * fewer is noise, and before the first two snapshots there is nothing to
+     * compare, so the section stays empty rather than saying so.
+     */
+    _renderClimbing(b) {
+      const climbers = (b.trending || [])
+        .filter((t) => typeof t.rank_delta === "number" && t.rank_delta >= 3)
+        .sort((x, y) => y.rank_delta - x.rank_delta);
+      if (climbers.length < 3) return "";
+      return window.renderGameRail(climbers.map((t) => this._trendingEntry(t)), this._railOpts({
+        icon: "arrow-up-right",
+        title: "Climbing this week",
+        stubHandler: (s) => `window.discoveryView._importStub(${Number(s.bgg_id) || 0})`,
+      }));
     }
 
     _renderNew(b) {
