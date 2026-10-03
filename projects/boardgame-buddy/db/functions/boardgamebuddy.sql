@@ -1065,7 +1065,7 @@
 
 -- bgb_sync_achievements(uid UUID)
 --   → JSONB { total, earned_count, metrics, groups[], achievements[] }
---   Defined in: db/migrations/003_baseline_functions_social.sql
+--   Defined in: db/migrations/067_achievements_skip_imported_plays.sql
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/achievement_routes.py
 --               (GET /achievements, POST /achievements/installed)
@@ -1086,7 +1086,10 @@
 --               rather than a read plus a write: every caller wants both, and
 --               the metrics pass is the expensive half. `earned` is read off
 --               the unlock row rather than the live metric, which is what makes
---               a badge permanent once a play behind it is deleted. Plays use
+--               a badge permanent once a play behind it is deleted.
+--               plays_logged counts only plays logged in the app: a play with
+--               import_batch_id or import_group_id set is left out of it, and
+--               only of it. Plays use
 --               the "logged it OR appeared on it" visibility rule shared with
 --               bgb_play_stats and bgb_user_stats_detail; wins are
 --               necessarily narrower, since a win needs a player row.

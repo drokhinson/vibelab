@@ -125,7 +125,7 @@
             <span class="lp-opt__title">Host a game</span>
             <span class="lp-opt__sub">${offline
               ? "Saves to this device and uploads when you're back online."
-              : "Open a session — everyone joins with a code."}</span>
+              : "Record a play session."}</span>
           </span>
         </button>
 
@@ -137,7 +137,7 @@
           </span>
           <span class="lp-opt__body">
             <span class="lp-opt__title">Game explorer</span>
-            <span class="lp-opt__sub">Browse by players, play time and type.</span>
+            <span class="lp-opt__sub">Find a game that fits the current vibe.</span>
           </span>
         </button>
       `;
