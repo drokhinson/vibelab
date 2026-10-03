@@ -557,6 +557,28 @@ def test_a_finalised_session_rewrites_the_invite_it_concludes():
     assert saved["body"] == "Dave recorded a game with you"
 
 
+def test_a_seat_accepted_in_the_lobby_gets_no_push_but_keeps_its_badges():
+    """Whoever accepted their seat watched the game; the rest of the table is
+    still told. The achievement sweep covers everyone, pushed or not."""
+    play = SimpleNamespace(id="play-9", game_name="Catan", players=_seated("host-1", "sam", "priya"))
+    tasks = BackgroundTasks()
+    N.play_logged(tasks, None, _actor(), play, session_code="ABCD", already_seen={"sam"})
+
+    sends = [t for t in tasks.tasks if t.func is P.send]
+    assert [t.args[1] for t in sends] == [["priya"]]
+    (sweep,) = [t for t in tasks.tasks if t.func is N.achievements_after_play]
+    assert sorted(sweep.args[1]) == ["host-1", "priya", "sam"]
+
+
+def test_a_table_that_all_accepted_sends_nothing_but_still_sweeps_badges():
+    play = SimpleNamespace(id="play-9", game_name="Catan", players=_seated("host-1", "sam"))
+    tasks = BackgroundTasks()
+    N.play_logged(tasks, None, _actor(), play, session_code="ABCD", already_seen=["sam"])
+
+    assert not [t for t in tasks.tasks if t.func is P.send]
+    assert [t.func for t in tasks.tasks] == [N.achievements_after_play]
+
+
 def test_a_play_logged_outside_a_lobby_is_unchanged():
     """No session, no rewrite. This play was never announced in advance, so it
     keeps the per-actor tag and alerts as usual."""

@@ -743,6 +743,7 @@
       // A returned seat that reads the same as the one held repaints nothing
       // above, which would leave the strip on "Working…".
       this._patchSeat();
+      if (accept && window.BgbPush) window.BgbPush.closeSessionCards(code);
       if (!accept) showToast("It won't count for you", "info");
     }
 

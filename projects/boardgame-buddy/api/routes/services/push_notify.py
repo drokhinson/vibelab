@@ -250,6 +250,7 @@ def play_logged(
     play: PlayResponse,
     *,
     session_code: str | None = None,
+    already_seen: Iterable[str] = (),
 ) -> None:
     """Somebody logged a play and seated other people in it.
 
@@ -270,6 +271,11 @@ def play_logged(
     `quiet` keeps that rewrite from buzzing a second time
     (push_service.payload).
 
+    `already_seen` are the seats saved already read (play_players.seen_at: a
+    lobby seat its account accepted). Those people watched the game happen, so
+    they get no push about it; the achievement sweep still covers them, since a
+    badge is news the game itself was not.
+
     Either way the tap opens this play's detail card over the bell
     (`/notifications?play=<id>`, read by views/notifications-view.js), not the
     lobby, which no longer exists once the play is written.
@@ -280,6 +286,13 @@ def play_logged(
     seated = [p.user_id for p in play.players if p.user_id and p.user_id != user.user_id]
     if not seated:
         return
+    background_tasks.add_task(
+        achievements_after_play, sb, seated + [user.user_id]
+    )
+    skip = set(already_seen)
+    told = [uid for uid in seated if uid not in skip]
+    if not told:
+        return
     # Same event, sentence and destination either way — only the tag and
     # whether the device buzzes turn on where the play came from.
     if session_code:
@@ -287,16 +300,13 @@ def play_logged(
     else:
         tag, quiet = f"play_link:{user.user_id}", False
     _queue(
-        background_tasks, sb, seated, PushEvent.PLAY_LINK,
+        background_tasks, sb, told, PushEvent.PLAY_LINK,
         title=play.game_name or "You were in a game",
         body=f"{user.display_name} recorded a game with you",
         url=f"/notifications?play={play.id}",
         tag=tag,
         actor_id=user.user_id,
         quiet=quiet,
-    )
-    background_tasks.add_task(
-        achievements_after_play, sb, seated + [user.user_id]
     )
 
 

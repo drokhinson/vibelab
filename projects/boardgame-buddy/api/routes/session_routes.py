@@ -383,6 +383,11 @@ async def finalize_session(
         payload=body.model_dump(mode="json"),
     )
     # session_code, so the push replaces this table's invite in the tray
-    # rather than stacking a near-identical card on top of it.
-    push_notify.play_logged(background_tasks, sb, user, play, session_code=code)
+    # rather than stacking a near-identical card on top of it. Whoever accepted
+    # their seat during the game watched it happen and is not pushed at all.
+    push_notify.play_logged(
+        background_tasks, sb, user, play,
+        session_code=code,
+        already_seen=session_service.seats_saved_read(sb, play.id),
+    )
     return play

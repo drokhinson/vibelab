@@ -369,6 +369,20 @@ def finalize_session(sb: Client, *, host_user_id: str, code: str, payload: dict[
     return PlayResponse.model_validate(data)
 
 
+def seats_saved_read(sb: Client, play_id: str) -> set[str]:
+    """Accounts whose seat on this play was saved already read: the lobby seats
+    they accepted (play_players.seen_at, stamped by bgb_log_play). The finalize
+    route sends them no push about a game they watched."""
+    res = (
+        sb.table("boardgamebuddy_play_players")
+        .select("player_user_id")
+        .eq("play_id", play_id)
+        .not_.is_("seen_at", "null")
+        .execute()
+    )
+    return {r["player_user_id"] for r in res.data or [] if r.get("player_user_id")}
+
+
 # ALLOWED_PHASE_TRANSITIONS, in the shape bgb_advance_phase wants. Passing the
 # table to the RPC rather than encoding it in SQL keeps constants.py the single
 # source of truth; a copy encoded in SQL drifts from the code constants within

@@ -306,6 +306,24 @@
     },
 
     /**
+     * Take this table's cards off this device's tray: the invite, and anything
+     * else tagged on the session. Called when the account accepts its seat on
+     * the spectator screen, after which nothing more about the game is pushed
+     * to it (push_notify.play_logged), so a card left up would tap into a lobby
+     * that is gone once the play is saved. The tag must match
+     * push_notify._session_tag. Best effort: nothing to close is not an error.
+     * @param {string} code
+     */
+    async closeSessionCards(code) {
+      if (!code || !this.supported()) return;
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const open = await reg.getNotifications({ tag: `session:${String(code).trim().toUpperCase()}` });
+        open.forEach((n) => n.close());
+      } catch (_) {}
+    },
+
+    /**
      * Route a tap on a notification, without reloading the app.
      *
      * sw.js posts here rather than calling client.navigate() because this is a
