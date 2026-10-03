@@ -229,9 +229,9 @@ def load_play_response(sb, play_id: str, viewer_id: str) -> PlayResponse:
     )
 
 
-def _read_linked_at(sb, play_id: str) -> dict[str, tuple[str, bool]]:
-    """Existing `linked_at` and invite state per seated account, for the edit
-    path to carry over.
+def _read_linked_at(sb, play_id: str) -> dict[str, tuple[str, bool, str | None]]:
+    """Existing `linked_at`, invite state and `seen_at` per seated account, for
+    the edit path to carry over.
 
     PUT /plays/{id} full-replaces the nested lists — it deletes every
     play_players row and re-inserts them — so without this every edit stamps a
@@ -242,18 +242,21 @@ def _read_linked_at(sb, play_id: str) -> dict[str, tuple[str, bool]]:
     Only account seats are keyed: a ghost has no id to carry a timestamp for,
     and nothing notifies about one. The flag is True for a seat that is still
     an invite, so an edit neither accepts it nor re-invites an accepted one.
+    `seen_at` rides along for the same reason as `linked_at`: a seat its
+    account accepted in the lobby is saved already read, and an edit must not
+    turn it back into an unread notification.
     """
     res = (
         sb.table("boardgamebuddy_play_players")
-        .select("player_user_id, pending_user_id, linked_at")
+        .select("player_user_id, pending_user_id, linked_at, seen_at")
         .eq("play_id", play_id)
         .execute()
     )
-    out: dict[str, tuple[str, bool]] = {}
+    out: dict[str, tuple[str, bool, str | None]] = {}
     for r in res.data or []:
         uid = r.get("player_user_id") or r.get("pending_user_id")
         if uid and r.get("linked_at"):
-            out[uid] = (r["linked_at"], bool(r.get("pending_user_id")))
+            out[uid] = (r["linked_at"], bool(r.get("pending_user_id")), r.get("seen_at"))
     return out
 
 
@@ -284,7 +287,7 @@ def _write_play_players(
     play_id: str,
     players: list,
     owner_id: str,
-    linked_at_by_user: dict[str, tuple[str, bool]] | None = None,
+    linked_at_by_user: dict[str, tuple[str, bool, str | None]] | None = None,
     one_time_names: set[str] | None = None,
 ) -> list[PlayPlayerResponse]:
     """Insert the play_players rows for a play in ONE bulk statement.
@@ -296,7 +299,8 @@ def _write_play_players(
     `linked_at_by_user` is the edit path's carry-over (see _read_linked_at). A
     player already on the play keeps the timestamp they were first seated at;
     one who is genuinely new to it is stamped now and is notified, which is the
-    whole point. It also carries whether the seat is still an invite. A new
+    whole point. It also carries whether the seat is still an invite, and its
+    `seen_at` (NULL for a new seat, which is unread until opened). A new
     account other than `owner_id` is written as an invite, as bgb_log_play
     writes one.
 
@@ -321,7 +325,7 @@ def _write_play_players(
     column is nullable, so an explicit NULL is both harmless and correct.
     `player_user_id` and `pending_user_id` are unconditional too: an account
     seat sets exactly one of them and the other goes as an explicit NULL.
-    So is `one_time`, which is NOT NULL: a guest is one-time when the payload
+    So is `seen_at`, NULL on most rows. So is `one_time`, which is NOT NULL: a guest is one-time when the payload
     says so or when `one_time_names` (see _read_one_time_names) holds its name.
 
     The roster itself is already checked by the time it gets here: this is only
@@ -343,7 +347,7 @@ def _write_play_players(
         # PlayerEntry has already turned "" into None (an untagged seat is NULL,
         # never an empty tag everyone shares), so this rides through as-is.
         team = getattr(p, "team", None)
-        linked_at, was_pending = carried.get(player_uid) or (seated_now, None)
+        linked_at, was_pending, seen_at = carried.get(player_uid) or (seated_now, None, None)
         if was_pending is None:
             pending = bool(player_uid) and player_uid != owner_id
         else:
@@ -355,6 +359,7 @@ def _write_play_players(
             "player_display_name": p.name,
             "round_scores": round_scores,
             "linked_at": linked_at,
+            "seen_at": seen_at,
             "team": team,
             "player_user_id": None if pending else player_uid,
             "pending_user_id": player_uid if pending else None,

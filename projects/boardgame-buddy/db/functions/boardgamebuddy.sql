@@ -556,7 +556,10 @@
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
 --   Defined in: db/migrations/062_decimal_scores.sql
 --               redefined in db/migrations/063_play_invites.sql,
---               065_one_time_guests.sql
+--               065_one_time_guests.sql, 068_accepted_seat_saved_read.sql
+--   NOTE:       Stamps play_players.seen_at on the seats named in
+--               p_payload.accepted_user_ids (other than p_user), so a lobby
+--               seat its account accepted is saved already read.
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by
@@ -1401,7 +1404,7 @@
 --            play_group, play_id, play_ids UUID[], group_count, game_count,
 --            played_from, played_to, game_id, game_name, game_thumbnail_url,
 --            import_batch_id, edge_id)
---   Defined in: db/migrations/003_baseline_functions_social.sql
+--   Defined in: db/migrations/068_accepted_seat_saved_read.sql
 --   Language:   plpgsql
 --   Called by:  services/notification_service.list_notifications
 --               (GET /notifications, and the /bootstrap gather, which prefetches
@@ -1427,10 +1430,12 @@
 --               the array_aggs, the COUNT(DISTINCT) and the catalog join run
 --               over the ~20 entries on the page instead of over every entry
 --               the account has ever had.
+--               A play_link entry is unread when any of its seats is past the
+--               watermark and has no play_players.seen_at (a seat saved read).
 
 -- bgb_notifications_unread(p_viewer UUID)
 --   → INT
---   Defined in: db/migrations/003_baseline_functions_social.sql
+--   Defined in: db/migrations/068_accepted_seat_saved_read.sql
 --   Language:   plpgsql
 --   Called by:  services/notification_service.unread_count
 --               (GET /notifications, and — via list_notifications — /bootstrap)

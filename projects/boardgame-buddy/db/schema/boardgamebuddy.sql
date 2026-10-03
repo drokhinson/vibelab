@@ -680,6 +680,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   -- ghost list, and claimed by bgb_ghost_key (play + name) rather than by name
   -- across every play the logger has.
   one_time BOOLEAN DEFAULT false NOT NULL,
+  -- Set when the seat was saved already read by its account: a lobby seat it
+  -- accepted (bgb_log_play, from bgb_finalize_session). Such a seat is never
+  -- unread in the notifications feed or the bell's count.
+  seen_at TIMESTAMPTZ,
   CONSTRAINT boardgamebuddy_play_players_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_play_players_play_id_fkey FOREIGN KEY (play_id) REFERENCES boardgamebuddy_plays(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_play_players_player_user_id_fkey FOREIGN KEY (player_user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
