@@ -1,7 +1,9 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-10-03 (**Discover is back in the bottom nav, with Climbing this week, and without subtitles**. The Discover tab returns as Feed · Discover · Play · Profile. The Climbing this week rail is back, without its "Up the BoardGameGeek hot list since yesterday." line, the header's "Games worth a look…" blurb is gone, and Picked for you no longer shows its new-account line over catalog picks. Frontend only.)
+> Last updated: 2026-10-03 (**the score pad's bottom row is ⌨↓ · 0 · Next · .**. The hide key moves to the left corner, and Prev becomes Next in the hide key's old spot: it walks forward through the cells, and past the last cell it closes the pad like Enter does. A hardware keyboard keeps Shift+Enter for going back. Frontend only.)
+>
+> Previously: 2026-10-03 (**Discover is back in the bottom nav, with Climbing this week, and without subtitles**. The Discover tab returns as Feed · Discover · Play · Profile. The Climbing this week rail is back, without its "Up the BoardGameGeek hot list since yesterday." line, the header's "Games worth a look…" blurb is gone, and Picked for you no longer shows its new-account line over catalog picks. Frontend only.)
 >
 > Previously: 2026-10-03 (**Imported plays no longer count toward the play-count badges**. `bgb_sync_achievements` (migration 067) counts `plays_logged` (Table Regular, Century Club, Table Titan) only over plays logged in the app; a play with `import_batch_id` / `import_group_id` set is left out, the same test `bgb_dormant_collection` uses. Every other metric still reads imported plays, and a badge already unlocked stays unlocked. Deploy order: either.)
 >

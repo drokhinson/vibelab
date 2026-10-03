@@ -4,14 +4,14 @@
 //   1  2  3  ⌫          Sum mode:   1  2  3  ⌫
 //   4  5  6  (−)                    4  5  6  −
 //   7  8  9                         7  8  9  +
-//   Prev  0  ⌨↓  .                  Prev  0  ⌨↓  .
+//   ⌨↓  0  Next  .                  ⌨↓  0  Next  .
 //   Σ Sum  |  + Round               Σ Sum  |  =
 //
 // On a coarse pointer the cells render with inputmode="none"
 // (round-score-grid.js asks ScoreKeypad.custom), so focusing one raises no
 // system keyboard and this pad slides up instead. A score field outside a grid
 // (the play-detail card's whole-play scores) opts in with `data-score-pad`,
-// and Prev walks the nearest [data-score-pad-group] around it. ⌨↓ puts the pad
+// and Next walks the nearest [data-score-pad-group] around it. ⌨↓ puts the pad
 // away. A mouse-and-keyboard screen keeps plain typing, with Enter /
 // Shift+Enter moving between cells.
 //
@@ -92,8 +92,8 @@
     return Array.from(grid.querySelectorAll(CELL));
   }
 
-  // Enter past the last cell closes the pad; Prev before the first one does
-  // nothing (its key is disabled there).
+  // Enter or Next past the last cell closes the pad; Shift+Enter before the
+  // first one does nothing.
   function move(el, step) {
     const cells = cellsOf(el);
     const to = cells[cells.indexOf(el) + step];
@@ -145,9 +145,9 @@
         ${key("-", "&minus;", "score-pad__key--op score-pad__sum", "Subtract")}
         ${key("7", "7")}${key("8", "8")}${key("9", "9")}
         ${blank}${key("+", "+", "score-pad__key--op score-pad__sum", "Add")}
-        ${key("prev", "Prev", "score-pad__key--nav")}
-        ${key("0", "0")}
         ${key("hide", HIDE_ICON, "score-pad__key--hide", "Hide keyboard")}
+        ${key("0", "0")}
+        ${key("next", "Next", "score-pad__key--nav")}
         ${key(".", ".", "score-pad__key--fn score-pad__key--dot", "Decimal point")}
         ${key("sum", "&Sigma; Sum", "score-pad__key--tool score-pad__key--sumkey")}
         ${key("round", "+ Round", "score-pad__key--tool score-pad__key--round score-pad__plain")}
@@ -189,7 +189,7 @@
     if (!b || /** @type {HTMLButtonElement} */ (b).disabled) return;
     const k = b.getAttribute("data-key");
     if (k === "hide") { settle(el); el.blur(); }
-    else if (k === "prev") move(el, -1);
+    else if (k === "next") move(el, 1);
     else if (k === "round") {
       endSum();
       settle(el);
@@ -274,9 +274,6 @@
     if (!pad) pad = buildPad();
     if (active !== el) endSum();
     active = el;
-    const cells = cellsOf(el);
-    const prevBtn = /** @type {HTMLButtonElement|null} */ (pad.querySelector('[data-key="prev"]'));
-    if (prevBtn) prevBtn.disabled = cells[0] === el;
     pad.classList.toggle("has-round", !!el.closest("[data-kp-round]"));
     place();
     const opening = pad.hidden;
