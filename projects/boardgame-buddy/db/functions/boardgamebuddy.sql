@@ -556,7 +556,11 @@
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
 --   Defined in: db/migrations/062_decimal_scores.sql
 --               redefined in db/migrations/063_play_invites.sql,
---               065_one_time_guests.sql
+--               065_one_time_guests.sql, 068_accepted_seat_saved_read.sql
+--   NOTE:       For each account in p_payload.accepted_user_ids (other than
+--               p_user) whose bgb_notifications_unread was 0 before the write,
+--               moves profiles.link_notifications_seen_at up to now(), so the
+--               play arrives read in a tray that was clear.
 --   Language:   plpgsql
 --   Called by:  projects/boardgame-buddy/api/routes/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by
