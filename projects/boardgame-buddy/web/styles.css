@@ -9675,8 +9675,8 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .score-pad__key--blank { background: transparent; box-shadow: none; pointer-events: none; }
 .score-pad__key--nav { background: var(--bg-0); font-size: 16px; font-weight: 600; }
 .score-pad__key--nav:disabled { color: var(--ink-faint); box-shadow: none; cursor: default; }
-.score-pad__key--next { background: var(--accent-fill); color: var(--on-accent); font-size: 17px; font-weight: 600; }
-/* Σ Sum and + Round: outlined in the accent so Next stays the one solid key.
+.score-pad__key--hide { background: var(--accent-fill); color: var(--on-accent); }
+/* Σ Sum and + Round: outlined in the accent so the hide key stays the one solid key.
    + Round is the Play step's "Next round" and shows only there
    ([data-kp-round]); without it Σ Sum takes the whole row. In Sum mode the
    row is always Σ Sum beside a solid =, which finishes the sum. */
@@ -9800,8 +9800,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .score-pad--side .score-pad__tape { width: 100%; margin-bottom: 6px; }
 .score-pad--side .score-pad__keys { flex: 1 1 auto; min-height: 0; width: 100%; gap: 5px; grid-template-rows: repeat(5, minmax(0, 1fr)); }
 .score-pad--side .score-pad__key { height: auto; font-size: 20px; }
-.score-pad--side .score-pad__key--nav,
-.score-pad--side .score-pad__key--next { font-size: 15px; }
+.score-pad--side .score-pad__key--nav { font-size: 15px; }
 .score-pad--side .score-pad__key--tool { font-size: 14px; }
 .score-pad--side .score-pad__chip { padding: 4px 9px; font-size: 13px; }
 
