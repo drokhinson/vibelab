@@ -201,7 +201,7 @@
 --   Defined in: db/migrations/066_revisit_daily_shuffle.sql
 --   Language:   sql
 --   Called by:  projects/boardgame-buddy/api/routes/services/discovery_service.py
---               (fetch_back_on_shelf — the Discover tab's "Back on the shelf"
+--               (fetch_back_on_shelf — the Discover tab's "Time to revisit"
 --               rail, 365 days, 8 rows.)
 --   Purpose:    A random `lim` of the owned games this user has not logged in
 --               the app within N days (never logged counts). Only plays logged

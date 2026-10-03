@@ -351,7 +351,7 @@
       // changes which shelf a game sits on, so drop them too.
       if (window.Game && window.Game.invalidateSearch) window.Game.invalidateSearch();
       // A pick just shelved must not come straight back on the Discover tab,
-      // and "Back on the shelf" is a read of the shelf.
+      // and "Time to revisit" is a read of the shelf.
       if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
     }
 
