@@ -451,7 +451,6 @@
     _renderShelfBody(shelf) {
       const pctPlayed = Math.round((shelf.played / shelf.owned) * 100);
       const circ = 2 * Math.PI * SHELF_R;
-      const marked = shelf.marked || 0;
       return `
         <div class="stats-shelf">
           <div class="stats-shelf__ring">
@@ -465,7 +464,7 @@
           </div>
           <div class="stats-mini__d" style="margin-top:0">
             You've played <b>${pctPlayed}%</b> of what you own.
-            ${this._shelfLine(shelf, marked)}
+            ${this._shelfLine(shelf)}
           </div>
         </div>
       `;
@@ -494,8 +493,7 @@
                 <div class="stats-mini__k"><i data-icon="sparkles" class="w-3 h-3"></i> Comeback kid</div>
                 <div class="stats-mini__v">${cb.wins_from_behind} ${cb.wins_from_behind === 1 ? "win" : "wins"}</div>
                 <div class="stats-mini__d">
-                  Games you won after trailing at the halfway round — out of
-                  <b>${cb.tracked_plays}</b> round-tracked ${cb.tracked_plays === 1 ? "play" : "plays"}.
+                  Games you won after trailing at the halfway round.
                 </div>` : ""}
               ${coopTotal ? `
                 <div class="stats-mini__k" style="margin-top:${cb.tracked_plays ? "0.8rem" : "0"}">
@@ -532,20 +530,12 @@
       `;
     }
 
-    // Three cases, not two-plus-a-suffix: "Every box has hit the table" with
-    // "4 more are marked as played" bolted on afterwards contradicts itself,
-    // because a marked box IS one that has hit the table.
-    _shelfLine(shelf, marked) {
+    _shelfLine(shelf) {
       const owned = shelf.owned;
       if (shelf.unplayed) {
-        const head = `<b>${shelf.unplayed}</b> of ${owned} ${owned === 1 ? "game has" : "games have"} never hit the table.`;
-        return marked
-          ? `${head} <b>${marked}</b> more ${marked === 1 ? "is" : "are"} marked as played before you joined.`
-          : head;
+        return `<b>${shelf.unplayed}</b> of ${owned} ${owned === 1 ? "game has" : "games have"} never hit the table.`;
       }
-      return marked
-        ? `Every box on the shelf has hit the table, <b>${marked}</b> of them before you joined.`
-        : `Every box on the shelf has hit the table.`;
+      return `Every box on the shelf has hit the table.`;
     }
 
     // Delegates to ui/stat-primitives.js, which the admin Usage spoke draws
