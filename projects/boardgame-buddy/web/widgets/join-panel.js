@@ -202,7 +202,7 @@
       return `
         <div class="cascade-join__empty">
           <i data-icon="moon" class="w-6 h-6"></i>
-          <p>No active sessions right now. Enter a code above if a host shared one.</p>
+          <p>No active sessions right now.</p>
         </div>
       `;
     }
