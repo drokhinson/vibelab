@@ -370,12 +370,12 @@
     _renderShelf(b) {
       const entries = (b.back_on_shelf || []).map((d) => ({
         game: d.game,
-        meta: d.last_played_at ? `Last played ${formatRelativeDay(d.last_played_at)}` : "Never played",
+        meta: d.last_played_at ? `Last played ${formatRelativeDay(d.last_played_at)}` : "Never logged",
       }));
       return window.renderGameRail(entries, this._railOpts({
         icon: "hourglass",
         title: "Back on the shelf",
-        subtitle: entries.length ? `Owned, and not played in ${b.dormant_days || 60} days.` : "",
+        subtitle: entries.length ? "Owned, and not logged here in a year. A fresh pick every day." : "",
         emptyHtml: this._empty("Nothing's gathering dust \u2014 everything you own has hit the table lately."),
       }));
     }
