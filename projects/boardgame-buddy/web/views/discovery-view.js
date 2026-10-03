@@ -375,7 +375,6 @@
       return window.renderGameRail(entries, this._railOpts({
         icon: "hourglass",
         title: "Time to revisit",
-        subtitle: entries.length ? "Owned, and not logged here in a year. A fresh pick every day." : "",
         emptyHtml: this._empty("Nothing's gathering dust \u2014 everything you own has hit the table lately."),
       }));
     }
