@@ -1,7 +1,9 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-10-03 (**the score pad's bottom row is ⌨↓ · 0 · Next · .**. The hide key moves to the left corner, and Prev becomes Next in the hide key's old spot: it walks forward through the cells, and past the last cell it closes the pad like Enter does. A hardware keyboard keeps Shift+Enter for going back. Frontend only.)
+> Last updated: 2026-10-03 (**a badge's detail sheet pages through its row, and opening a badge takes its New ribbon off at once**. The sheet moved to `widgets/achievement-sheet.js`: every badge in the tapped tile's rail is a page of one scroll-snapped track, in rail order, with ‹ › arrows, an "N of M" count and ←/→. Opening or paging to a badge removes its ribbon from the tile and recounts the summary line immediately instead of at the next visit. Separately, the nav's active tab loses its 2px gold rule (under the tab on the bar, down its edge on the rail); the lit tab ground and gold icon/label are the marker. Frontend only.)
+>
+> Previously: 2026-10-03 (**the score pad's bottom row is ⌨↓ · 0 · Next · .**. The hide key moves to the left corner, and Prev becomes Next in the hide key's old spot: it walks forward through the cells, and past the last cell it closes the pad like Enter does. A hardware keyboard keeps Shift+Enter for going back. Frontend only.)
 >
 > Previously: 2026-10-03 (**Discover is back in the bottom nav, with Climbing this week, and without subtitles**. The Discover tab returns as Feed · Discover · Play · Profile. The Climbing this week rail is back, without its "Up the BoardGameGeek hot list since yesterday." line, the header's "Games worth a look…" blurb is gone, and Picked for you no longer shows its new-account line over catalog picks. Frontend only.)
 >

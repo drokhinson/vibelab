@@ -3652,7 +3652,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 /* Flat rectangular tab bar — square corners, edge-to-edge, nothing
    protruding above the top edge. Four equal-width tabs; the active one is
-   marked by a gold top rule plus gold icon/label, so the bar's silhouette
+   marked by a gold icon/label on a lit tab ground, so the bar's silhouette
    stays a clean rectangle. */
 .bgb-nav {
   position: fixed;
@@ -3694,21 +3694,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-nav__tab.active {
   color: var(--accent);
   background: var(--accent-quiet);
-}
-/* Active marker: a 2px gold rule underlining the selected tab. Keeps the
-   indicator inside the rectangle instead of floating a pill on top of it.
-   Anchored to the tab's own bottom edge, which sits above the bar's
-   env(safe-area-inset-bottom) padding — so on a device with a home
-   indicator the rule underlines the label rather than stranding itself
-   at the bottom of the inset gap. */
-.bgb-nav__tab.active::before {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--accent, #CDA23F);
 }
 .bgb-nav__ico { display: inline-flex; align-items: center; justify-content: center; position: relative; }
 .bgb-nav__label { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
@@ -3836,30 +3821,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* The utilities sink to the bottom of the rail, under the tabs: the first
    utility (the one directly after the last route tab) takes the slack. */
 :root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab[data-nav] + .bgb-nav__tab--util { margin-top: auto; }
-/* The active marker turns from a rule under the tab into a rule down its
-   leading edge. */
-:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab.active::before {
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: auto;
-  width: 2px;
-  height: auto;
-}
 /* A toggle wears its screen's state the way a tab wears its route's:
    domain/view.js#go sets aria-pressed on every navigation. */
 .bgb-nav__tab--util[aria-pressed="true"] {
   color: var(--accent);
   background: var(--accent-quiet);
-}
-:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab--util[aria-pressed="true"]::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 2px;
-  background: var(--accent, #CDA23F);
 }
 
 /* ── The rail, drawn compact (land tier) ────────────────────────────────────
@@ -19080,7 +19046,50 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 /* The Close button is the shared .bgb-sheet__cancel (52px, per
    .claude/rules/mobile-web.md §5) — the sheet family already owns that
    affordance, so this only gives it a little air under the badge. */
-.ach-detail + .bgb-sheet__cancel { margin: 0.9rem 0.2rem 0.2rem; }
+.ach-track + .bgb-sheet__cancel { margin: 0.9rem 0.2rem 0.2rem; }
+
+/* Paging through a row (widgets/achievement-sheet.js): one page per badge,
+   side by side in a snapping track. A grid row stretches every page to the
+   tallest, so a turn never resizes the sheet. */
+.ach-track--paged {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+}
+.ach-track--paged::-webkit-scrollbar { display: none; }
+.ach-track--paged > .ach-detail { scroll-snap-align: start; scroll-snap-stop: always; min-width: 0; }
+.ach-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0.2rem 0.1rem;
+}
+.ach-pager__btn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--polaroid-ink);
+  cursor: pointer;
+}
+.ach-pager__btn:disabled { color: var(--polaroid-muted); opacity: 0.4; cursor: default; }
+.ach-pager__count {
+  font-family: var(--font-score);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--polaroid-muted);
+  font-variant-numeric: tabular-nums;
+}
 
 /* ── "Achievement unlocked!" polaroid ─────────────────────────────────────────
    ui/polaroid-popup.js#achievement, queued by ui/achievement-popup.js. Rides
