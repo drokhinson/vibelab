@@ -1,7 +1,9 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-10-03 (**Discover leaves the bottom nav, and the Climbing this week rail is gone**. The nav is Feed · Play · Profile; `/discover` still routes and renders, but nothing in the shell links to it. The Climbing rail is no longer rendered — the trending rail still carries each game's ▲/▼/NEW move on its meta line. Frontend only; `/discover` and the hot-list snapshots are unchanged.)
+> Last updated: 2026-10-03 (**Imported plays no longer count toward the play-count badges**. `bgb_sync_achievements` (migration 067) counts `plays_logged` (Table Regular, Century Club, Table Titan) only over plays logged in the app; a play with `import_batch_id` / `import_group_id` set is left out, the same test `bgb_dormant_collection` uses. Every other metric still reads imported plays, and a badge already unlocked stays unlocked. Deploy order: either.)
+>
+> Previously: 2026-10-03 (**Discover leaves the bottom nav, and the Climbing this week rail is gone**. The nav is Feed · Play · Profile; `/discover` still routes and renders, but nothing in the shell links to it. The Climbing rail is no longer rendered — the trending rail still carries each game's ▲/▼/NEW move on its meta line. Frontend only; `/discover` and the hot-list snapshots are unchanged.)
 >
 > Previously: 2026-10-03 (**Time to revisit has no subtitle**. The Discover rail shows just its title over the tiles. Frontend only.)
 >
