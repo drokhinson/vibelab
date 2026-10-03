@@ -173,6 +173,18 @@ strongly than any millisecond count does. Relatedly: rebuilding a container
 destroys the control under the user's finger before `:active` can apply, which
 is one more reason to repaint surgically (`.claude/rules/overlays.md` §6).
 
+**A touch never triggers a hover state.** Mobile browsers apply `:hover` to
+whatever was last tapped and leave it there until something else is tapped, so
+an unguarded hover lift, tint or border sticks to a card after the finger has
+gone. Every `:hover` rule goes inside `@media (hover: hover) { … }`, with no
+exceptions for "just a colour change". When a hover selector shares a rule with
+`:focus-visible` or another state, split it: the other selectors stay outside the
+query, so a keyboard on a touch device keeps its focus ring. The same holds for
+JS: no `mouseenter`/`mouseover`/`pointerenter` handler that paints a visual hover
+state unless it checks `matchMedia("(hover: hover)")` first.
+`projects/boardgame-buddy/tools/check-hover-guard.mjs` enforces the CSS half for
+that project's stylesheet.
+
 ## 6. The back gesture belongs to whatever is on top
 
 The phone's back button (Android) and the edge swipe (iOS) are the same gesture
