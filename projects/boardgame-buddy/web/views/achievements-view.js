@@ -11,15 +11,22 @@
 // whole point of an achievement list is knowing what is still out there — so
 // it keeps its art (dimmed and desaturated by CSS, never by a second "locked"
 // sprite) and prints what it wants from you. Tapping any badge opens its
-// detail sheet, which keeps the same grey art while it is unearned.
+// detail sheet (widgets/achievement-sheet.js), which keeps the same grey art
+// while it is unearned and pages sideways through the rest of that rail.
 //
 // "New" ribbons come from the device, not the server: see domain/
-// achievements.js. They are cleared by markSeen() only after this screen has
-// actually painted the badges.
+// achievements.js. markSeen() records them only after this screen has
+// actually painted the badges; a ribbon stays up for the rest of the visit
+// until its badge is opened or paged to in the sheet.
 
 // @ts-check
 
 (function () {
+  function cssEscape(v) {
+    if (window.CSS && window.CSS.escape) return window.CSS.escape(String(v));
+    return String(v).replace(/["\\]/g, "\\$&");
+  }
+
   class AchievementsView extends window.View {
     constructor() {
       super("achievements");
@@ -29,11 +36,6 @@
       this._fresh = [];
       this._loading = true;
       this._error = null;
-      this._sheet = new window.BgbBottomSheet({
-        id: "bgb-ach-sheet",
-        className: "ach-sheet",
-        label: "Achievement detail",
-      });
     }
 
     async onMount() {
@@ -74,7 +76,7 @@
     }
 
     async onUnmount() {
-      this._sheet.close();
+      window.AchievementSheet.close();
     }
 
     renderLoading() { this.render(); }
@@ -229,7 +231,7 @@
         : `${a.name} — locked. ${a.requirement}`;
       return `
         <button class="ach-tile ${a.earned ? "is-earned" : "is-locked"}" type="button"
-                role="listitem" aria-label="${escapeAttr(label)}"
+                role="listitem" aria-label="${escapeAttr(label)}" data-ach-id="${escapeAttr(a.id)}"
                 onclick="window.achievementsView._open('${jsStr(a.id)}')">
           <span class="ach-tile__art">
             <img src="${escapeAttr(src)}" alt="" width="160" height="160" loading="lazy" decoding="async" />
@@ -266,58 +268,38 @@
       return list.find((a) => a.id === id) || null;
     }
 
+    /** The badges of `a`'s group, in the order its rail shows them. */
+    _rowOf(a) {
+      const list = (this._payload && this._payload.achievements) || [];
+      return this._byCompletion(list.filter((x) => x.group_id === a.group_id));
+    }
+
+    /** Take the "New" ribbon off one badge, on the tile and in the summary. */
+    _clearNew(id) {
+      if (!this._fresh.includes(id)) return;
+      this._fresh = this._fresh.filter((x) => x !== id);
+      const c = this.container;
+      if (!c || !this._payload) return;
+      const tile = c.querySelector(`.ach-tile[data-ach-id="${cssEscape(id)}"]`);
+      const pill = tile && tile.querySelector(".ach-tile__new");
+      if (pill) pill.remove();
+      const summary = c.querySelector(".ach-summary");
+      if (summary) summary.outerHTML = this._renderSummary(this._payload);
+    }
+
     _open(id) {
       const a = this._find(id);
       if (!a) return;
-      const src = window.Achievements.spriteUrl(a.icon);
-      const pct = a.threshold > 1
-        ? Math.min(100, Math.round((a.progress / a.threshold) * 100))
-        : 0;
-      const status = a.earned
-        ? `<div class="ach-detail__status ach-detail__status--earned">
-             <i data-icon="check" class="w-4 h-4"></i>
-             Unlocked ${escapeHtml(formatDate(a.unlocked_at) || "")}
-           </div>`
-        // The tagline says what the badge is FOR in the past tense ("you've
-        // played a game made for two"), so it only belongs on an earned badge;
-        // while locked, the same fact is the requirement below, in the
-        // imperative. Printing both would say it twice.
-        //
-        // The key glyph and the desaturated art carry "locked" visually, and
-        // the requirement reads as a to-do rather than as something achieved
-        // — but none of that reaches a screen reader, which would otherwise
-        // hear only the instruction while the earned variant says "Unlocked"
-        // outright. The word goes in visually-hidden text rather than on
-        // screen, where it would just restate the picture.
-        : `<div class="ach-detail__status">
-             <i data-icon="key-round" class="w-4 h-4"></i>
-             <span class="bgb-vis-hidden">Locked. To earn: </span>
-             ${escapeHtml(a.requirement)}
-           </div>`;
-      // No bar once it is earned: the status pill above already says so, and
-      // "10 / 10" on a badge you cleared 37 plays ago is noise.
-      const bar = (!a.earned && a.threshold > 1)
-        ? `<div class="ach-detail__progress">
-             <div class="ach-detail__bar"><div class="ach-detail__bar-fill" style="width:${pct}%"></div></div>
-             <div class="ach-detail__count">${a.progress} / ${a.threshold}</div>
-           </div>`
-        : "";
-
-      this._sheet.open({
-        label: a.earned ? `${a.name} — unlocked` : `${a.name} — locked`,
-        html: `
-          <div class="ach-sheet__panel bgb-sheet__panel">
-            <div class="bgb-sheet__grip" aria-hidden="true"></div>
-            <div class="ach-detail ${a.earned ? "is-earned" : "is-locked"}">
-              <img class="ach-detail__art" src="${escapeAttr(src)}" alt="" width="160" height="160" />
-              <h3 class="ach-detail__name font-display">${escapeHtml(a.name)}</h3>
-              ${a.earned ? `<p class="ach-detail__tagline">${escapeHtml(a.tagline)}</p>` : ""}
-              ${status}
-              ${bar}
-            </div>
-            <button class="bgb-sheet__cancel" type="button" data-action="close">Close</button>
-          </div>
-        `,
+      this._clearNew(a.id);
+      window.AchievementSheet.open({
+        row: this._rowOf(a),
+        startId: a.id,
+        onShow: (item) => {
+          this._clearNew(item.id);
+          // Keep the badge in view on the rail behind the backdrop.
+          const tile = this.container && this.container.querySelector(`.ach-tile[data-ach-id="${cssEscape(item.id)}"]`);
+          if (tile) tile.scrollIntoView({ behavior: "instant", block: "nearest", inline: "nearest" });
+        },
       });
     }
   }

@@ -725,9 +725,11 @@ html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
   border: 1px solid rgba(200, 155, 40, 0.25);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+@media (hover: hover) {
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  }
 }
 
 /* Search-highlight inside chapter content */
@@ -1269,7 +1271,9 @@ html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
    on cream paper. Give it the parchment's own ink. It stays 44px tall over a
    38px field: the overhang is the tap target, not the visible control. */
 .scroll-panel__search-row .field-clear-btn { color: rgba(43, 29, 10, 0.5); right: 2px; }
-.scroll-panel__search-row .field-clear-btn:hover { color: #2B1D0A; }
+@media (hover: hover) {
+  .scroll-panel__search-row .field-clear-btn:hover { color: #2B1D0A; }
+}
 .scroll-panel__search::placeholder { color: rgba(43, 29, 10, 0.45); }
 .scroll-panel__search:focus {
   outline: 2px solid var(--accent);
@@ -1408,12 +1412,14 @@ html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
 .scroll-panel .scroll-chapter .btn-ghost.bgb-destructive-icon-btn { color: #8F3320; }
 .scroll-panel .scroll-chapter .bgb-destructive-icon-btn [data-icon-name],
 .scroll-panel .scroll-chapter .bgb-destructive-icon-btn i { color: #8F3320; }
-.scroll-panel .scroll-chapter .btn-ghost.bgb-destructive-icon-btn:hover {
-  background: rgba(143, 51, 32, 0.14);
-  color: #74280F;
+@media (hover: hover) {
+  .scroll-panel .scroll-chapter .btn-ghost.bgb-destructive-icon-btn:hover {
+    background: rgba(143, 51, 32, 0.14);
+    color: #74280F;
+  }
+  .scroll-panel .scroll-chapter .bgb-destructive-icon-btn:hover [data-icon-name],
+  .scroll-panel .scroll-chapter .bgb-destructive-icon-btn:hover i { color: #74280F; }
 }
-.scroll-panel .scroll-chapter .bgb-destructive-icon-btn:hover [data-icon-name],
-.scroll-panel .scroll-chapter .bgb-destructive-icon-btn:hover i { color: #74280F; }
 .scroll-panel__empty {
   display: flex;
   flex-direction: column;
@@ -1500,7 +1506,9 @@ html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
   opacity: 0.6;
   transition: opacity 120ms ease;
 }
-.collapsible-header:hover .collapsible-header__chev { opacity: 1; }
+@media (hover: hover) {
+  .collapsible-header:hover .collapsible-header__chev { opacity: 1; }
+}
 
 /* ── Add-chapter view (Create | Browse) ──────────────────────────────────── */
 /* The browse pool is the same parchment, minus the rolls: always open, height
@@ -1573,12 +1581,14 @@ html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
   white-space: nowrap;
 }
 .chapter-add__pool-toggle [data-icon-name] { color: var(--accent); }
-.chapter-add__pool-toggle:hover {
-  background: var(--accent);
-  color: var(--bg-0);
-  border-color: var(--accent-hover);
+@media (hover: hover) {
+  .chapter-add__pool-toggle:hover {
+    background: var(--accent);
+    color: var(--bg-0);
+    border-color: var(--accent-hover);
+  }
+  .chapter-add__pool-toggle:hover [data-icon-name] { color: var(--bg-0); }
 }
-.chapter-add__pool-toggle:hover [data-icon-name] { color: var(--bg-0); }
 .chapter-add__pool-toggle--compact {
   padding: 4px 9px;
   font-size: 0.72rem;
@@ -1591,12 +1601,14 @@ html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
   border-color: rgba(74, 122, 74, 0.55);
 }
 .chapter-add__pool-toggle--in [data-icon-name] { color: #2F6033; }
-.chapter-add__pool-toggle--in:hover {
-  background: rgba(166, 93, 44, 0.18);
-  color: var(--rust);
-  border-color: var(--rust);
+@media (hover: hover) {
+  .chapter-add__pool-toggle--in:hover {
+    background: rgba(166, 93, 44, 0.18);
+    color: var(--rust);
+    border-color: var(--rust);
+  }
+  .chapter-add__pool-toggle--in:hover [data-icon-name] { color: var(--rust); }
 }
-.chapter-add__pool-toggle--in:hover [data-icon-name] { color: var(--rust); }
 
 /* ── Turning a chapter down ─────────────────────────────────────────────────
    views/reference-guide-add-view.js#_renderPoolRow and
@@ -1767,7 +1779,9 @@ html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
   white-space: nowrap;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
-.chapter-add__chip:hover { border-color: var(--accent); color: oklch(var(--bc)); }
+@media (hover: hover) {
+  .chapter-add__chip:hover { border-color: var(--accent); color: oklch(var(--bc)); }
+}
 .chapter-add__chip--active {
   background: var(--accent);
   border-color: var(--accent);
@@ -2098,7 +2112,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   white-space: nowrap;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
-.chapter-edit__tpill:hover { color: oklch(var(--bc)); background: oklch(var(--b3)); }
+@media (hover: hover) {
+  .chapter-edit__tpill:hover { color: oklch(var(--bc)); background: oklch(var(--b3)); }
+}
 .chapter-edit__tpill--on {
   background: radial-gradient(120% 140% at 30% 20%, #F0C662, var(--accent) 60%, var(--accent-hover));
   border-color: transparent;
@@ -2173,7 +2189,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   padding: 0 10px;
   transition: background 120ms ease, color 120ms ease;
 }
-.chapter-edit__tbtn:hover { background: rgba(201, 146, 42, 0.25); color: oklch(var(--bc)); }
+@media (hover: hover) {
+  .chapter-edit__tbtn:hover { background: rgba(201, 146, 42, 0.25); color: oklch(var(--bc)); }
+}
 .chapter-edit__tbtn--ital { font-style: italic; font-family: var(--font-display); }
 .chapter-edit__tbtn--gold { color: var(--accent); }
 .chapter-edit__tdiv {
@@ -2905,8 +2923,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--accent);
   border-color: var(--accent);
 }
-.chapter-edit__fbtn.chapter-wiz__fbtn--alt:hover:not(:disabled) {
-  background: var(--accent-quiet);
+@media (hover: hover) {
+  .chapter-edit__fbtn.chapter-wiz__fbtn--alt:hover:not(:disabled) {
+    background: var(--accent-quiet);
+  }
 }
 .chapter-edit__fbtn.chapter-wiz__fbtn--alt:disabled { opacity: 0.6; cursor: not-allowed; }
 
@@ -3020,9 +3040,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   transition: transform 140ms ease, border-color 140ms ease;
   padding: 0;
 }
-.chapter-edit__sw:hover {
-  transform: scale(1.15);
-  border-color: #fff;
+@media (hover: hover) {
+  .chapter-edit__sw:hover {
+    transform: scale(1.15);
+    border-color: #fff;
+  }
 }
 
 @keyframes pop-in {
@@ -3066,14 +3088,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: oklch(var(--bc, 87.6229% 0.021 340));
   border: 1.5px solid oklch(var(--b3, 19% 0.020 52));
 }
-.chapter-edit__fbtn--cancel:hover { background: oklch(var(--b2)); }
+@media (hover: hover) {
+  .chapter-edit__fbtn--cancel:hover { background: oklch(var(--b2)); }
+}
 .chapter-edit__fbtn--save {
   flex: 1.6;
   background: radial-gradient(120% 140% at 30% 20%, #F0C662, var(--accent) 55%, var(--accent-hover));
   color: #3a2a08;
   box-shadow: 0 8px 20px rgba(201, 146, 42, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
-.chapter-edit__fbtn--save:hover:not(:disabled) { filter: brightness(1.06); }
+@media (hover: hover) {
+  .chapter-edit__fbtn--save:hover:not(:disabled) { filter: brightness(1.06); }
+}
 .chapter-edit__fbtn--save:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -3141,7 +3167,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   box-shadow: 0 10px 24px rgba(201, 146, 42, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.55);
   transition: transform 120ms ease, filter 140ms ease;
 }
-.bgb-fab:hover { filter: brightness(1.06); }
+@media (hover: hover) {
+  .bgb-fab:hover { filter: brightness(1.06); }
+}
 .bgb-fab:active { transform: scale(0.97); }
 .bgb-fab [data-icon-name] { color: #3a2a08; }
 
@@ -3172,9 +3200,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   transition: transform 120ms ease, background 140ms ease, border-color 140ms ease;
   max-width: calc(100% - 200px); /* keep clear of the right FAB at narrow widths */
 }
-.bgb-fab-back:hover {
-  background: oklch(var(--b3));
-  border-color: var(--accent);
+@media (hover: hover) {
+  .bgb-fab-back:hover {
+    background: oklch(var(--b3));
+    border-color: var(--accent);
+  }
 }
 .bgb-fab-back:active { transform: scale(0.97); }
 .bgb-fab-back [data-icon-name] { color: var(--accent); }
@@ -3652,7 +3682,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 /* Flat rectangular tab bar — square corners, edge-to-edge, nothing
    protruding above the top edge. Four equal-width tabs; the active one is
-   marked by a gold top rule plus gold icon/label, so the bar's silhouette
+   marked by a gold icon/label on a lit tab ground, so the bar's silhouette
    stays a clean rectangle. */
 .bgb-nav {
   position: fixed;
@@ -3690,25 +3720,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border: none;
   transition: color 0.2s ease, background 0.2s ease;
 }
-.bgb-nav__tab:hover { color: var(--ink-muted); }
+@media (hover: hover) {
+  .bgb-nav__tab:hover { color: var(--ink-muted); }
+}
 .bgb-nav__tab.active {
   color: var(--accent);
   background: var(--accent-quiet);
-}
-/* Active marker: a 2px gold rule underlining the selected tab. Keeps the
-   indicator inside the rectangle instead of floating a pill on top of it.
-   Anchored to the tab's own bottom edge, which sits above the bar's
-   env(safe-area-inset-bottom) padding — so on a device with a home
-   indicator the rule underlines the label rather than stranding itself
-   at the bottom of the inset gap. */
-.bgb-nav__tab.active::before {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--accent, #CDA23F);
 }
 .bgb-nav__ico { display: inline-flex; align-items: center; justify-content: center; position: relative; }
 .bgb-nav__label { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
@@ -3836,30 +3853,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* The utilities sink to the bottom of the rail, under the tabs: the first
    utility (the one directly after the last route tab) takes the slack. */
 :root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab[data-nav] + .bgb-nav__tab--util { margin-top: auto; }
-/* The active marker turns from a rule under the tab into a rule down its
-   leading edge. */
-:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab.active::before {
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: auto;
-  width: 2px;
-  height: auto;
-}
 /* A toggle wears its screen's state the way a tab wears its route's:
    domain/view.js#go sets aria-pressed on every navigation. */
 .bgb-nav__tab--util[aria-pressed="true"] {
   color: var(--accent);
   background: var(--accent-quiet);
-}
-:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab--util[aria-pressed="true"]::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 2px;
-  background: var(--accent, #CDA23F);
 }
 
 /* ── The rail, drawn compact (land tier) ────────────────────────────────────
@@ -3890,10 +3888,15 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .tabs-boxed {
   border: 1px solid rgba(200, 155, 40, 0.15);
 }
-.tabs-boxed .tab-active,
-.tabs-boxed .tab-active:hover {
+.tabs-boxed .tab-active {
   background-color: var(--accent) !important;
   color: #0D0A06 !important;
+}
+@media (hover: hover) {
+  .tabs-boxed .tab-active:hover {
+    background-color: var(--accent) !important;
+    color: #0D0A06 !important;
+  }
 }
 
 /* ── Icon sizing ─────────────────────────────────────────────────────────────
@@ -4050,10 +4053,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 @media (prefers-reduced-motion: reduce) {
   .bgb-global-header__bell,
   .bgb-global-header__settings { transition: color 160ms var(--ease), border-color 160ms var(--ease); }
-  .bgb-global-header__bell:hover,
-  .bgb-global-header__settings:hover,
   .bgb-global-header__bell[aria-pressed="true"],
   .bgb-global-header__settings[aria-pressed="true"] { transform: none; }
+  @media (hover: hover) {
+    .bgb-global-header__bell:hover,
+    .bgb-global-header__settings:hover { transform: none; }
+  }
 }
 
 /* ── OAuth buttons (per .claude/rules/auth-ui.md) ─────────────────────────── */
@@ -4074,9 +4079,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin-bottom: 10px;
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
-.auth-oauth-btn:hover:not(:disabled) {
-  background: oklch(var(--b3));
-  border-color: var(--accent);
+@media (hover: hover) {
+  .auth-oauth-btn:hover:not(:disabled) {
+    background: oklch(var(--b3));
+    border-color: var(--accent);
+  }
 }
 .auth-oauth-btn:active:not(:disabled) { transform: translateY(1px); }
 .auth-oauth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -4602,7 +4609,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.play-card__caption-name:hover { text-decoration: underline; }
+@media (hover: hover) {
+  .play-card__caption-name:hover { text-decoration: underline; }
+}
 
 /* 28px of visible chrome inside a 44px hit box (the ::before), pulled back
    with negative margins so the button doesn't inflate the row's height. */
@@ -4622,11 +4631,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   transition: background 140ms var(--ease), color 140ms var(--ease);
 }
 .play-card__open::before { content: ""; position: absolute; inset: -8px; }
-.play-card__open:hover,
 .play-card__open:focus-visible {
   background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
   color: var(--polaroid-ink);
   outline: none;
+}
+@media (hover: hover) {
+  .play-card__open:hover {
+    background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
+    color: var(--polaroid-ink);
+    outline: none;
+  }
 }
 .play-card__open:focus-visible { box-shadow: 0 0 0 2px var(--accent-ink); }
 
@@ -4922,7 +4937,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--ink);
   cursor: pointer;
 }
-.play-session__name:hover { text-decoration: underline; }
+@media (hover: hover) {
+  .play-session__name:hover { text-decoration: underline; }
+}
 
 /* Multi-card rail — horizontal scroll of polaroid strip cards. Padded
    generously so the hover lift and card shadows don't clip against the
@@ -6166,7 +6183,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   padding: 0.45rem 1.1rem;
   font-weight: 600;
 }
-.settings-account__logout:hover { background: var(--bg-2); border-color: var(--ink-faint); }
+@media (hover: hover) {
+  .settings-account__logout:hover { background: var(--bg-2); border-color: var(--ink-faint); }
+}
 .settings-account__logout:active { transform: scale(0.98); }
 
 /* The rule is the separation: what is above it you can undo. */
@@ -6195,9 +6214,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   padding: 0.45rem 1.1rem;
   font-weight: 600;
 }
-.settings-account__delete:hover {
-  background: color-mix(in srgb, var(--rust) 12%, transparent);
-  border-color: var(--rust-strong);
+@media (hover: hover) {
+  .settings-account__delete:hover {
+    background: color-mix(in srgb, var(--rust) 12%, transparent);
+    border-color: var(--rust-strong);
+  }
 }
 .settings-account__delete:active { transform: scale(0.98); }
 .settings-account__delete[disabled] { opacity: 0.6; }
@@ -6376,7 +6397,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    a + that adds it. It still navigates — opening the game page is how you
    decide whether you want it — so the + is its own target, not the whole row. */
 .exp-tree__child--unowned .game-polaroid { opacity: 0.45; filter: grayscale(0.6); }
-.exp-tree__child--unowned:hover .game-polaroid { opacity: 0.7; filter: grayscale(0.3); }
+@media (hover: hover) {
+  .exp-tree__child--unowned:hover .game-polaroid { opacity: 0.7; filter: grayscale(0.3); }
+}
 .exp-tree__own {
   flex: none;
   width: 44px;
@@ -6390,7 +6413,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.exp-tree__own:hover { background: oklch(var(--b3) / 0.6); }
+@media (hover: hover) {
+  .exp-tree__own:hover { background: oklch(var(--b3) / 0.6); }
+}
 .exp-tree__own:active { transform: translateY(1px); }
 
 /* Owned-only vs the whole catalog, and open-vs-closed. The bottom margin is
@@ -6431,7 +6456,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.exp-tree__all:hover:not(:disabled) { background: oklch(var(--b3) / 0.6); color: oklch(var(--bc)); }
+@media (hover: hover) {
+  .exp-tree__all:hover:not(:disabled) { background: oklch(var(--b3) / 0.6); color: oklch(var(--bc)); }
+}
 .exp-tree__all:active:not(:disabled) { transform: translateY(1px); }
 .exp-tree__all:disabled { opacity: 0.45; cursor: default; }
 .exp-tree__all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -6451,7 +6478,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 600;
   cursor: pointer;
 }
-.exp-tree__add:hover { background: oklch(var(--b3) / 0.5); }
+@media (hover: hover) {
+  .exp-tree__add:hover { background: oklch(var(--b3) / 0.5); }
+}
 .exp-tree__truncated { font-size: 0.7rem; color: oklch(var(--bc) / 0.55); margin-top: 0.5rem; text-align: center; }
 
 .recent-plays { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
@@ -6460,7 +6489,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-detail { display: flex; flex-direction: column; gap: 0.75rem; padding-top: 0.5rem; }
 .play-detail__crumb { cursor: pointer; flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.play-detail__crumb:hover { color: var(--accent); }
+@media (hover: hover) {
+  .play-detail__crumb:hover { color: var(--accent); }
+}
 .play-detail__meta {
   display: flex; flex-direction: column; gap: 0.4rem;
   padding: 0.65rem 0.75rem;
@@ -6540,10 +6571,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   flex: none;
   width: 0.875rem;   /* matches the chevron's w-3.5 */
 }
-.play-detail__player.is-link:hover,
 .play-detail__player.is-link:focus-visible { border-color: var(--accent); }
+@media (hover: hover) {
+  .play-detail__player.is-link:hover { border-color: var(--accent); }
+}
 .play-detail__player-go { flex: none; opacity: 0.45; }
-.play-detail__player.is-link:hover .play-detail__player-go { opacity: 0.8; }
+@media (hover: hover) {
+  .play-detail__player.is-link:hover .play-detail__player-go { opacity: 0.8; }
+}
 .play-detail__player.is-link:active { transform: scale(0.99); filter: brightness(0.97); }
 
 .play-detail__expansions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
@@ -6732,9 +6767,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
 }
-.play-detail__edit-photo-pick:hover {
-  background: oklch(var(--accent) / 0.12);
-  border-color: oklch(var(--accent) / 0.7);
+@media (hover: hover) {
+  .play-detail__edit-photo-pick:hover {
+    background: oklch(var(--accent) / 0.12);
+    border-color: oklch(var(--accent) / 0.7);
+  }
 }
 .play-detail__edit-photo-pick-icon {
   display: inline-grid; place-items: center;
@@ -6775,9 +6812,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin-right: auto;
   color: oklch(0.7 0.18 27);
 }
-.play-detail__delete-btn:hover:not(:disabled) {
-  background: oklch(0.55 0.22 27 / 0.15);
-  color: oklch(0.78 0.2 27);
+@media (hover: hover) {
+  .play-detail__delete-btn:hover:not(:disabled) {
+    background: oklch(0.55 0.22 27 / 0.15);
+    color: oklch(0.78 0.2 27);
+  }
 }
 
 /* Non-owner "I didn't play — remove me" self-ghost action. Built on the
@@ -6788,10 +6827,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: oklch(0.7 0.18 27);
   border-color: oklch(0.7 0.18 27 / 0.4);
 }
-.play-detail__leave-btn:hover:not(:disabled) {
-  background: oklch(0.55 0.22 27 / 0.12);
-  border-color: oklch(0.7 0.18 27);
-  color: oklch(0.78 0.2 27);
+@media (hover: hover) {
+  .play-detail__leave-btn:hover:not(:disabled) {
+    background: oklch(0.55 0.22 27 / 0.12);
+    border-color: oklch(0.7 0.18 27);
+    color: oklch(0.78 0.2 27);
+  }
 }
 
 /* ── Search view ──────────────────────────────────────────────────────────── */
@@ -6862,7 +6903,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
   white-space: nowrap;
 }
-.filter-chip:hover { border-color: var(--accent); }
+@media (hover: hover) {
+  .filter-chip:hover { border-color: var(--accent); }
+}
 .filter-chip.is-active {
   background: var(--accent-fill);
   color: var(--on-accent);
@@ -7245,10 +7288,12 @@ html.bgb-ptr-armed body {
   border-color: oklch(var(--b3));
   padding: 0.18rem 0.4rem;
 }
-.status-tag--add:hover {
-  background: var(--accent);
-  color: #1a0d00;
-  border-color: var(--accent);
+@media (hover: hover) {
+  .status-tag--add:hover {
+    background: var(--accent);
+    color: #1a0d00;
+    border-color: var(--accent);
+  }
 }
 /* corner + add: the same chip with a "+" in it, for a game the viewer has no
    relationship with. Deliberately identical to --corner above rather than
@@ -7267,10 +7312,12 @@ html.bgb-ptr-armed body {
   color: oklch(0.96 0.006 85);
   border-color: oklch(1 0 0 / 0.22);
 }
-.status-tag--corner.status-tag--add:hover {
-  background: var(--accent);
-  color: #1a0d00;
-  border-color: var(--accent);
+@media (hover: hover) {
+  .status-tag--corner.status-tag--add:hover {
+    background: var(--accent);
+    color: #1a0d00;
+    border-color: var(--accent);
+  }
 }
 
 /* Bottom-right expansion count, pinned to the tile's ART box — the chip is
@@ -7385,7 +7432,9 @@ html.bgb-ptr-armed body {
   font-size: 0.94rem; font-weight: 600;
   cursor: pointer;
 }
-.status-sheet__cancel:hover { background: var(--polaroid-line); }
+@media (hover: hover) {
+  .status-sheet__cancel:hover { background: var(--polaroid-line); }
+}
 
 /* ── Sheet chrome (shared) ────────────────────────────────────────────────
    Panel, grip, title, sub, search slot, scroller and cancel — everything a
@@ -7498,7 +7547,9 @@ html.bgb-ptr-armed body {
   color: var(--polaroid-ink);
   cursor: pointer; text-align: left;
 }
-.bgb-sheet__opt:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .bgb-sheet__opt:hover { background: var(--polaroid-bg-soft); }
+}
 /* Inset: the list is a scroller and would clip an outset ring. */
 .bgb-sheet__opt:focus-visible {
   outline: 2px solid var(--accent-ink);
@@ -7630,7 +7681,9 @@ html.bgb-ptr-armed body {
   text-align: left;
   cursor: pointer;
 }
-.game-picker__row:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .game-picker__row:hover { background: var(--polaroid-bg-soft); }
+}
 .game-picker__row:focus-visible {
   outline: 2px solid var(--accent-ink);
   outline-offset: -3px;
@@ -7713,7 +7766,9 @@ html.bgb-ptr-armed body {
   color: var(--polaroid-ink);
   cursor: pointer;
 }
-.country-picker__row:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .country-picker__row:hover { background: var(--polaroid-bg-soft); }
+}
 .country-picker__row:focus-visible {
   outline: 2px solid var(--accent-ink);
   outline-offset: -3px;
@@ -7774,7 +7829,9 @@ html.bgb-ptr-armed body {
   font-size: 0.94rem; font-weight: 600;
   cursor: pointer;
 }
-.bgb-sheet__cancel:hover { background: var(--polaroid-line); }
+@media (hover: hover) {
+  .bgb-sheet__cancel:hover { background: var(--polaroid-line); }
+}
 
 /* ── Expansion picker sheet ───────────────────────────────────────────────── */
 /* Rows reuse .game-picker__row and the panel reuses .bgb-sheet__*; only these
@@ -7796,7 +7853,9 @@ html.bgb-ptr-armed body {
   font-weight: 600;
   cursor: pointer;
 }
-.exp-picker__import:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .exp-picker__import:hover { background: var(--polaroid-bg-soft); }
+}
 /* The untickable half of the tick column. .game-picker__check already reserves
    its 20px whether or not anything is in it, so swapping plus for check cannot
    reflow the name beside it (.claude/rules/overlays.md §6) — this only takes
@@ -7904,7 +7963,9 @@ html.bgb-ptr-armed body {
 .export-sheet__all::before { content: ""; position: absolute; inset: -4px -2px; }
 .export-sheet__all > i,
 .export-sheet__all > svg { flex: 0 0 auto; }
-.export-sheet__all:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .export-sheet__all:hover { background: var(--polaroid-bg-soft); }
+}
 .export-sheet__all:active { background: var(--polaroid-line); }
 .export-sheet__all:focus-visible {
   outline: 2px solid var(--accent-ink);
@@ -8708,9 +8769,11 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: var(--polaroid-muted);
   font-weight: 600;
 }
-.ghost-claim-sheet .ghost-claim-sheet__dismiss:hover {
-  background: var(--polaroid-bg-soft);
-  color: var(--polaroid-ink);
+@media (hover: hover) {
+  .ghost-claim-sheet .ghost-claim-sheet__dismiss:hover {
+    background: var(--polaroid-bg-soft);
+    color: var(--polaroid-ink);
+  }
 }
 
 /* ── Add-a-buddy QR sheet ─────────────────────────────────────────────────
@@ -8886,7 +8949,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   border-color: var(--accent-fill);
   color: var(--on-accent);
 }
-.buddy-qr-sheet__action--go:hover { background: var(--accent-hover); }
+@media (hover: hover) {
+  .buddy-qr-sheet__action--go:hover { background: var(--accent-hover); }
+}
 /* aria-disabled, not [disabled] — see the note in buddy-qr-scan.js's _render.
    The button stays interactive on purpose, so it swallows the tap that Chrome's
    touch adjustment would otherwise hand to the control below it. */
@@ -8953,7 +9018,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   text-align: left;
   cursor: pointer;
 }
-.player-picker__row:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .player-picker__row:hover { background: var(--polaroid-bg-soft); }
+}
 .player-picker__row:focus-visible {
   outline: 2px solid var(--accent-ink);
   outline-offset: -3px;
@@ -9028,7 +9095,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: var(--accent-ink);
 }
 .player-picker__row--global[disabled] { cursor: default; opacity: 0.55; }
-.player-picker__row--global[disabled]:hover { background: transparent; }
+@media (hover: hover) {
+  .player-picker__row--global[disabled]:hover { background: transparent; }
+}
 
 /* The wait between pressing it and the results landing. Sits where the rows
    will, so the list doesn't jump when they arrive. */
@@ -10449,7 +10518,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   cursor: pointer;
   padding: 0;
 }
-.scoring-round-remove:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+@media (hover: hover) {
+  .scoring-round-remove:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+}
 .scoring-total-cell {
   display: inline-flex; align-items: center; gap: 0.35rem;
   justify-content: center;
@@ -10472,7 +10543,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   padding: 0;
   transition: color 0.15s, background 0.15s;
 }
-.scoring-winner-btn:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+@media (hover: hover) {
+  .scoring-winner-btn:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+}
 .scoring-winner-btn.is-winner { color: var(--polaroid-accent); }
 
 /* The grid's own action row. DaisyUI's .btn-ghost paints oklch(var(--bc)),
@@ -10484,7 +10557,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    follows `color-scheme` — dark grey on the cream scorepad and the cream
    popup. Same class of bug as the .cascade-card .input rule below. */
 .scoring-add-round { background: transparent; color: var(--polaroid-ink); }
-.scoring-add-round:hover { background: var(--polaroid-line); color: var(--polaroid-ink); }
+@media (hover: hover) {
+  .scoring-add-round:hover { background: var(--polaroid-line); color: var(--polaroid-ink); }
+}
 
 /* ── Game type selector (competitive / team / co-op) ────────────────────── */
 .play-mode-selector {
@@ -10503,7 +10578,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.play-mode-opt:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .play-mode-opt:hover { background: var(--polaroid-bg-soft); }
+}
 /* A solid accent chip, so --accent-fill + --on-accent rather than --accent
    with a literal #fff: white on light's --accent (#A87215) is 4.1:1. */
 .play-mode-opt.is-active {
@@ -10532,7 +10609,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: var(--polaroid-ink);
   cursor: pointer;
 }
-.coop-outcome-btn:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
+@media (hover: hover) {
+  .coop-outcome-btn:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
+}
 .coop-outcome-btn.is-winner {
   background: color-mix(in srgb, var(--accent-ink) 18%, transparent);
   border-color: var(--accent-ink);
@@ -10730,11 +10809,13 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    BgbIcons.render() swaps the placeholder for its <svg>. */
 .bgb-destructive-icon-btn { color: var(--rust); }
 .bgb-destructive-icon-btn i { color: var(--rust); }
-.bgb-destructive-icon-btn:hover {
-  background: var(--rust-soft);
-  color: var(--rust-strong);
+@media (hover: hover) {
+  .bgb-destructive-icon-btn:hover {
+    background: var(--rust-soft);
+    color: var(--rust-strong);
+  }
+  .bgb-destructive-icon-btn:hover i { color: var(--rust-strong); }
 }
-.bgb-destructive-icon-btn:hover i { color: var(--rust-strong); }
 .player-type-chip {
   display: inline-block;
   margin-left: 0.4rem;
@@ -10886,7 +10967,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 /* A transparent border rather than none, so BGG stands the same height as
    its bordered neighbours. */
 .game-detail__link-btn { border: 1px solid transparent; color: #fff8ec; }
-.game-detail__link-btn:hover:not(:disabled) { filter: brightness(1.08); }
+@media (hover: hover) {
+  .game-detail__link-btn:hover:not(:disabled) { filter: brightness(1.08); }
+}
 .game-detail__link-btn--bgg {
   /* BGG brand orange — keeps the external-link visually distinct from
      the gold-accented project actions. */
@@ -10901,7 +10984,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: oklch(var(--bc) / 0.45);
   cursor: not-allowed;
 }
-.game-detail__link-btn--disabled:hover { filter: none; }
+@media (hover: hover) {
+  .game-detail__link-btn--disabled:hover { filter: none; }
+}
 .game-detail__link-btn--disabled::after {
   content: "";
   position: absolute;
@@ -11022,7 +11107,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   cursor: pointer;
   color: var(--game-accent, var(--accent));
 }
-.game-detail__base-link:hover { border-color: var(--game-accent, var(--accent)); }
+@media (hover: hover) {
+  .game-detail__base-link:hover { border-color: var(--game-accent, var(--accent)); }
+}
 
 .expansion-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 .expansion-list__row {
@@ -11034,7 +11121,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   cursor: pointer;
   position: relative;
 }
-.expansion-list__row:hover { border-color: var(--exp-color, var(--accent)); }
+@media (hover: hover) {
+  .expansion-list__row:hover { border-color: var(--exp-color, var(--accent)); }
+}
 .expansion-list__dot {
   position: absolute;
   left: -2px; top: 50%;
@@ -11141,7 +11230,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: var(--accent);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
-.game-detail__back:hover { background: oklch(var(--b1) / 0.8); }
+@media (hover: hover) {
+  .game-detail__back:hover { background: oklch(var(--b1) / 0.8); }
+}
 
 /* Cream meta pills replacing the old chip row. Same Mulish/Inter as the rest
    of the UI; subtle shadow so they sit above the dark backdrop. */
@@ -11251,12 +11342,14 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 /* Square, like every other card. The alternating nth-child tilts that used to
    sit here straightened on `:hover`, which on touch meant a tap both navigated
    AND snapped the card upright. A plain lift is the only transform now. */
-.expansion-polaroid:hover {
-  transform: translateY(-3px);
-  box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.05),
-    0 14px 28px -6px rgba(0, 0, 0, 0.55),
-    0 3px 6px rgba(0, 0, 0, 0.22);
+@media (hover: hover) {
+  .expansion-polaroid:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      0 1px 1px rgba(0, 0, 0, 0.05),
+      0 14px 28px -6px rgba(0, 0, 0, 0.55),
+      0 3px 6px rgba(0, 0, 0, 0.22);
+  }
 }
 .expansion-polaroid__photo {
   position: relative;
@@ -11459,9 +11552,11 @@ main[data-view="session-viewer"].hidden {
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease;
 }
-.cascade-back:hover,
-.cascade-screen__close:hover {
-  background: oklch(var(--b3));
+@media (hover: hover) {
+  .cascade-back:hover,
+  .cascade-screen__close:hover {
+    background: oklch(var(--b3));
+  }
 }
 .cascade-back-spacer { display: inline-block; width: 44px; height: 44px; }
 
@@ -11929,7 +12024,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   color: var(--ink-muted);
   cursor: pointer;
 }
-.play-side-bar__btn:hover { color: var(--ink); }
+@media (hover: hover) {
+  .play-side-bar__btn:hover { color: var(--ink); }
+}
 .play-side-bar__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .play-side-bar__unfold { display: none; }
 /* Folded: the column is a 48px strip holding one button that unfolds it. */
@@ -12055,7 +12152,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   color: var(--on-accent);
   box-shadow: 0 10px 22px -8px color-mix(in srgb, var(--accent-fill) 55%, transparent);
 }
-.cascade-cta:hover { background: var(--accent-hover); }
+@media (hover: hover) {
+  .cascade-cta:hover { background: var(--accent-hover); }
+}
 /* Disabled state — the same warm grey as .cascade-card--expansions.is-disabled,
    but mixed into the ground as a SOLID fill rather than faded with opacity.
    The CTA floats in a fixed bar over the scrolling screen, so a translucent
@@ -12069,8 +12168,10 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   box-shadow: none;
   cursor: not-allowed;
 }
-.cascade-cta:disabled:hover,
-.cascade-cta[disabled]:hover { background: var(--cta-off); }
+@media (hover: hover) {
+  .cascade-cta:disabled:hover,
+  .cascade-cta[disabled]:hover { background: var(--cta-off); }
+}
 
 /* The Play screen docks TWO buttons — "Next round" and "Wrap up"
    (play-flow-view#_renderPlayCta) — so its bar carries a row instead of a
@@ -12099,7 +12200,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   border: 1px solid var(--line-strong);
   box-shadow: none;
 }
-.cascade-cta--alt:hover { background: var(--bg-2); }
+@media (hover: hover) {
+  .cascade-cta--alt:hover { background: var(--bg-2); }
+}
 
 .cascade-error {
   /* Rides on top of the docked CTA bar, so it docks the same way and to
@@ -12297,8 +12400,10 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   background: color-mix(in srgb, var(--polaroid-accent) 11%, transparent);
   transition: background 130ms var(--ease);
 }
-.cascade-gamebar__code--copy:hover::before {
-  background: color-mix(in srgb, var(--polaroid-accent) 18%, transparent);
+@media (hover: hover) {
+  .cascade-gamebar__code--copy:hover::before {
+    background: color-mix(in srgb, var(--polaroid-accent) 18%, transparent);
+  }
 }
 .cascade-gamebar__code--copy:focus-visible {
   outline: 2px solid var(--polaroid-accent);
@@ -12648,9 +12753,11 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   text-align: left;
   cursor: pointer;
 }
-.cascade-add-player:hover {
-  border-color: var(--accent);
-  color: var(--polaroid-ink);
+@media (hover: hover) {
+  .cascade-add-player:hover {
+    border-color: var(--accent);
+    color: var(--polaroid-ink);
+  }
 }
 .cascade-add-player:focus-visible {
   outline: 2px solid var(--accent);
@@ -12796,7 +12903,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
      card, not a plate on a photo. */
   background: var(--well, var(--polaroid-bg-soft));
 }
-.cascade-photo__pick:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .cascade-photo__pick:hover { background: var(--polaroid-bg-soft); }
+}
 .cascade-notes {
   background: var(--well, var(--polaroid-bg-soft));
   color: var(--polaroid-ink);
@@ -12821,7 +12930,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   text-align: left;
   cursor: pointer;
 }
-.cascade-where:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .cascade-where:hover { background: var(--polaroid-bg-soft); }
+}
 .cascade-where:focus-visible {
   outline: 2px solid var(--accent-ink);
   outline-offset: -3px;
@@ -12857,66 +12968,93 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
-.cascade-join__list-wrap { margin-top: 18px; }
+/* The sessions card has the code card's anatomy: a label row (with the
+   refresh at its right edge) over the content. Session rows are rows of this
+   card, divided by hairlines, not cards of their own. */
+.cascade-join__sessions { margin-top: 14px; }
 .cascade-join__list-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: 0 4px 8px;
+  margin-bottom: 8px;
 }
-.cascade-join__list-title {
-  font-family: var(--font-polaroid);
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: 0.04em;
-  margin: 0;
-  color: oklch(var(--bc));
-}
+.cascade-join__list-title { margin: 0; }
+/* 44px target over a 16px glyph. The negative margins keep the row as tall as
+   the label and put the glyph's right edge on the card's padding line. */
 .cascade-join__refresh {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
   width: 44px;
   height: 44px;
-  margin: -10px -10px -10px 0;
+  margin: -14px -14px -14px 0;
   background: transparent;
   border: none;
   border-radius: 999px;
-  color: oklch(var(--bc) / 0.7);
+  color: var(--polaroid-muted);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, transform 0.1s;
+  transition: background 0.15s, color 0.15s;
 }
-.cascade-join__refresh:hover:not(:disabled) {
-  background: oklch(var(--bc) / 0.08);
-  color: oklch(var(--bc));
+@media (hover: hover) {
+  .cascade-join__refresh:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
+    color: var(--polaroid-ink);
+  }
 }
-.cascade-join__refresh:active:not(:disabled) { transform: translateY(1px); }
+.cascade-join__refresh:active:not(:disabled) {
+  background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
+}
 .cascade-join__refresh:disabled { opacity: 0.6; cursor: not-allowed; }
 .cascade-join__refresh-spin { animation: cascade-join-spin 0.9s linear infinite; }
 @keyframes cascade-join-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-.cascade-join__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+@media (prefers-reduced-motion: reduce) {
+  .cascade-join__refresh-spin { animation: none; }
+}
+/* One box holds the list's whole lifecycle: the buddy loader while a load is
+   in flight, then the empty message or the session rows in its place. The
+   min-height keeps the card from resizing when the loader swaps out. */
+.cascade-join__box {
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.cascade-join__box > .buddy-loader { align-self: center; }
+.cascade-join__box:has(> .cascade-join__list) { min-height: 0; justify-content: flex-start; }
+.cascade-join__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--polaroid-muted);
+  text-align: center;
+  font-size: 13px;
+}
+.cascade-join__empty p { margin: 0; }
+.cascade-join__list { list-style: none; padding: 0; margin: 0; }
+/* Full card width, so the hairline and the press tint run edge to edge. */
 .cascade-join__row {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 12px;
+  margin: 0 -14px;
+  padding: 10px 14px;
   cursor: pointer;
   user-select: none;
+  transition: background 0.15s;
 }
-.cascade-join__row:hover { transform: translateY(-1px); }
-.cascade-join__row-action {
-  align-self: center;
-  min-height: 40px;
-  height: auto;
-  padding: 0 14px;
-  font-size: 14px;
-  white-space: nowrap;
+.cascade-join__row + .cascade-join__row { border-top: 1px solid var(--polaroid-line); }
+.cascade-join__row:last-child { margin-bottom: -6px; }
+@media (hover: hover) {
+  .cascade-join__row:hover { background: color-mix(in srgb, var(--polaroid-ink) 5%, transparent); }
 }
+.cascade-join__row:active { background: color-mix(in srgb, var(--polaroid-ink) 9%, transparent); }
 .cascade-join__row-thumb {
   width: 44px;
   height: 44px;
@@ -12940,19 +13078,6 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cascade-join__row-side {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-.cascade-join__row-code {
-  font-family: var(--font-score);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  color: var(--polaroid-accent);
-}
 .cascade-join__row-bottom {
   display: flex;
   align-items: center;
@@ -12974,33 +13099,28 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   align-items: center;
   gap: 3px;
 }
-/* One box holds the list's whole lifecycle: the buddy loader while a load is
-   in flight, then the empty message or the session rows in its place. The
-   min-height keeps the box from resizing when the loader swaps out. */
-.cascade-join__box {
-  background: var(--polaroid-bg);
-  border: 1px dashed var(--polaroid-line);
-  border-radius: 14px;
-  padding: 12px;
-  min-height: 104px;
+/* Code over button, one fixed column, so Join and Spectate rows line up. */
+.cascade-join__row-side {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-}
-.cascade-join__box > .buddy-loader { align-self: center; }
-/* Session rows are cards of their own, so the dashed frame steps aside once
-   they fill the box rather than nesting a card inside a card. */
-.cascade-join__box:has(> .cascade-join__list) {
-  background: none;
-  border: 0;
-  padding: 0;
-  min-height: 0;
-}
-.cascade-join__empty {
-  color: var(--polaroid-muted);
-  padding: 8px 4px;
+  align-items: stretch;
+  gap: 4px;
+  width: 96px;
   text-align: center;
-  font-size: 13px;
+}
+.cascade-join__row-code {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--polaroid-accent);
+}
+.cascade-join__row-action {
+  min-height: 40px;
+  height: auto;
+  padding: 0 10px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 /* ── Polaroid popup ──────────────────────────────────────────────────────── */
@@ -13295,9 +13415,11 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   border-color: var(--polaroid-accent);
   color: #fff;
 }
-.polaroid-popup__actions .btn-primary:hover {
-  background: #b3492f;
-  border-color: #b3492f;
+@media (hover: hover) {
+  .polaroid-popup__actions .btn-primary:hover {
+    background: #b3492f;
+    border-color: #b3492f;
+  }
 }
 .polaroid-popup__actions .btn-ghost { color: var(--polaroid-ink); }
 /* The destructive confirm (PolaroidPopup.confirm({destructive:true})).
@@ -13313,9 +13435,11 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   color: var(--on-rust);
   font-weight: 700;
 }
-.polaroid-popup__actions .polaroid-popup__confirm--danger:hover {
-  background: color-mix(in srgb, var(--rust-ink) 88%, #000);
-  border-color: color-mix(in srgb, var(--rust-ink) 88%, #000);
+@media (hover: hover) {
+  .polaroid-popup__actions .polaroid-popup__confirm--danger:hover {
+    background: color-mix(in srgb, var(--rust-ink) 88%, #000);
+    border-color: color-mix(in srgb, var(--rust-ink) 88%, #000);
+  }
 }
 
 /* ── Game finder widget (Gather screen + Add Game modal) ────────────────── */
@@ -13396,7 +13520,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
      separation without costing a visible result (the dropdown grew too). */
   min-height: 56px;
 }
-.game-finder-dropdown-item:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .game-finder-dropdown-item:hover { background: var(--polaroid-bg-soft); }
+}
 /* Touch has no hover — :active is the press feedback on a phone. */
 .game-finder-dropdown-item:active { background: var(--polaroid-bg-soft); }
 .game-finder-dropdown-item__thumb {
@@ -13529,7 +13655,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.game-finder-bgg-btn:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .game-finder-bgg-btn:hover { background: var(--polaroid-bg-soft); }
+}
 .game-finder-bgg-btn:active { transform: translateY(1px); }
 
 /* ── Import-expansions modal ────────────────────────────────────────────────
@@ -13587,7 +13715,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
 }
 .field-clear-btn[hidden] { display: none; }
-.field-clear-btn:hover { color: var(--polaroid-ink); }
+@media (hover: hover) {
+  .field-clear-btn:hover { color: var(--polaroid-ink); }
+}
 .field-clear-btn:active { transform: translateY(-50%) scale(0.9); }
 .field-clear-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 0.5rem; }
 
@@ -13786,7 +13916,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.import-exp-row__add:hover:not(:disabled) { background: var(--polaroid-bg); }
+@media (hover: hover) {
+  .import-exp-row__add:hover:not(:disabled) { background: var(--polaroid-bg); }
+}
 .import-exp-row__add:active:not(:disabled) { transform: translateY(1px); }
 .import-exp-row__add:disabled { cursor: default; opacity: 0.7; }
 /* Skeleton rows while /expansions/available is in flight. */
@@ -13906,7 +14038,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   text-align: left;
   cursor: pointer;
 }
-.cascade-game-quick:hover { border-color: var(--accent); }
+@media (hover: hover) {
+  .cascade-game-quick:hover { border-color: var(--accent); }
+}
 .cascade-game-quick:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -13949,9 +14083,11 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   text-align: left;
   cursor: pointer;
 }
-.cascade-game-search:hover {
-  border-color: var(--accent);
-  color: var(--polaroid-ink);
+@media (hover: hover) {
+  .cascade-game-search:hover {
+    border-color: var(--accent);
+    color: var(--polaroid-ink);
+  }
 }
 .cascade-game-search:focus-visible {
   outline: 2px solid var(--accent);
@@ -14005,8 +14141,10 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   border: 0;
   cursor: pointer;
 }
-.cascade-game-chip__clear:hover,
-.cascade-game-chip__details:hover { background: rgba(0, 0, 0, 0.06); color: var(--polaroid-ink); }
+@media (hover: hover) {
+  .cascade-game-chip__clear:hover,
+  .cascade-game-chip__details:hover { background: rgba(0, 0, 0, 0.06); color: var(--polaroid-ink); }
+}
 .cascade-game-chip__details { color: var(--polaroid-ink); }
 
 /* ── Play tab split — divider + section titles ───────────────────────────── */
@@ -14104,7 +14242,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   white-space: nowrap;
   transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
-.lp-chip:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .lp-chip:hover { background: var(--polaroid-bg-soft); }
+}
 .lp-chip.is-active {
   background: var(--polaroid-accent);
   color: #fff;
@@ -14158,11 +14298,13 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   flex-direction: column;
 }
 .lp-find-grid .game-polaroid { transform: none; }
-.game-polaroid:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 1px 1px rgba(0,0,0,0.04),
-              0 10px 22px -8px rgba(0,0,0,0.55),
-              0 3px 6px rgba(0,0,0,0.2);
+@media (hover: hover) {
+  .game-polaroid:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 1px 1px rgba(0,0,0,0.04),
+                0 10px 22px -8px rgba(0,0,0,0.55),
+                0 3px 6px rgba(0,0,0,0.2);
+  }
 }
 .game-polaroid__photo {
   width: 100%;
@@ -14265,7 +14407,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   line-clamp: 1;
   font-size: 0.85rem;
 }
-.game-polaroid.game-polaroid--row:hover { transform: none; box-shadow: none; }
+@media (hover: hover) {
+  .game-polaroid.game-polaroid--row:hover { transform: none; box-shadow: none; }
+}
 
 /* ── Add Games: the catalog scroll ────────────────────────────────────────
    views/add-games-view.js — the whole BgB library as one list, one tap per
@@ -14347,7 +14491,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
-.catalog-import:hover { background: var(--accent-quiet); border-color: var(--accent); }
+@media (hover: hover) {
+  .catalog-import:hover { background: var(--accent-quiet); border-color: var(--accent); }
+}
 .catalog-import:active { transform: translateY(1px); }
 .catalog-import:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -14413,7 +14559,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.catalog-row__action:hover { background: var(--accent-quiet); border-color: var(--accent); }
+@media (hover: hover) {
+  .catalog-row__action:hover { background: var(--accent-quiet); border-color: var(--accent); }
+}
 .catalog-row__action:active { transform: translateY(1px); }
 .catalog-row__action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .catalog-row__action.is-on {
@@ -14421,7 +14569,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   border-color: var(--accent-fill);
   color: var(--on-accent);
 }
-.catalog-row__action.is-on:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+@media (hover: hover) {
+  .catalog-row__action.is-on:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+}
 /* No in-flight state. The button used to dim to 0.55 and go pointer-events:none
    for the whole round trip, which on the one screen built for a long run of taps
    meant every tap was followed by a few hundred milliseconds of a control that
@@ -14503,10 +14653,12 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
 }
-.play-detail-popup__edit:hover {
-  background: var(--line);
-  border-color: var(--accent);
-  color: var(--accent);
+@media (hover: hover) {
+  .play-detail-popup__edit:hover {
+    background: var(--line);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
 }
 .play-detail-popup__close {
   width: 44px;
@@ -14521,7 +14673,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 120ms ease;
 }
-.play-detail-popup__close:hover { background: var(--line); }
+@media (hover: hover) {
+  .play-detail-popup__close:hover { background: var(--line); }
+}
 .play-detail-popup__scroll {
   flex: 1;
   min-height: 0;
@@ -14731,9 +14885,11 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease;
 }
-.play-detail-popup__add-photo:hover {
-  background: rgba(201, 146, 42, 0.16);
-  border-color: var(--accent);
+@media (hover: hover) {
+  .play-detail-popup__add-photo:hover {
+    background: rgba(201, 146, 42, 0.16);
+    border-color: var(--accent);
+  }
 }
 .play-detail-popup__add-photo [data-icon-name] { color: var(--accent); }
 .play-detail-popup__add-photo-title {
@@ -14772,9 +14928,13 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 /* The popup's rows take the polaroid accent on hover, the same ink as the
    game name in the title, rather than the app's --accent. */
-.play-detail-popup__card .play-detail__player.is-link:hover,
 .play-detail-popup__card .play-detail__player.is-link:focus-visible {
   border-color: var(--polaroid-accent);
+}
+@media (hover: hover) {
+  .play-detail-popup__card .play-detail__player.is-link:hover {
+    border-color: var(--polaroid-accent);
+  }
 }
 .play-detail-popup__card .play-detail__game-when,
 .play-detail-popup__card .play-detail__edit-photo-pick-hint {
@@ -14893,10 +15053,12 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
-.play-detail-popup__card .play-detail__game-goto:hover {
-  background: var(--line);
-  border-color: var(--polaroid-accent);
-  color: var(--polaroid-accent);
+@media (hover: hover) {
+  .play-detail-popup__card .play-detail__game-goto:hover {
+    background: var(--line);
+    border-color: var(--polaroid-accent);
+    color: var(--polaroid-accent);
+  }
 }
 
 /* Edit mode's swap for that arrow: same chip, same 44×44 thumb target, but it
@@ -15071,12 +15233,16 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   justify-content: center;
   gap: 0.25rem;
 }
-.profile-stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--sh-3);
+@media (hover: hover) {
+  .profile-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--sh-3);
+  }
 }
 .profile-stat-card--static { cursor: default; }
-.profile-stat-card--static:hover { transform: none; box-shadow: var(--sh-2); }
+@media (hover: hover) {
+  .profile-stat-card--static:hover { transform: none; box-shadow: var(--sh-2); }
+}
 .profile-stat-card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -15191,7 +15357,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   min-height: 32px;
   transition: background 0.15s;
 }
-.preview-card__seeall:hover { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+@media (hover: hover) {
+  .preview-card__seeall:hover { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+}
 .preview-card__seeall:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -15222,7 +15390,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   box-shadow: var(--sh-2);
   transition: transform 0.15s;
 }
-.preview-card__cover:hover { transform: translateY(-2px); }
+@media (hover: hover) {
+  .preview-card__cover:hover { transform: translateY(-2px); }
+}
 .preview-card__cover img {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
@@ -15465,10 +15635,14 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   flex: none;
   transition: background 0.15s, transform 0.15s;
 }
-.spoke-head__back:hover { background: oklch(var(--bc) / 0.14); transform: translateX(-2px); }
+@media (hover: hover) {
+  .spoke-head__back:hover { background: oklch(var(--bc) / 0.14); transform: translateX(-2px); }
+}
 /* The close variant sits at the trailing edge and dismisses rather than
    stepping back, so it stays put on hover instead of sliding leftward. */
-.spoke-head__close:hover { background: oklch(var(--bc) / 0.14); }
+@media (hover: hover) {
+  .spoke-head__close:hover { background: oklch(var(--bc) / 0.14); }
+}
 .spoke-head__back:focus-visible,
 .spoke-head__close:focus-visible {
   outline: 2px solid var(--accent);
@@ -15738,7 +15912,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   min-height: 44px;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.spoke-toggle__pill:hover { color: oklch(var(--bc)); border-color: var(--accent); }
+@media (hover: hover) {
+  .spoke-toggle__pill:hover { color: oklch(var(--bc)); border-color: var(--accent); }
+}
 .spoke-toggle__pill.is-active {
   background: var(--accent-fill-grad);
   color: var(--on-accent);
@@ -15785,9 +15961,11 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   min-height: 64px;
 }
-.plays-list__row:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--sh-3);
+@media (hover: hover) {
+  .plays-list__row:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--sh-3);
+  }
 }
 .plays-list__thumb {
   width: 50px; height: 50px;
@@ -15952,9 +16130,11 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   flex: none;
   transition: background 0.15s, border-color 0.15s;
 }
-.set-card__acct-btn:hover {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+@media (hover: hover) {
+  .set-card__acct-btn:hover {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  }
 }
 .set-card__acct-btn:active { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 .set-card__acct-btn:focus-visible {
@@ -15976,7 +16156,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   transition: background 0.15s;
   min-height: 56px;
 }
-.set-card__row:hover { background: color-mix(in srgb, var(--polaroid-ink) 5%, transparent); }
+@media (hover: hover) {
+  .set-card__row:hover { background: color-mix(in srgb, var(--polaroid-ink) 5%, transparent); }
+}
 .set-card__row + .set-card__row {
   border-top: 1px solid color-mix(in srgb, var(--polaroid-ink) 10%, transparent);
 }
@@ -16034,10 +16216,12 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   white-space: nowrap;
   transition: background 0.15s, border-color 0.15s;
 }
-.set-card__row--action:hover .set-card__row-run {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  color: var(--accent-ink);
+@media (hover: hover) {
+  .set-card__row--action:hover .set-card__row-run {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    color: var(--accent-ink);
+  }
 }
 
 /* The four things a run can be, on the Settings row and on the backfill
@@ -16049,29 +16233,53 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
    Every value is a var() onto the status ramp, so light and dark work by
    construction (.claude/rules/theming.md §7). --accent-ink and not --accent:
    these sit on a card, not on the app ground. */
-.set-card__row-run.set-card__row-run--running,
-.set-card__row--action:hover .set-card__row-run.set-card__row-run--running {
+.set-card__row-run.set-card__row-run--running {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--accent-ink);
 }
-.set-card__row-run.set-card__row-run--done,
-.set-card__row--action:hover .set-card__row-run.set-card__row-run--done {
+@media (hover: hover) {
+  .set-card__row--action:hover .set-card__row-run.set-card__row-run--running {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    color: var(--accent-ink);
+  }
+}
+.set-card__row-run.set-card__row-run--done {
   background: color-mix(in srgb, var(--ok) 14%, transparent);
   border-color: color-mix(in srgb, var(--ok) 40%, transparent);
   color: var(--ok);
 }
-.set-card__row-run.set-card__row-run--interrupted,
-.set-card__row--action:hover .set-card__row-run.set-card__row-run--interrupted {
+@media (hover: hover) {
+  .set-card__row--action:hover .set-card__row-run.set-card__row-run--done {
+    background: color-mix(in srgb, var(--ok) 14%, transparent);
+    border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+    color: var(--ok);
+  }
+}
+.set-card__row-run.set-card__row-run--interrupted {
   background: color-mix(in srgb, var(--warn) 16%, transparent);
   border-color: color-mix(in srgb, var(--warn) 42%, transparent);
   color: var(--warn);
 }
-.set-card__row-run.set-card__row-run--failed,
-.set-card__row--action:hover .set-card__row-run.set-card__row-run--failed {
+@media (hover: hover) {
+  .set-card__row--action:hover .set-card__row-run.set-card__row-run--interrupted {
+    background: color-mix(in srgb, var(--warn) 16%, transparent);
+    border-color: color-mix(in srgb, var(--warn) 42%, transparent);
+    color: var(--warn);
+  }
+}
+.set-card__row-run.set-card__row-run--failed {
   background: color-mix(in srgb, var(--rust) 14%, transparent);
   border-color: color-mix(in srgb, var(--rust) 40%, transparent);
   color: var(--rust);
+}
+@media (hover: hover) {
+  .set-card__row--action:hover .set-card__row-run.set-card__row-run--failed {
+    background: color-mix(in srgb, var(--rust) 14%, transparent);
+    border-color: color-mix(in srgb, var(--rust) 40%, transparent);
+    color: var(--rust);
+  }
 }
 .set-card__row--action:disabled {
   cursor: default;
@@ -16224,9 +16432,11 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   background: color-mix(in srgb, var(--polaroid-ink) 6%, transparent);
   color: var(--accent-ink);
 }
-.bgb-spoke-screen .spoke-head__back:hover,
-.bgb-spoke-screen .spoke-head__close:hover {
-  background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
+@media (hover: hover) {
+  .bgb-spoke-screen .spoke-head__back:hover,
+  .bgb-spoke-screen .spoke-head__close:hover {
+    background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
+  }
 }
 .bgb-spoke-screen .spoke-head__title { color: var(--accent-ink); }
 /* A title-only head (Notifications has no back button) still holds the 44px
@@ -16332,11 +16542,13 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 .bgb-spoke-screen .btn.btn-ghost.bgb-destructive-icon-btn {
   color: var(--rust);
 }
-.bgb-spoke-screen .btn.btn-ghost.bgb-destructive-icon-btn:hover {
-  color: var(--rust-strong);
-}
-.bgb-spoke-screen .btn.btn-ghost:hover {
-  background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
+@media (hover: hover) {
+  .bgb-spoke-screen .btn.btn-ghost.bgb-destructive-icon-btn:hover {
+    color: var(--rust-strong);
+  }
+  .bgb-spoke-screen .btn.btn-ghost:hover {
+    background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
+  }
 }
 
 /* Owned ↔ Played toggle pills. Scoped to :not(.is-active) so the selected
@@ -16349,9 +16561,11 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   color: var(--polaroid-muted, #8B7E68);
   border-color: var(--sheet-line);
 }
-.bgb-spoke-screen .spoke-toggle__pill:not(.is-active):hover {
-  border-color: var(--accent);
-  color: var(--polaroid-ink, #1D1812);
+@media (hover: hover) {
+  .bgb-spoke-screen .spoke-toggle__pill:not(.is-active):hover {
+    border-color: var(--accent);
+    color: var(--polaroid-ink, #1D1812);
+  }
 }
 
 /* Filter chips (player count / playtime / play mode) */
@@ -16360,7 +16574,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   border-color: var(--sheet-line);
   color: var(--polaroid-ink, #1D1812);
 }
-.bgb-spoke-screen .filter-chip:hover { border-color: var(--accent); }
+@media (hover: hover) {
+  .bgb-spoke-screen .filter-chip:hover { border-color: var(--accent); }
+}
 .bgb-spoke-screen .filter-chip.is-active {
   background: var(--accent-fill);
   color: var(--on-accent);
@@ -16786,7 +17002,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   display: grid; place-items: center;
   transition: background 0.15s, transform 0.1s;
 }
-.avatar-cust__arrow:hover { background: rgba(201, 146, 42, 0.18); }
+@media (hover: hover) {
+  .avatar-cust__arrow:hover { background: rgba(201, 146, 42, 0.18); }
+}
 .avatar-cust__arrow:active { transform: scale(0.92); }
 .avatar-cust__reel {
   position: relative;
@@ -16941,7 +17159,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   border: 2px solid rgba(42, 32, 20, 0.12);
   padding: 0;
 }
-.avatar-cust__sw:hover:not(:disabled) { transform: scale(1.1); }
+@media (hover: hover) {
+  .avatar-cust__sw:hover:not(:disabled) { transform: scale(1.1); }
+}
 .avatar-cust__sw--on {
   box-shadow: 0 0 0 3px var(--polaroid-bg, #FFFBF1),
               0 0 0 5.5px var(--accent, #C9922A);
@@ -17276,7 +17496,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: background 160ms var(--ease), color 160ms var(--ease);
 }
-.theme-seg__opt:hover:not(:disabled) { color: var(--polaroid-ink); }
+@media (hover: hover) {
+  .theme-seg__opt:hover:not(:disabled) { color: var(--polaroid-ink); }
+}
 .theme-seg__opt.is-on {
   background: var(--accent-fill);
   color: var(--on-accent);
@@ -17342,9 +17564,13 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   cursor: pointer;
   transition: transform 160ms var(--ease), border-color 160ms var(--ease);
 }
-.lp-opt:hover { transform: translateY(-1px); border-color: var(--line-strong); }
+@media (hover: hover) {
+  .lp-opt:hover { transform: translateY(-1px); border-color: var(--line-strong); }
+}
 .lp-opt:active { transform: scale(0.995); }
-.lp-opt:hover .lp-opt__title { color: var(--accent); }
+@media (hover: hover) {
+  .lp-opt:hover .lp-opt__title { color: var(--accent); }
+}
 
 /* Box art or a chrome icon, always the same slot — so the text columns of
    every row line up. (The old quiet rows only had an art slot on "Another
@@ -17419,8 +17645,10 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   border-color: color-mix(in srgb, var(--win) 38%, transparent);
   cursor: default;
 }
-.lp-opt--live:hover { transform: none; border-color: color-mix(in srgb, var(--win) 38%, transparent); }
-.lp-opt--live:hover .lp-opt__title { color: inherit; }
+@media (hover: hover) {
+  .lp-opt--live:hover { transform: none; border-color: color-mix(in srgb, var(--win) 38%, transparent); }
+  .lp-opt--live:hover .lp-opt__title { color: inherit; }
+}
 
 /* Inline actions. Deliberately not DaisyUI `btn-sm`, which is 32px tall and
    under the 44px tap target .claude/rules/web-frontend.md requires — these
@@ -17452,7 +17680,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   color: var(--nav-bg);
   border: none;
 }
-.lp-opt__resume:hover { background: var(--accent-hover); }
+@media (hover: hover) {
+  .lp-opt__resume:hover { background: var(--accent-hover); }
+}
 .lp-opt__discard {
   padding: 0 6px;
   font-size: 13px;
@@ -17461,7 +17691,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   border: none;
   color: var(--ink-muted);
 }
-.lp-opt__discard:hover { color: var(--rust); }
+@media (hover: hover) {
+  .lp-opt__discard:hover { color: var(--rust); }
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    Outbox dialog (widgets/outbox-modal.js)
@@ -18118,7 +18350,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
   box-shadow: var(--sh-3);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.statsblock:hover { transform: translateY(-2px); box-shadow: var(--sh-3), 0 6px 18px -10px var(--shadow-c); }
+@media (hover: hover) {
+  .statsblock:hover { transform: translateY(-2px); box-shadow: var(--sh-3), 0 6px 18px -10px var(--shadow-c); }
+}
 .statsblock:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .statsblock__row {
   display: grid;
@@ -18955,7 +19189,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 }
 /* No hover lift here, unlike the grid this replaced: the rail is a scrollport,
    so a tile that translates up is clipped at its top edge instead of rising. */
-.ach-tile:hover { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .ach-tile:hover { background: var(--polaroid-bg-soft); }
+}
 .ach-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ach-tile__art { position: relative; display: block; width: 100%; }
 .ach-tile__art img {
@@ -18967,7 +19203,9 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 /* Locked: the same art, held back. Desaturating the medallion is what makes
    "not yours yet" read at a glance without hiding what the badge IS. */
 .ach-tile.is-locked .ach-tile__art img { filter: grayscale(0.85) brightness(0.62); opacity: 0.75; }
-.ach-tile.is-locked:hover .ach-tile__art img { filter: grayscale(0.55) brightness(0.78); opacity: 0.9; }
+@media (hover: hover) {
+  .ach-tile.is-locked:hover .ach-tile__art img { filter: grayscale(0.55) brightness(0.78); opacity: 0.9; }
+}
 .ach-tile__lock {
   position: absolute;
   right: 4%; bottom: 4%;
@@ -19080,7 +19318,50 @@ main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager)
 /* The Close button is the shared .bgb-sheet__cancel (52px, per
    .claude/rules/mobile-web.md §5) — the sheet family already owns that
    affordance, so this only gives it a little air under the badge. */
-.ach-detail + .bgb-sheet__cancel { margin: 0.9rem 0.2rem 0.2rem; }
+.ach-track + .bgb-sheet__cancel { margin: 0.9rem 0.2rem 0.2rem; }
+
+/* Paging through a row (widgets/achievement-sheet.js): one page per badge,
+   side by side in a snapping track. A grid row stretches every page to the
+   tallest, so a turn never resizes the sheet. */
+.ach-track--paged {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+}
+.ach-track--paged::-webkit-scrollbar { display: none; }
+.ach-track--paged > .ach-detail { scroll-snap-align: start; scroll-snap-stop: always; min-width: 0; }
+.ach-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0.2rem 0.1rem;
+}
+.ach-pager__btn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--polaroid-ink);
+  cursor: pointer;
+}
+.ach-pager__btn:disabled { color: var(--polaroid-muted); opacity: 0.4; cursor: default; }
+.ach-pager__count {
+  font-family: var(--font-score);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--polaroid-muted);
+  font-variant-numeric: tabular-nums;
+}
 
 /* ── "Achievement unlocked!" polaroid ─────────────────────────────────────────
    ui/polaroid-popup.js#achievement, queued by ui/achievement-popup.js. Rides

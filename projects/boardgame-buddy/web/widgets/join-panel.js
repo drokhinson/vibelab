@@ -171,10 +171,10 @@
           ${this._error ? `<div class="cascade-card__error">${escapeHtml(this._error)}</div>` : ""}
         </section>
 
-        <section class="cascade-join__list-wrap">
+        <section class="cascade-card cascade-join__sessions">
           <div class="cascade-join__list-head">
-            <h3 class="cascade-join__list-title">Active sessions</h3>
-            <button class="cascade-join__refresh"
+            <h3 class="cascade-card__label cascade-join__list-title">Active sessions</h3>
+            <button type="button" class="cascade-join__refresh"
                     aria-label="Refresh active sessions"
                     title="Refresh"
                     ${this._loading ? "disabled" : ""}
@@ -218,7 +218,7 @@
       // read-only session-viewer and isn't added to the host's player list.
       const spectate = s.phase && s.phase !== "gather";
       return `
-        <li class="cascade-card cascade-join__row"
+        <li class="cascade-join__row"
             onclick="window.joinPanel._joinSession('${escapeAttr(s.code)}')">
           ${thumb}
           <div class="cascade-join__row-body">
