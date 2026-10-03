@@ -577,7 +577,6 @@
           if (window.PolaroidPopup) {
             window.PolaroidPopup.update({
               playId: session.finalized_play_id,
-              seatNote: this._seatCounts(session) ? "Added to your stats" : null,
             });
           }
         } else if (session.finalized_play_id) {
