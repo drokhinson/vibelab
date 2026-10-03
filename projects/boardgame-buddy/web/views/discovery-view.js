@@ -7,7 +7,7 @@
 //   Trending on BoardGameGeek   BGG's hot list; a game the catalog lacks is a
 //                               stub tile whose tap imports it
 //   New in {year}               this year's catalog releases by BGG rank
-//   Back on the shelf           owned games that have not hit the table lately
+//   Time to revisit             a daily random 8 of owned games unlogged for a year
 //
 // Shape: the shell (header + four section hosts) paints synchronously in
 // renderLoading, from the cached bundle when there is one; each host is then
@@ -208,7 +208,7 @@
           climbing: "",
           trending: this._skeleton("flame", "Trending on BoardGameGeek"),
           fresh: this._skeleton("star", "New this year"),
-          shelf: this._skeleton("hourglass", "Back on the shelf"),
+          shelf: this._skeleton("hourglass", "Time to revisit"),
         });
         return;
       }
@@ -370,12 +370,12 @@
     _renderShelf(b) {
       const entries = (b.back_on_shelf || []).map((d) => ({
         game: d.game,
-        meta: d.last_played_at ? `Last played ${formatRelativeDay(d.last_played_at)}` : "Never played",
+        meta: d.last_played_at ? `Last played ${formatRelativeDay(d.last_played_at)}` : "Never logged",
       }));
       return window.renderGameRail(entries, this._railOpts({
         icon: "hourglass",
-        title: "Back on the shelf",
-        subtitle: entries.length ? `Owned, and not played in ${b.dormant_days || 60} days.` : "",
+        title: "Time to revisit",
+        subtitle: entries.length ? "Owned, and not logged here in a year. A fresh pick every day." : "",
         emptyHtml: this._empty("Nothing's gathering dust \u2014 everything you own has hit the table lately."),
       }));
     }

@@ -49,7 +49,7 @@ NEW_LIMIT = 12
 # "New this year" widens to last year when the current one is thin — January
 # would otherwise be an empty rail.
 NEW_MIN_ROWS = 6
-DORMANT_DAYS = 60
+DORMANT_DAYS = 365
 DORMANT_LIMIT = 8
 # The refresh imports hot games the catalog lacks, and each import is one
 # /thing?stats=1 plus two R2 uploads on a client with no rate limiter — so a
@@ -190,7 +190,7 @@ def fetch_new_this_year(sb: Client, *, today: date | None = None) -> tuple[list[
 
 
 def fetch_back_on_shelf(sb: Client, uid: str) -> list[DiscoverDormantEntry]:
-    """bgb_dormant_collection → owned games that have not hit the table lately."""
+    """bgb_dormant_collection → today's random draw of owned games not logged in a year."""
     rows = sb.rpc(
         "bgb_dormant_collection",
         {"uid": uid, "days_since": DORMANT_DAYS, "lim": DORMANT_LIMIT},

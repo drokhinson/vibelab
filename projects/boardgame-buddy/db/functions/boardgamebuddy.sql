@@ -198,15 +198,16 @@
 
 -- bgb_dormant_collection(uid UUID, days_since INT DEFAULT 60, lim INT DEFAULT 5)
 --   → TABLE (game_id UUID, last_played_at DATE)
---   Defined in: db/migrations/002_baseline_functions_play.sql
+--   Defined in: db/migrations/066_revisit_daily_shuffle.sql
 --   Language:   sql
 --   Called by:  projects/boardgame-buddy/api/routes/services/discovery_service.py
---               (fetch_back_on_shelf — the Discover tab's "Back on the shelf"
---               rail.)
---   Purpose:    Owned games this user hasn't played in N days. Counts
---               participated plays, not just logged ones, so a game the user
---               played but a buddy logged is not nudged at them as "never
---               played".
+--               (fetch_back_on_shelf — the Discover tab's "Time to revisit"
+--               rail, 365 days, 8 rows.)
+--   Purpose:    A random `lim` of the owned games this user has not logged in
+--               the app within N days (never logged counts). Only plays logged
+--               in the app count, by the user or with them seated; imported
+--               plays are ignored. Ordered by md5(game_id || CURRENT_DATE), so
+--               the draw holds for a UTC day and reshuffles at midnight.
 
 -- bgb_suggested_buddies(uid UUID, lim INT DEFAULT 5)
 --   → TABLE (user_id UUID, mutual_count BIGINT, play_count BIGINT,

@@ -735,7 +735,7 @@
     }
     if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
     // A play moves the taste profile the Discover picks are scored against,
-    // and takes its game off "Back on the shelf".
+    // and takes its game off "Time to revisit".
     if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
     // A play is what makes a game rankable (and deleting its last one what
     // stops it), and it ends a "Rank after next play" wait, so the unranked
