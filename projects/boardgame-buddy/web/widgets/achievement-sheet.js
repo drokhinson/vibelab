@@ -6,8 +6,10 @@
 // Every page is painted up front into one scroll-snapped track, so the
 // neighbour is under the finger for the whole drag and a turn never creates
 // or removes a page; the track's own overscroll is the rubber band at the
-// ends. Arrows and an "N of M" count sit above it, and ←/→ turn too. A row of
-// one gets none of that.
+// ends. Arrows and an "N of M" count sit above it, and ←/→ turn too. The
+// count, the label and the arrows follow the page under the finger, switching
+// as the drag crosses halfway rather than when the snap settles. A row of one
+// gets none of that. Pulling the sheet down closes it (ui/sheet-pull.js).
 //
 // Its class is named in the theme re-point list in styles.css; a body-level
 // sheet lands outside the screen that opened it (.claude/rules/theming.md §8).
@@ -150,26 +152,22 @@
         if (btn) turn(Number(btn.getAttribute("data-step")));
       },
       onOpen: (root) => {
+        if (window.BgbSheetPull) {
+          window.BgbSheetPull.attach(root, { panelSel: ".ach-sheet__panel", close: () => sheet.close() });
+        }
         track = /** @type {HTMLElement|null} */ (root.querySelector(".ach-track"));
         if (!paged) { onShow(row[start]); return; }
         if (!track) return;
         track.scrollLeft = start * width();
         settle(start);
-        const onScrolled = () => {
+        // Every scroll frame, not scrollend: the page whose larger half is on
+        // screen is the current one, so the count turns at the midpoint.
+        track.addEventListener("scroll", () => {
           const w = width();
           if (!w || !track) return;
           const i = Math.max(0, Math.min(row.length - 1, Math.round(track.scrollLeft / w)));
           if (i !== current) settle(i);
-        };
-        if ("onscrollend" in window) {
-          track.addEventListener("scrollend", onScrolled);
-        } else {
-          let timer = 0;
-          track.addEventListener("scroll", () => {
-            clearTimeout(timer);
-            timer = setTimeout(onScrolled, 120);
-          });
-        }
+        }, { passive: true });
         document.addEventListener("keydown", onKey);
       },
       onClose: () => document.removeEventListener("keydown", onKey),
